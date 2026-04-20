@@ -282,11 +282,6 @@
 
       <div class="field-grid">
         <label>
-          <span>Groq API Key</span>
-          <input id="groqApiKey" type="password" placeholder="gsk_..." />
-        </label>
-
-        <label>
           <span>Modèle Groq</span>
           <select id="groqModel">
             <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
@@ -311,7 +306,7 @@
       </div>
 
       <div class="settings-note">
-        Les actualités ne sont pas affichées dans l’interface. Elles sont seulement injectées dans le contexte envoyé au moteur IA ou au fallback local.
+        Les actualités ne sont pas affichées. Elles sont seulement injectées dans le contexte d’analyse côté serveur.
       </div>
 
       <div class="row-actions">
@@ -322,4 +317,4 @@
 
   <script src="app.js"></script>
 </body>
-      </html>
+  </html>
