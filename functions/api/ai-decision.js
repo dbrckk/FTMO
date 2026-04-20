@@ -2,20 +2,29 @@ export async function onRequestPost(context) {
   try {
     const body = await safeJson(context.request);
     if (!body.ok) {
-      return json(
-        {
-          ok: false,
-          error: "Invalid JSON body"
-        },
-        400
-      );
+      return json({ ok: false, error: "Invalid JSON body" }, 400);
     }
 
     const payload = normalizePayload(body.data);
     const env = context.env || {};
-    const groqKey = env.GROQ_API_KEY;
+    const groqKey = env.GROQ_API_KEY || "";
 
     const macroContext = await getMacroContext(context.request, payload.pair, payload.cooldownMinutes);
+
+    const riskBlock = shouldBlockForMacro(macroContext);
+    if (riskBlock.blocked) {
+      return json({
+        ok: true,
+        decision: "NO TRADE",
+        title: "Blocage macro",
+        reason: riskBlock.reason,
+        confidence: 91,
+        action: "Ne pas entrer",
+        window: `Réévaluer après ${macroContext.cooldownMinutes || payload.cooldownMinutes} min`,
+        source: "macro-hard-block",
+        macroSource: macroContext.source || "macro-context"
+      });
+    }
 
     if (!groqKey) {
       const fallback = localDecisionEngine({
@@ -27,7 +36,7 @@ export async function onRequestPost(context) {
         ok: true,
         ...fallback,
         source: "fallback-server",
-        macroSource: macroContext.source || "macro-fallback"
+        macroSource: macroContext.source || "macro-context"
       });
     }
 
@@ -43,7 +52,7 @@ export async function onRequestPost(context) {
         ok: true,
         ...fallback,
         source: "groq-error-fallback",
-        macroSource: macroContext.source || "macro-fallback"
+        macroSource: macroContext.source || "macro-context"
       });
     }
 
@@ -53,22 +62,19 @@ export async function onRequestPost(context) {
       ok: true,
       ...parsed,
       source: "groq",
-      macroSource: macroContext.source || "macro-fallback"
+      macroSource: macroContext.source || "macro-context"
     });
-  } catch (error) {
-    return json(
-      {
-        ok: true,
-        decision: "WAIT",
-        title: "Erreur temporaire",
-        reason: "Le serveur n’a pas pu analyser la requête. Le mode prudent prend le relais.",
-        confidence: 74,
-        action: "Attendre",
-        window: "Réessayer dans quelques minutes",
-        source: "server-catch"
-      },
-      200
-    );
+  } catch {
+    return json({
+      ok: true,
+      decision: "WAIT",
+      title: "Erreur temporaire",
+      reason: "Le serveur n’a pas pu analyser la requête. Le mode prudent prend le relais.",
+      confidence: 74,
+      action: "Attendre",
+      window: "Réessayer dans quelques minutes",
+      source: "server-catch"
+    });
   }
 }
 
@@ -82,7 +88,7 @@ async function askGroq(apiKey, payload, macroContext) {
         {
           role: "system",
           content:
-            "Tu es un filtre de trading ultra strict. Tu réponds uniquement en JSON avec les clés decision,title,reason,confidence,action,window. decision doit être exactement TRADE, WAIT ou NO TRADE. Si le moindre doute existe, retourne WAIT ou NO TRADE. Tu dois prendre en compte le contexte macro caché, la qualité du setup, le levier x10, et ne jamais promettre un gain certain."
+            "Tu es un filtre de trading ultra strict. Tu réponds uniquement en JSON avec les clés decision,title,reason,confidence,action,window. decision doit être exactement TRADE, WAIT ou NO TRADE. Si un événement macro important est proche, retourne NO TRADE ou WAIT. Tu ne promets jamais un gain certain."
         },
         {
           role: "user",
@@ -117,12 +123,8 @@ async function askGroq(apiKey, payload, macroContext) {
       body: JSON.stringify(requestBody)
     });
 
-    if (!response.ok) {
-      return { ok: false };
-    }
-
-    const data = await response.json();
-    return { ok: true, data };
+    if (!response.ok) return { ok: false };
+    return { ok: true, data: await response.json() };
   } catch {
     return { ok: false };
   }
@@ -161,26 +163,51 @@ async function getMacroContext(request, pair, cooldownMinutes) {
       }
     });
 
-    if (!response.ok) {
-      throw new Error("macro fetch failed");
-    }
-
+    if (!response.ok) throw new Error("macro-context failed");
     const data = await response.json();
 
     return {
       danger: Boolean(data.danger),
+      dangerScore: Number(data.dangerScore) || 0,
       cooldownMinutes: Number(data.cooldownMinutes) || cooldownMinutes,
-      source: data.source || "macro-endpoint",
+      source: data.source || "macro-context",
       relevantEvents: Array.isArray(data.relevantEvents) ? data.relevantEvents.slice(0, 10) : []
     };
   } catch {
     return {
       danger: false,
+      dangerScore: 0,
       cooldownMinutes,
       source: "macro-fallback-empty",
       relevantEvents: []
     };
   }
+}
+
+function shouldBlockForMacro(macroContext) {
+  if (!macroContext?.danger) {
+    return { blocked: false, reason: "" };
+  }
+
+  const highNear = (macroContext.relevantEvents || []).find(
+    (evt) => evt.impact === "high" && Math.abs(Number(evt.minutesFromNow || 9999)) <= Number(macroContext.cooldownMinutes || 90)
+  );
+
+  if (highNear) {
+    return {
+      blocked: true,
+      reason: `Événement macro fort proche sur ${highNear.currency} : ${highNear.name}.`
+    };
+  }
+
+  if (Number(macroContext.dangerScore || 0) >= 75) {
+    return {
+      blocked: true,
+      reason: "Le contexte macro global est trop instable pour une entrée propre."
+    };
+  }
+
+  return { blocked: false, reason: "" };
 }
 
 function localDecisionEngine(body) {
@@ -197,8 +224,8 @@ function localDecisionEngine(body) {
     return {
       decision: "NO TRADE",
       title: "Contexte macro défavorable",
-      reason: "Une fenêtre macro sensible est proche ou en cours. Le moteur serveur bloque le trade.",
-      confidence: clamp(82 + strictPenalty, 1, 99),
+      reason: "Une fenêtre macro sensible est proche ou en cours. Le moteur bloque le trade.",
+      confidence: clamp(84 + strictPenalty, 1, 99),
       action: "Ne pas entrer",
       window: `Réévaluer après ${hiddenMacro.cooldownMinutes || 90} min`
     };
@@ -229,7 +256,7 @@ function localDecisionEngine(body) {
   return {
     decision: "TRADE",
     title: "Trade autorisé",
-    reason: "Le contexte technique, le risque et le timing sont suffisamment alignés selon les critères stricts du moteur.",
+    reason: "Le contexte technique, le risque et le timing sont suffisamment alignés.",
     confidence: clamp(confidenceBase + 4 - strictPenalty, 1, 99),
     action: `Entrée ${(String(body.signal || "").includes("SELL")) ? "SELL" : "BUY"} possible`,
     window: "Fenêtre exploitable maintenant"
@@ -323,4 +350,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-      }
+  }
