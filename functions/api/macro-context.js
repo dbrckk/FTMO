@@ -2,7 +2,7 @@ export async function onRequestGet(context) {
   try {
     const url = new URL(context.request.url);
     const pair = cleanPair(url.searchParams.get("pair"));
-    const cooldownMinutes = clamp(Number(url.searchParams.get("cooldown")) || 90, 15, 240);
+    const cooldownMinutes = clamp(Number(url.searchParams.get("cooldown")) || 90, 15, 360);
     const currencies = extractCurrenciesFromPair(pair);
 
     if (!currencies.length) {
@@ -11,9 +11,10 @@ export async function onRequestGet(context) {
         pair,
         cooldownMinutes,
         danger: false,
+        hardBlock: false,
+        dangerScore: 0,
         source: "empty-pair",
-        relevantEvents: [],
-        dangerScore: 0
+        relevantEvents: []
       });
     }
 
@@ -25,9 +26,10 @@ export async function onRequestGet(context) {
       .map((evt) => {
         const date = new Date(evt.date);
         return {
-          name: String(evt.name || "").slice(0, 120),
+          name: String(evt.name || "").slice(0, 140),
           currency: String(evt.currency || "").toUpperCase(),
           impact: normalizeImpact(evt.impact),
+          severity: detectSeverity(evt.name),
           date: date.toISOString(),
           minutesFromNow: Math.round((date.getTime() - now.getTime()) / 60000)
         };
@@ -37,13 +39,15 @@ export async function onRequestGet(context) {
       .slice(0, 12);
 
     const dangerScore = computeDangerScore(relevantEvents, cooldownMinutes);
-    const danger = dangerScore >= 60;
+    const hardBlock = shouldHardBlock(relevantEvents, cooldownMinutes);
+    const danger = hardBlock || dangerScore >= 60;
 
     return json({
       ok: true,
       pair,
       cooldownMinutes,
       danger,
+      hardBlock,
       dangerScore,
       source: feed.source || "macro-feed",
       relevantEvents
@@ -54,6 +58,7 @@ export async function onRequestGet(context) {
       pair: "",
       cooldownMinutes: 90,
       danger: false,
+      hardBlock: false,
       dangerScore: 0,
       source: "macro-context-catch",
       relevantEvents: []
@@ -69,9 +74,7 @@ async function getMacroFeed(request) {
 
     const res = await fetch(url.toString(), {
       method: "GET",
-      headers: {
-        Accept: "application/json"
-      }
+      headers: { Accept: "application/json" }
     });
 
     if (!res.ok) throw new Error("macro-feed failed");
@@ -90,10 +93,16 @@ function computeDangerScore(events, cooldownMinutes) {
   for (const evt of events) {
     const minutes = Math.abs(Number(evt.minutesFromNow || 99999));
     const impact = normalizeImpact(evt.impact);
+    const severity = evt.severity || "normal";
 
     if (impact === "high") {
-      if (minutes <= cooldownMinutes) score += 70;
-      else if (minutes <= cooldownMinutes * 2) score += 30;
+      if (severity === "major") {
+        if (minutes <= cooldownMinutes) score += 95;
+        else if (minutes <= cooldownMinutes * 2) score += 45;
+      } else {
+        if (minutes <= cooldownMinutes) score += 70;
+        else if (minutes <= cooldownMinutes * 2) score += 30;
+      }
     } else if (impact === "medium") {
       if (minutes <= cooldownMinutes) score += 35;
       else if (minutes <= cooldownMinutes * 2) score += 14;
@@ -103,6 +112,41 @@ function computeDangerScore(events, cooldownMinutes) {
   }
 
   return Math.min(100, score);
+}
+
+function shouldHardBlock(events, cooldownMinutes) {
+  return events.some((evt) => {
+    const minutes = Math.abs(Number(evt.minutesFromNow || 99999));
+    const isHigh = evt.impact === "high";
+    const isMajor = evt.severity === "major";
+
+    if (isMajor && minutes <= cooldownMinutes * 1.5) return true;
+    if (isHigh && minutes <= Math.min(cooldownMinutes, 90)) return true;
+    return false;
+  });
+}
+
+function detectSeverity(name) {
+  const n = String(name || "").toLowerCase();
+
+  if (
+    n.includes("cpi") ||
+    n.includes("nfp") ||
+    n.includes("nonfarm") ||
+    n.includes("fomc") ||
+    n.includes("interest rate") ||
+    n.includes("rate decision") ||
+    n.includes("inflation") ||
+    n.includes("employment") ||
+    n.includes("powell") ||
+    n.includes("ecb") ||
+    n.includes("boj") ||
+    n.includes("boe")
+  ) {
+    return "major";
+  }
+
+  return "normal";
 }
 
 function normalizeImpact(value) {
@@ -147,4 +191,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-      }
+                                      }
