@@ -4,9 +4,14 @@ export async function onRequestPost(context) {
     const env = context.env || {};
     const groqKey = env.GROQ_API_KEY;
 
+    const hiddenMacroContext = await getMacroContext(context.request, body.pair);
+
     if (!groqKey) {
       return json({
-        decision: localDecisionEngine(body),
+        ...localDecisionEngine({
+          ...body,
+          hiddenMacroContext
+        }),
         source: "fallback-server"
       });
     }
@@ -27,7 +32,7 @@ export async function onRequestPost(context) {
       rr: body.rr,
       gatekeeper: body.gatekeeper,
       reasons: body.reasons,
-      hiddenMacroContext: body.hiddenMacroContext
+      hiddenMacroContext
     };
 
     const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -44,7 +49,7 @@ export async function onRequestPost(context) {
           {
             role: "system",
             content:
-              "Tu es un filtre de trading ultra strict. Réponds uniquement en JSON avec les clés decision,title,reason,confidence,action,window. decision doit être TRADE, WAIT ou NO TRADE. Si le doute existe, retourne WAIT ou NO TRADE. Tu dois utiliser le contexte macro caché pour bloquer un trade si besoin."
+              "Tu es un filtre de trading ultra strict. Réponds uniquement en JSON avec les clés decision,title,reason,confidence,action,window. decision doit être TRADE, WAIT ou NO TRADE. Si le doute existe, retourne WAIT ou NO TRADE. Tu dois utiliser le contexte macro caché pour bloquer un trade si besoin. Tu ne dois jamais promettre une certitude de gain."
           },
           {
             role: "user",
@@ -55,8 +60,13 @@ export async function onRequestPost(context) {
     });
 
     if (!groqRes.ok) {
-      const fallback = localDecisionEngine(body);
-      return json({ ...fallback, source: "groq-error-fallback" }, 200);
+      return json({
+        ...localDecisionEngine({
+          ...body,
+          hiddenMacroContext
+        }),
+        source: "groq-error-fallback"
+      });
     }
 
     const groqData = await groqRes.json();
@@ -66,7 +76,10 @@ export async function onRequestPost(context) {
     try {
       parsed = JSON.parse(content);
     } catch {
-      parsed = localDecisionEngine(body);
+      parsed = localDecisionEngine({
+        ...body,
+        hiddenMacroContext
+      });
     }
 
     const output = {
@@ -76,7 +89,8 @@ export async function onRequestPost(context) {
       confidence: clamp(Number(parsed.confidence) || Number(body.confidence) || 70, 1, 99),
       action: parsed.action || "Attendre une meilleure fenêtre",
       window: parsed.window || "À revalider au prochain refresh",
-      source: "groq"
+      source: "groq",
+      macroSource: hiddenMacroContext.source || "unknown"
     };
 
     return json(output);
@@ -90,6 +104,37 @@ export async function onRequestPost(context) {
       window: "Réessayer dans quelques minutes",
       source: "server-catch"
     }, 200);
+  }
+}
+
+async function getMacroContext(request, pair) {
+  try {
+    const url = new URL(request.url);
+    url.pathname = "/api/macro-context";
+    url.search = `?pair=${encodeURIComponent(pair || "")}`;
+
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      headers: { "Content-Type": "application/json" }
+    });
+
+    if (!res.ok) {
+      throw new Error(`macro ${res.status}`);
+    }
+
+    const data = await res.json();
+
+    return {
+      danger: Boolean(data.danger),
+      relevantEvents: Array.isArray(data.relevantEvents) ? data.relevantEvents : [],
+      source: data.source || "macro-endpoint"
+    };
+  } catch {
+    return {
+      danger: false,
+      relevantEvents: [],
+      source: "macro-fallback-empty"
+    };
   }
 }
 
@@ -109,7 +154,7 @@ function localDecisionEngine(body) {
       reason: "Une fenêtre macro sensible est proche ou en cours. Le moteur serveur bloque le trade.",
       confidence: clamp(82 + strictPenalty, 1, 99),
       action: "Ne pas entrer",
-      window: `Réévaluer après ${hiddenMacro.cooldownMinutes || 90} min`
+      window: "Réévaluer plus tard"
     };
   }
 
