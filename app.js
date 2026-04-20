@@ -1,8 +1,7 @@
-const STORAGE_KEY = "ftmo-edge-ai-state-v5";
+const STORAGE_KEY = "ftmo-edge-ai-state-v6";
 
 const TIMEFRAMES = ["M5", "M15", "H1", "H4"];
 
-// Paires plus sérieuses + paires plus volatiles/opportunistes
 const PAIRS = [
   { symbol: "EURUSD", group: "forex", base: "EUR", quote: "USD", tier: 1 },
   { symbol: "GBPUSD", group: "forex", base: "GBP", quote: "USD", tier: 1 },
@@ -54,6 +53,7 @@ const defaultState = {
   watchlist: [],
   trades: [],
   scans: [],
+  journal: null,
   aiDecisionCache: {},
   aiSettings: {
     model: "llama-3.1-8b-instant",
@@ -100,7 +100,9 @@ function cacheEls() {
     "groqModel", "aiMode", "macroCooldown", "maxRiskPerTrade",
     "ftmoRiskTitle", "ftmoDecisionBadge", "ftmoDailyRemaining", "ftmoDailyHint",
     "ftmoMaxAdditionalRisk", "ftmoRiskHint", "ftmoDecisionText", "ftmoDecisionReason",
-    "exitSuggestionBox"
+    "exitSuggestionBox",
+    "journalMeta", "journalWinRate", "journalExpectancy", "journalBestPair",
+    "journalBestPairHint", "journalBestSession", "journalBestSessionHint", "journalInsights"
   ].forEach((id) => {
     els[id] = document.getElementById(id);
   });
@@ -146,21 +148,17 @@ function hydrateUiFromState() {
 
 function renderTimeframeButtons() {
   els.timeframeRow.innerHTML = "";
-
   TIMEFRAMES.forEach((tf) => {
     const btn = document.createElement("button");
     btn.className = "ghost-btn";
     btn.textContent = tf;
-
     if (appState.timeframe === tf) btn.classList.add("active-chip");
-
     btn.addEventListener("click", () => {
       appState.timeframe = tf;
       persistState();
       renderTimeframeButtons();
       refreshAll(true);
     });
-
     els.timeframeRow.appendChild(btn);
   });
 }
@@ -188,6 +186,7 @@ function bindEvents() {
 
   els.refreshBtn.addEventListener("click", () => refreshAll(true));
   els.recheckAiBtn.addEventListener("click", () => refreshAll(true));
+
   els.tradeForm.addEventListener("submit", onAddTrade);
   els.watchlistBtn.addEventListener("click", toggleCurrentWatchlist);
   els.exportBtn.addEventListener("click", exportTradesJson);
@@ -269,6 +268,7 @@ async function refreshAll(forceAi = false) {
   renderSelectedPair();
   renderTrades();
   renderWatchlist();
+  await fetchJournalInsights();
   persistState();
 
   await refreshAiDecision(forceAi);
@@ -295,13 +295,11 @@ function updateClockAndSession() {
 }
 
 function getMarketSession(date) {
-  const hourParis = Number(
-    date.toLocaleString("en-GB", {
-      hour: "2-digit",
-      hour12: false,
-      timeZone: "Europe/Paris"
-    })
-  );
+  const hourParis = Number(date.toLocaleString("en-GB", {
+    hour: "2-digit",
+    hour12: false,
+    timeZone: "Europe/Paris"
+  }));
 
   const tokyo = hourParis >= 1 && hourParis < 10;
   const london = hourParis >= 9 && hourParis < 18;
@@ -356,10 +354,7 @@ async function scanPair(item, timeframe, strategy) {
   const ema50 = Number(market.indicators?.ema50 ?? emaSeries(closes, 50).at(-1));
   const rsi14 = Number(market.indicators?.rsi14 ?? rsi(closes, 14));
   const atr14 = Number(market.indicators?.atr14 ?? atr(highs, lows, closes, 14));
-  const momentum = Number(
-    market.indicators?.momentum ??
-    (((current - closes.at(-12)) / closes.at(-12)) * 100)
-  );
+  const momentum = Number(market.indicators?.momentum ?? (((current - closes.at(-12)) / closes.at(-12)) * 100));
 
   const support = Math.min(...lows.slice(-20));
   const resistance = Math.max(...highs.slice(-20));
@@ -395,14 +390,7 @@ async function scanPair(item, timeframe, strategy) {
   contextScore += sessionBoost;
   contextScore += historicalEdge;
   contextScore += tierBonus;
-  contextScore += strategyBonus(strategy, {
-    rsi14,
-    current,
-    support,
-    resistance,
-    ema20,
-    ema50
-  });
+  contextScore += strategyBonus(strategy, { rsi14, current, support, resistance, ema20, ema50 });
 
   const finalScore = clamp(
     Math.round(
@@ -426,15 +414,11 @@ async function scanPair(item, timeframe, strategy) {
   });
 
   const signal = gatekeeper.allowed
-    ? finalScore >= 82
-      ? "STRONG BUY"
-      : finalScore >= 68
-        ? "BUY"
-        : finalScore <= 22
-          ? "STRONG SELL"
-          : finalScore <= 36
-            ? "SELL"
-            : "WAIT"
+    ? finalScore >= 82 ? "STRONG BUY"
+      : finalScore >= 68 ? "BUY"
+      : finalScore <= 22 ? "STRONG SELL"
+      : finalScore <= 36 ? "SELL"
+      : "WAIT"
     : gatekeeper.decision;
 
   const direction = signal.includes("SELL") ? "sell" : "buy";
@@ -488,17 +472,8 @@ async function scanPair(item, timeframe, strategy) {
   };
 }
 
-function buildGatekeeper({
-  macroPenalty,
-  spreadPenalty,
-  offSessionPenalty,
-  correlationPenalty,
-  finalScore,
-  atr14,
-  current
-}) {
+function buildGatekeeper({ macroPenalty, spreadPenalty, offSessionPenalty, correlationPenalty, finalScore, atr14, current }) {
   const volatilityRisk = (atr14 / current) * 100;
-
   const checks = [
     { label: "Macro", ok: macroPenalty < 14, value: macroPenalty < 14 ? "OK" : "Bloqué" },
     { label: "Spread", ok: spreadPenalty < 10, value: spreadPenalty < 10 ? "OK" : "Trop cher" },
@@ -537,15 +512,8 @@ function renderOverview() {
 
 function getFilteredScans() {
   let list = [...appState.scans];
-
-  if (appState.marketFilter !== "all") {
-    list = list.filter((scan) => scan.group === appState.marketFilter);
-  }
-
-  if (appState.search) {
-    list = list.filter((scan) => scan.pair.includes(appState.search));
-  }
-
+  if (appState.marketFilter !== "all") list = list.filter((scan) => scan.group === appState.marketFilter);
+  if (appState.search) list = list.filter((scan) => scan.pair.includes(appState.search));
   return list;
 }
 
@@ -598,7 +566,6 @@ function renderSelectedPair() {
   if (!scan) return;
 
   const ai = appState.aiDecisionCache[scan.pair];
-
   els.selectedPairName.textContent = scan.pair;
   els.selectedSignalBadge.textContent = ai?.decision || scan.gatekeeper.decision;
   els.tradePair.value = scan.pair;
@@ -774,6 +741,8 @@ function renderTrades() {
       persistState();
       renderTrades();
       renderOverview();
+      fetchFtmoRisk();
+      fetchJournalInsights();
     });
 
     els.tradeList.appendChild(card);
@@ -832,9 +801,7 @@ function applyDecisionUi(pair, decision) {
 async function askServerForDecision(scan) {
   const response = await fetch("/api/ai-decision", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       aiMode: appState.aiSettings.mode,
       model: appState.aiSettings.model,
@@ -856,10 +823,7 @@ async function askServerForDecision(scan) {
     })
   });
 
-  if (!response.ok) {
-    throw new Error(`AI endpoint error ${response.status}`);
-  }
-
+  if (!response.ok) throw new Error(`AI endpoint error ${response.status}`);
   const data = await response.json();
 
   return {
@@ -876,15 +840,12 @@ async function fetchMarketData(pair, timeframe) {
   try {
     const res = await fetch(
       `/api/market-data?pair=${encodeURIComponent(pair)}&timeframe=${encodeURIComponent(timeframe)}`,
-      {
-        method: "GET",
-        headers: { Accept: "application/json" }
-      }
+      { method: "GET", headers: { Accept: "application/json" } }
     );
 
     if (!res.ok) throw new Error(`market-data ${res.status}`);
-
     const data = await res.json();
+
     return {
       source: data.source || "unknown",
       price: data.price,
@@ -911,9 +872,7 @@ async function fetchFtmoRisk() {
 
     const response = await fetch("/api/risk-engine", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         accountSize: appState.ftmo.accountSize,
         dailyLossLimitPercent: appState.ftmo.dailyLossLimitPercent,
@@ -970,10 +929,8 @@ function renderFtmoRiskPanel() {
 
   els.ftmoDailyRemaining.textContent = `${Number(risk.remainingDailyLoss || 0).toFixed(2)}$`;
   els.ftmoDailyHint.textContent = `Limite: ${Number(risk.dailyLossLimitValue || 0).toFixed(2)}$`;
-
   els.ftmoMaxAdditionalRisk.textContent = `${Number(risk.maxAdditionalRiskPercent || 0).toFixed(2)}%`;
   els.ftmoRiskHint.textContent = `Risque demandé: ${Number(risk.requestedRiskValue || 0).toFixed(2)}$`;
-
   els.ftmoDecisionText.textContent = risk.decision || "WAIT";
   els.ftmoDecisionReason.textContent = risk.reason || "Le moteur reste prudent.";
 }
@@ -983,9 +940,7 @@ async function fetchExitSuggestion(scan, aiDecision) {
     const entry = Number(els.tradeEntry.value || scan.current);
     const response = await fetch("/api/exit-engine", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         pair: scan.pair,
         direction: scan.direction,
@@ -1001,7 +956,6 @@ async function fetchExitSuggestion(scan, aiDecision) {
     });
 
     if (!response.ok) throw new Error(`exit-engine ${response.status}`);
-
     const data = await response.json();
 
     els.exitSuggestionBox.innerHTML = `
@@ -1018,6 +972,64 @@ async function fetchExitSuggestion(scan, aiDecision) {
       Impossible de calculer la meilleure sortie pour le moment.
     `;
   }
+}
+
+async function fetchJournalInsights() {
+  try {
+    const payloadTrades = appState.trades.map((trade) => {
+      const scan = appState.scans.find((s) => s.pair === trade.pair);
+      return {
+        ...trade,
+        currentPrice: scan?.current ?? Number(trade.entry),
+        exitPrice: scan?.current ?? Number(trade.entry)
+      };
+    });
+
+    const response = await fetch("/api/journal-insights", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trades: payloadTrades })
+    });
+
+    if (!response.ok) throw new Error(`journal-insights ${response.status}`);
+
+    const data = await response.json();
+    appState.journal = data;
+    persistState();
+    renderJournalInsights();
+    return data;
+  } catch {
+    appState.journal = null;
+    renderJournalInsights();
+    return null;
+  }
+}
+
+function renderJournalInsights() {
+  const j = appState.journal;
+
+  if (!j) {
+    if (els.journalMeta) els.journalMeta.textContent = "--";
+    if (els.journalWinRate) els.journalWinRate.textContent = "--";
+    if (els.journalExpectancy) els.journalExpectancy.textContent = "--";
+    if (els.journalBestPair) els.journalBestPair.textContent = "--";
+    if (els.journalBestPairHint) els.journalBestPairHint.textContent = "--";
+    if (els.journalBestSession) els.journalBestSession.textContent = "--";
+    if (els.journalBestSessionHint) els.journalBestSessionHint.textContent = "--";
+    if (els.journalInsights) els.journalInsights.innerHTML = `<li>Pas assez de données pour analyser ton journal.</li>`;
+    return;
+  }
+
+  els.journalMeta.textContent = `${j.totalTrades || 0} trade(s) analysé(s)`;
+  els.journalWinRate.textContent = `${Number(j.winRate || 0).toFixed(2)}%`;
+  els.journalExpectancy.textContent = Number(j.expectancy || 0).toFixed(4);
+  els.journalBestPair.textContent = j.bestPair?.key || "--";
+  els.journalBestPairHint.textContent = j.bestPair ? `Expectancy ${j.bestPair.expectancy}` : "--";
+  els.journalBestSession.textContent = j.bestSession?.key || "--";
+  els.journalBestSessionHint.textContent = j.bestSession ? `Win rate ${j.bestSession.winRate}%` : "--";
+  els.journalInsights.innerHTML = (j.insights?.length
+    ? j.insights.map((x) => `<li>${x}</li>`).join("")
+    : `<li>Pas assez d’insights pour le moment.</li>`);
 }
 
 function localDecisionEngine(scan) {
@@ -1111,6 +1123,7 @@ async function onAddTrade(event) {
   renderTrades();
   renderOverview();
   fetchFtmoRisk();
+  fetchJournalInsights();
 
   els.tradeForm.reset();
   els.tradePair.value = scan.pair;
@@ -1138,6 +1151,7 @@ function clearTrades() {
   renderTrades();
   renderOverview();
   fetchFtmoRisk();
+  fetchJournalInsights();
 }
 
 function exportTradesJson() {
@@ -1214,7 +1228,6 @@ function getSpreadPenalty(pair, atrValue) {
     0.04;
 
   const normalized = atrValue <= 0 ? 0 : (baseSpread / atrValue) * 100;
-
   if (normalized > 18) return 12;
   if (normalized > 12) return 8;
   return 3;
@@ -1222,10 +1235,7 @@ function getSpreadPenalty(pair, atrValue) {
 
 function getOffSessionPenalty(pair) {
   const session = getMarketSession(new Date()).label;
-
-  if (session === "Off-session") {
-    return pair === "XAUUSD" || pair === "NAS100" ? 9 : 7;
-  }
+  if (session === "Off-session") return pair === "XAUUSD" || pair === "NAS100" ? 9 : 7;
   return 0;
 }
 
@@ -1249,7 +1259,6 @@ function detectStructure(highs, lows) {
   const h5 = highs.at(-5);
   const l1 = lows.at(-1);
   const l5 = lows.at(-5);
-
   if (h1 > h5 && l1 > l5) return 8;
   if (h1 < h5 && l1 < l5) return -8;
   return 0;
@@ -1361,7 +1370,6 @@ function getSymbolBasePrice(symbol) {
     NAS100: 18240,
     GER40: 18420
   };
-
   return prices[symbol] || 1;
 }
 
@@ -1389,12 +1397,10 @@ function emaSeries(values, period) {
   const k = 2 / (period + 1);
   const out = [];
   let prev = values[0];
-
   for (let i = 0; i < values.length; i += 1) {
     prev = i === 0 ? values[0] : values[i] * k + prev * (1 - k);
     out.push(prev);
   }
-
   return out;
 }
 
@@ -1405,13 +1411,11 @@ function ema(values, period) {
 function rsi(values, period = 14) {
   let gains = 0;
   let losses = 0;
-
   for (let i = values.length - period; i < values.length; i += 1) {
     const diff = values[i] - values[i - 1];
     if (diff >= 0) gains += diff;
     else losses += Math.abs(diff);
   }
-
   if (losses === 0) return 100;
   const rs = gains / losses;
   return 100 - (100 / (1 + rs));
@@ -1419,7 +1423,6 @@ function rsi(values, period = 14) {
 
 function atr(highs, lows, closes, period = 14) {
   const trs = [];
-
   for (let i = 1; i < highs.length; i += 1) {
     const tr = Math.max(
       highs[i] - lows[i],
@@ -1428,7 +1431,6 @@ function atr(highs, lows, closes, period = 14) {
     );
     trs.push(tr);
   }
-
   const recent = trs.slice(-period);
   return recent.reduce((a, b) => a + b, 0) / recent.length;
 }
