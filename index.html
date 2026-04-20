@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>FTMO Edge AI</title>
-  <meta name="description" content="Scanner FTMO mobile-first avec IA, contrôle FTMO, market data, filtre macro invisible et gestion de trade." />
+  <meta name="description" content="Scanner FTMO mobile-first avec IA, contrôle FTMO, market data, filtre macro invisible, journal intelligent et gestion de trade." />
   <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
   <link rel="stylesheet" href="styles.css"/>
 </head>
@@ -19,9 +19,6 @@
       </div>
 
       <div class="topbar-actions">
-        <span id="activeSessionPill" class="pill">Session --</span>
-        <span id="riskPill" class="pill warning">Risque --</span>
-        <span id="marketBiasPill" class="pill positive">Bias --</span>
         <button id="settingsBtn" class="ghost-btn">IA</button>
         <button id="refreshBtn" class="icon-btn" aria-label="Refresh">↻</button>
       </div>
@@ -31,9 +28,11 @@
       <section class="hero card gradient-border">
         <div class="hero-main">
           <div>
-            <p class="muted">Centre de décision</p>
+            <p class="muted">Command center</p>
             <h2 id="sessionHeadline">Analyse stricte des opportunités</h2>
-            <p id="sessionSubline" class="subline">Le moteur combine structure, timing, session, risque, corrélation, macro invisible et contrôle FTMO.</p>
+            <p id="sessionSubline" class="subline">
+              Le moteur combine structure, timing, risque, corrélation, macro invisible, contrôle FTMO et suivi intelligent.
+            </p>
           </div>
 
           <div class="hero-score-wrap">
@@ -44,6 +43,9 @@
 
         <div class="hero-pills">
           <span id="localClock" class="pill">--:--</span>
+          <span id="activeSessionPill" class="pill">Session --</span>
+          <span id="riskPill" class="pill warning">Risque --</span>
+          <span id="marketBiasPill" class="pill positive">Bias --</span>
           <span id="topPairLabel" class="pill">--</span>
           <span id="topPairReason" class="pill">--</span>
         </div>
@@ -225,9 +227,47 @@
         </div>
       </section>
 
+      <section class="card">
+        <div class="section-title-row">
+          <h3>Journal intelligent</h3>
+          <span id="journalMeta" class="muted small">--</span>
+        </div>
+
+        <div class="overview-grid">
+          <article class="card stat-card">
+            <span class="muted">Win rate</span>
+            <strong id="journalWinRate">--</strong>
+            <small>sur tes trades</small>
+          </article>
+
+          <article class="card stat-card">
+            <span class="muted">Expectancy</span>
+            <strong id="journalExpectancy">--</strong>
+            <small>avantage moyen</small>
+          </article>
+
+          <article class="card stat-card">
+            <span class="muted">Meilleure paire</span>
+            <strong id="journalBestPair">--</strong>
+            <small id="journalBestPairHint">--</small>
+          </article>
+
+          <article class="card stat-card">
+            <span class="muted">Meilleure session</span>
+            <strong id="journalBestSession">--</strong>
+            <small id="journalBestSessionHint">--</small>
+          </article>
+        </div>
+
+        <div class="card inset-card" style="margin-top:12px;">
+          <p class="muted">Insights</p>
+          <ul id="journalInsights" class="reason-list"></ul>
+        </div>
+      </section>
+
       <section class="card trade-panel">
         <div class="section-title-row">
-          <h3>Trade</h3>
+          <h3>Trade workspace</h3>
           <div class="row-actions">
             <button id="exportBtn" class="ghost-btn">Exporter</button>
             <button id="clearTradesBtn" class="ghost-btn danger">Vider</button>
@@ -328,7 +368,7 @@
       </div>
 
       <div class="settings-note">
-        Les news restent invisibles dans l’UI et servent uniquement au filtrage serveur / IA.
+        Les news restent invisibles dans l’UI et servent seulement au filtrage serveur / IA.
       </div>
 
       <div class="row-actions">
@@ -339,4 +379,4 @@
 
   <script src="app.js"></script>
 </body>
-  </html>
+            </html>
