@@ -1,4 +1,4 @@
-const STORAGE_KEY = "ftmo-edge-ai-state-v2";
+const STORAGE_KEY = "ftmo-edge-ai-state-v3";
 
 const TIMEFRAMES = ["M5", "M15", "H1", "H4"];
 const PAIRS = [
@@ -29,8 +29,6 @@ const defaultState = {
   watchlist: [],
   trades: [],
   scans: [],
-  priceSeries: {},
-  macroEvents: [],
   aiDecisionCache: {},
   aiSettings: {
     model: "llama-3.1-8b-instant",
@@ -45,7 +43,6 @@ document.addEventListener("DOMContentLoaded", () => {
   cacheEls();
   hydrateUiFromState();
   bindEvents();
-  seedMacroCalendar();
   setupChart();
   refreshAll();
 });
@@ -66,7 +63,7 @@ function cacheEls() {
     "decisionRiskMode", "decisionAction", "decisionWindow",
     "settingsBtn", "settingsModal", "closeSettingsBtn", "saveSettingsBtn",
     "groqModel", "aiMode", "macroCooldown", "maxRiskPerTrade"
-  ].forEach(id => {
+  ].forEach((id) => {
     els[id] = document.getElementById(id);
   });
 }
@@ -98,25 +95,27 @@ function hydrateUiFromState() {
   els.strategyMode.value = appState.strategy;
   els.marketFilter.value = appState.marketFilter;
   els.pairSearch.value = appState.search;
-  els.groqModel.value = appState.aiSettings.model || "llama-3.1-8b-instant";
-  els.aiMode.value = appState.aiSettings.mode || "strict";
-  els.macroCooldown.value = appState.aiSettings.cooldownMinutes || 90;
-  els.maxRiskPerTrade.value = 1;
+  els.groqModel.value = appState.aiSettings.model || defaultState.aiSettings.model;
+  els.aiMode.value = appState.aiSettings.mode || defaultState.aiSettings.mode;
+  els.macroCooldown.value = appState.aiSettings.cooldownMinutes || defaultState.aiSettings.cooldownMinutes;
+  els.maxRiskPerTrade.value = "1";
 }
 
 function renderTimeframeButtons() {
   els.timeframeRow.innerHTML = "";
-  TIMEFRAMES.forEach(tf => {
+  TIMEFRAMES.forEach((tf) => {
     const btn = document.createElement("button");
     btn.className = "ghost-btn";
     btn.textContent = tf;
     if (appState.timeframe === tf) btn.classList.add("active-chip");
+
     btn.addEventListener("click", () => {
       appState.timeframe = tf;
       persistState();
       renderTimeframeButtons();
-      refreshAll();
+      refreshAll(true);
     });
+
     els.timeframeRow.appendChild(btn);
   });
 }
@@ -125,40 +124,46 @@ function bindEvents() {
   els.strategyMode.addEventListener("change", () => {
     appState.strategy = els.strategyMode.value;
     persistState();
-    refreshAll();
+    refreshAll(true);
   });
 
   els.marketFilter.addEventListener("change", () => {
     appState.marketFilter = els.marketFilter.value;
     persistState();
     renderPairList();
+    renderOverview();
   });
 
   els.pairSearch.addEventListener("input", () => {
     appState.search = els.pairSearch.value.trim().toUpperCase();
     persistState();
     renderPairList();
+    renderOverview();
   });
 
-  els.refreshBtn.addEventListener("click", refreshAll);
+  els.refreshBtn.addEventListener("click", () => refreshAll(true));
   els.recheckAiBtn.addEventListener("click", () => refreshAll(true));
   els.tradeForm.addEventListener("submit", onAddTrade);
   els.watchlistBtn.addEventListener("click", toggleCurrentWatchlist);
   els.exportBtn.addEventListener("click", exportTradesJson);
   els.clearTradesBtn.addEventListener("click", clearTrades);
 
-  els.settingsBtn.addEventListener("click", () => els.settingsModal.classList.remove("hidden"));
-  els.closeSettingsBtn.addEventListener("click", () => els.settingsModal.classList.add("hidden"));
-  els.saveSettingsBtn.addEventListener("click", saveAiSettings);
-}
+  els.settingsBtn.addEventListener("click", () => {
+    els.settingsModal.classList.remove("hidden");
+  });
 
-function saveAiSettings() {
-  appState.aiSettings.model = els.groqModel.value;
-  appState.aiSettings.mode = els.aiMode.value;
-  appState.aiSettings.cooldownMinutes = Number(els.macroCooldown.value) || 90;
-  persistState();
-  els.settingsModal.classList.add("hidden");
-  refreshAll(true);
+  els.closeSettingsBtn.addEventListener("click", () => {
+    els.settingsModal.classList.add("hidden");
+  });
+
+  els.saveSettingsBtn.addEventListener("click", () => {
+    appState.aiSettings.model = els.groqModel.value;
+    appState.aiSettings.mode = els.aiMode.value;
+    appState.aiSettings.cooldownMinutes = Number(els.macroCooldown.value) || 90;
+    persistState();
+    els.settingsModal.classList.add("hidden");
+    refreshAll(true);
+  });
 }
 
 function setupChart() {
@@ -192,10 +197,12 @@ function setupChart() {
 
 async function refreshAll(forceAi = false) {
   updateClockAndSession();
-  appState.scans = PAIRS.map(item => scanPair(item, appState.timeframe, appState.strategy))
+
+  appState.scans = PAIRS
+    .map((item) => scanPair(item, appState.timeframe, appState.strategy))
     .sort((a, b) => b.finalScore - a.finalScore);
 
-  if (!appState.scans.find(s => s.pair === appState.selectedPair)) {
+  if (!appState.scans.some((scan) => scan.pair === appState.selectedPair)) {
     appState.selectedPair = appState.scans[0]?.pair || "EURUSD";
   }
 
@@ -248,6 +255,7 @@ function getMarketSession(date) {
       biasLabel: "Volatilité forte"
     };
   }
+
   if (london) {
     return {
       label: "London",
@@ -255,6 +263,7 @@ function getMarketSession(date) {
       biasLabel: "Bias Europe"
     };
   }
+
   if (newYork) {
     return {
       label: "New York",
@@ -262,6 +271,7 @@ function getMarketSession(date) {
       biasLabel: "Bias US"
     };
   }
+
   if (tokyo) {
     return {
       label: "Tokyo",
@@ -269,6 +279,7 @@ function getMarketSession(date) {
       biasLabel: "Bias Asie"
     };
   }
+
   return {
     label: "Off-session",
     headline: "Liquidité plus faible : l’app refuse davantage de trades.",
@@ -276,32 +287,11 @@ function getMarketSession(date) {
   };
 }
 
-function seedMacroCalendar() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  const d = now.getDate();
-
-  appState.macroEvents = [
-    makeEvent("US CPI", new Date(y, m, d, 14, 30), "USD", "high"),
-    makeEvent("FOMC Speech", new Date(y, m, d, 18, 45), "USD", "medium"),
-    makeEvent("UK CPI", new Date(y, m, d + 1, 8, 0), "GBP", "high"),
-    makeEvent("EZ PMI", new Date(y, m, d + 1, 10, 0), "EUR", "medium"),
-    makeEvent("BoJ Outlook", new Date(y, m, d + 2, 5, 0), "JPY", "high"),
-    makeEvent("CAD Employment", new Date(y, m, d + 2, 14, 30), "CAD", "medium")
-  ].sort((a, b) => a.date - b.date);
-}
-
-function makeEvent(name, date, currency, impact) {
-  return { name, date, currency, impact };
-}
-
 function scanPair(item, timeframe, strategy) {
   const candles = generateCandles(item.symbol, timeframe);
-
-  const closes = candles.map(c => c.close);
-  const highs = candles.map(c => c.high);
-  const lows = candles.map(c => c.low);
+  const closes = candles.map((c) => c.close);
+  const highs = candles.map((c) => c.high);
+  const lows = candles.map((c) => c.low);
 
   const current = closes.at(-1);
   const ema20 = emaSeries(closes, 20).at(-1);
@@ -313,7 +303,7 @@ function scanPair(item, timeframe, strategy) {
   const resistance = Math.max(...highs.slice(-20));
   const macdLine = ema(closes, 12) - ema(closes, 26);
   const sessionBoost = getSessionBoost(item.symbol);
-  const macroPenalty = getPairMacroPenalty(item.symbol);
+  const macroPenalty = estimateMacroPenalty(item.symbol);
   const structureBias = detectStructure(highs, lows);
   const candleBias = detectLastCandleSignal(candles);
   const historicalEdge = historicalSimilarity(item.symbol, timeframe, rsi14, momentum, atr14);
@@ -343,16 +333,18 @@ function scanPair(item, timeframe, strategy) {
   contextScore += historicalEdge;
   contextScore += strategyBonus(strategy, { rsi14, current, support, resistance, ema20, ema50 });
 
-  const weightedScore =
-    trendScore * 0.28 +
-    timingScore * 0.24 +
-    riskScore * 0.26 +
-    contextScore * 0.22;
-
-  const finalScore = clamp(Math.round(weightedScore), 1, 99);
+  const finalScore = clamp(
+    Math.round(
+      trendScore * 0.28 +
+      timingScore * 0.24 +
+      riskScore * 0.26 +
+      contextScore * 0.22
+    ),
+    1,
+    99
+  );
 
   const gatekeeper = buildGatekeeper({
-    pair: item.symbol,
     macroPenalty,
     spreadPenalty,
     offSessionPenalty,
@@ -406,9 +398,15 @@ function scanPair(item, timeframe, strategy) {
     confidence: clamp(Math.round(finalScore * 0.72 + Math.max(0, riskScore) * 0.28), 1, 99),
     trend: ema20 > ema50 ? "Bullish" : "Bearish",
     reasons: buildReasons({
-      ema20, ema50, rsi14, momentum, structureBias, candleBias,
-      macroPenalty, sessionBoost, correlationPenalty, spreadPenalty,
-      historicalEdge, gatekeeper
+      ema20,
+      ema50,
+      rsi14,
+      momentum,
+      structureBias,
+      macroPenalty,
+      correlationPenalty,
+      spreadPenalty,
+      gatekeeper
     })
   };
 }
@@ -424,7 +422,7 @@ function buildGatekeeper({ macroPenalty, spreadPenalty, offSessionPenalty, corre
     { label: "Setup", ok: finalScore >= 58, value: finalScore >= 58 ? "Valide" : "Faible" }
   ];
 
-  const failed = checks.filter(c => !c.ok).length;
+  const failed = checks.filter((c) => !c.ok).length;
 
   if (failed >= 2) return { allowed: false, decision: "NO TRADE", checks };
   if (failed === 1 || finalScore < 65) return { allowed: false, decision: "WAIT", checks };
@@ -434,26 +432,29 @@ function buildGatekeeper({ macroPenalty, spreadPenalty, offSessionPenalty, corre
 function renderOverview() {
   const filtered = getFilteredScans();
   const best = filtered[0];
-  const allowed = filtered.filter(s => s.gatekeeper.decision === "TRADE").length;
-  const blocked = filtered.filter(s => s.gatekeeper.decision === "NO TRADE").length;
+  const allowed = filtered.filter((s) => s.gatekeeper.decision === "TRADE").length;
+  const blocked = filtered.filter((s) => s.gatekeeper.decision === "NO TRADE").length;
   const exposure = calculateOpenExposure();
 
   els.topPairLabel.textContent = best ? `${best.pair} · ${best.signal}` : "--";
   els.topPairReason.textContent = best ? `${best.trend} · confiance ${best.confidence}` : "--";
-  els.allowedCount.textContent = allowed;
-  els.blockedCount.textContent = blocked;
+  els.allowedCount.textContent = String(allowed);
+  els.blockedCount.textContent = String(blocked);
   els.globalExposure.textContent = `${exposure.toFixed(2)}%`;
   els.bestScore.textContent = best?.finalScore ?? "--";
 }
 
 function getFilteredScans() {
   let list = [...appState.scans];
+
   if (appState.marketFilter !== "all") {
-    list = list.filter(scan => scan.group === appState.marketFilter);
+    list = list.filter((scan) => scan.group === appState.marketFilter);
   }
+
   if (appState.search) {
-    list = list.filter(scan => scan.pair.includes(appState.search));
+    list = list.filter((scan) => scan.pair.includes(appState.search));
   }
+
   return list;
 }
 
@@ -462,9 +463,10 @@ function renderPairList() {
   els.pairCount.textContent = `${list.length} paire(s)`;
   els.pairList.innerHTML = "";
 
-  list.forEach(scan => {
+  list.forEach((scan) => {
     const item = document.createElement("button");
     item.className = "pair-item";
+
     item.addEventListener("click", () => {
       appState.selectedPair = scan.pair;
       persistState();
@@ -472,11 +474,12 @@ function renderPairList() {
       refreshAiDecision(true);
     });
 
-    const signalClass = scan.signal.includes("BUY")
-      ? "signal-buy"
-      : scan.signal.includes("SELL") || scan.signal.includes("NO")
-        ? "signal-sell"
-        : "signal-wait";
+    const signalClass =
+      scan.signal.includes("BUY")
+        ? "signal-buy"
+        : scan.signal.includes("SELL") || scan.signal.includes("NO")
+          ? "signal-sell"
+          : "signal-wait";
 
     item.innerHTML = `
       <div class="pair-left">
@@ -495,12 +498,13 @@ function renderPairList() {
         ${scan.finalScore}
       </div>
     `;
+
     els.pairList.appendChild(item);
   });
 }
 
 function renderSelectedPair() {
-  const scan = appState.scans.find(s => s.pair === appState.selectedPair) || appState.scans[0];
+  const scan = appState.scans.find((s) => s.pair === appState.selectedPair) || appState.scans[0];
   if (!scan) return;
 
   const ai = appState.aiDecisionCache[scan.pair];
@@ -511,7 +515,7 @@ function renderSelectedPair() {
   els.tradeDirection.value = scan.direction;
 
   els.summaryMetrics.innerHTML = [
-    metricCard("Prix", formatPrice(scan.current), `${scan.trend}`),
+    metricCard("Prix", formatPrice(scan.current), scan.trend),
     metricCard("Trend", `${scan.trendScore}`, "force directionnelle"),
     metricCard("Timing", `${scan.timingScore}`, "qualité d’entrée"),
     metricCard("Risk", `${scan.riskScore}`, "macro, spread, corrélation"),
@@ -524,8 +528,8 @@ function renderSelectedPair() {
   els.rrMini.textContent = scan.rr;
   els.aiMini.textContent = ai?.decision || "--";
 
-  els.reasonList.innerHTML = scan.reasons.map(reason => `<li>${reason}</li>`).join("");
-  els.gatekeeperBox.innerHTML = scan.gatekeeper.checks.map(check => `
+  els.reasonList.innerHTML = scan.reasons.map((reason) => `<li>${reason}</li>`).join("");
+  els.gatekeeperBox.innerHTML = scan.gatekeeper.checks.map((check) => `
     <div class="gate-row">
       <span>${check.label}</span>
       <strong class="${check.ok ? "gate-ok" : check.value === "Faible liquidité" ? "gate-warn" : "gate-bad"}">
@@ -550,7 +554,7 @@ function metricCard(label, value, hint) {
 
 function renderChart(candles) {
   candleSeries.setData(
-    candles.map(c => ({
+    candles.map((c) => ({
       time: c.time,
       open: c.open,
       high: c.high,
@@ -565,16 +569,14 @@ function renderTradeSuggestion(scan, ai) {
   const decision = ai?.decision || scan.gatekeeper.decision;
   const confidence = ai?.confidence ?? scan.confidence;
   const explanation = ai?.reason || "Le moteur privilégie prudence et sélection stricte.";
-  const sl = formatPrice(scan.stopLoss);
-  const tp = formatPrice(scan.takeProfit);
 
   els.tradeSuggestionBox.innerHTML = `
     <strong>${decision}</strong><br/>
     Confiance : ${confidence}%<br/>
     Direction suggérée : ${scan.direction.toUpperCase()}<br/>
     Entrée repère : ${formatPrice(scan.current)}<br/>
-    Stop loss : ${sl}<br/>
-    Take profit : ${tp}<br/>
+    Stop loss : ${formatPrice(scan.stopLoss)}<br/>
+    Take profit : ${formatPrice(scan.takeProfit)}<br/>
     Ratio RR : ${scan.rr}<br/>
     Exit dynamique : break-even à 1R, sortie partielle à 1.5R, trailing ATR au-delà.<br/>
     Motif principal : ${explanation}
@@ -590,8 +592,8 @@ function renderWatchlist() {
     return;
   }
 
-  appState.watchlist.forEach(pair => {
-    const scan = appState.scans.find(s => s.pair === pair);
+  appState.watchlist.forEach((pair) => {
+    const scan = appState.scans.find((s) => s.pair === pair);
     if (!scan) return;
 
     const card = document.createElement("div");
@@ -618,10 +620,11 @@ function renderWatchlist() {
       appState.selectedPair = scan.pair;
       persistState();
       renderSelectedPair();
+      refreshAiDecision(true);
     });
 
     card.querySelector(`[data-remove="${scan.pair}"]`).addEventListener("click", () => {
-      appState.watchlist = appState.watchlist.filter(p => p !== scan.pair);
+      appState.watchlist = appState.watchlist.filter((p) => p !== scan.pair);
       persistState();
       renderWatchlist();
     });
@@ -633,12 +636,13 @@ function renderWatchlist() {
 function renderTrades() {
   els.tradeList.innerHTML = "";
   els.tradeStats.textContent = `${appState.trades.length} trade(s)`;
+
   if (!appState.trades.length) {
     els.tradeList.innerHTML = `<div class="muted">Aucun trade enregistré.</div>`;
     return;
   }
 
-  appState.trades.forEach(trade => {
+  appState.trades.forEach((trade) => {
     const card = document.createElement("div");
     card.className = "trade-item";
     card.innerHTML = `
@@ -649,7 +653,6 @@ function renderTrades() {
         </div>
         <span class="signal-badge">${trade.aiDecision}</span>
       </div>
-
       <div class="trade-item-body">
         <div>Entrée: ${trade.entry}</div>
         <div>SL: ${trade.stopLoss}</div>
@@ -659,7 +662,6 @@ function renderTrades() {
         <div>Créé: ${trade.createdAt}</div>
         <div>Notes: ${trade.notes || "-"}</div>
       </div>
-
       <div class="trade-actions">
         <button class="mini-btn" data-close="${trade.id}">Archiver</button>
         <button class="mini-btn" data-delete="${trade.id}">Supprimer</button>
@@ -667,14 +669,17 @@ function renderTrades() {
     `;
 
     card.querySelector(`[data-close="${trade.id}"]`).addEventListener("click", () => {
-      const target = appState.trades.find(t => t.id === trade.id);
-      if (target) target.status = "archivé";
-      persistState();
-      renderTrades();
+      const target = appState.trades.find((t) => t.id === trade.id);
+      if (target) {
+        target.status = "archivé";
+        persistState();
+        renderTrades();
+        renderOverview();
+      }
     });
 
     card.querySelector(`[data-delete="${trade.id}"]`).addEventListener("click", () => {
-      appState.trades = appState.trades.filter(t => t.id !== trade.id);
+      appState.trades = appState.trades.filter((t) => t.id !== trade.id);
       persistState();
       renderTrades();
       renderOverview();
@@ -685,11 +690,20 @@ function renderTrades() {
 }
 
 async function refreshAiDecision(force = false) {
-  const selectedScan = appState.scans.find(s => s.pair === appState.selectedPair) || appState.scans[0];
+  const selectedScan = appState.scans.find((s) => s.pair === appState.selectedPair) || appState.scans[0];
   if (!selectedScan) return;
 
   els.decisionAsset.textContent = selectedScan.pair;
-  const cacheKey = `${selectedScan.pair}_${selectedScan.finalScore}_${selectedScan.gatekeeper.decision}_${appState.aiSettings.mode}_${appState.aiSettings.model}_${appState.aiSettings.cooldownMinutes}`;
+
+  const cacheKey = [
+    selectedScan.pair,
+    selectedScan.finalScore,
+    selectedScan.gatekeeper.decision,
+    appState.aiSettings.mode,
+    appState.aiSettings.model,
+    appState.aiSettings.cooldownMinutes
+  ].join("_");
+
   if (!force && appState.aiDecisionCache[selectedScan.pair]?.cacheKey === cacheKey) {
     applyDecisionUi(selectedScan.pair, appState.aiDecisionCache[selectedScan.pair]);
     renderSelectedPair();
@@ -725,9 +739,7 @@ function applyDecisionUi(pair, decision) {
 }
 
 async function askServerForDecision(scan) {
-  const hiddenMacro = buildHiddenMacroContext(scan.pair);
-
-  const res = await fetch("/api/ai-decision", {
+  const response = await fetch("/api/ai-decision", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -749,18 +761,16 @@ async function askServerForDecision(scan) {
       rr: scan.rr,
       gatekeeper: scan.gatekeeper,
       reasons: scan.reasons,
-      hiddenMacroContext: {
-        ...hiddenMacro,
-        cooldownMinutes: appState.aiSettings.cooldownMinutes
-      }
+      cooldownMinutes: appState.aiSettings.cooldownMinutes
     })
   });
 
-  if (!res.ok) {
-    throw new Error(`Server ${res.status}`);
+  if (!response.ok) {
+    throw new Error(`AI endpoint error ${response.status}`);
   }
 
-  const data = await res.json();
+  const data = await response.json();
+
   return {
     decision: sanitizeDecision(data.decision),
     title: data.title || "Décision IA",
@@ -771,51 +781,10 @@ async function askServerForDecision(scan) {
   };
 }
 
-function buildHiddenMacroContext(pair) {
-  const now = Date.now();
-  const relevant = appState.macroEvents
-    .filter(evt => pair.includes(evt.currency))
-    .map(evt => ({
-      name: evt.name,
-      currency: evt.currency,
-      impact: evt.impact,
-      minutesFromNow: Math.round((evt.date.getTime() - now) / 60000)
-    }));
-
-  const danger = relevant.some(
-    evt => Math.abs(evt.minutesFromNow) <= appState.aiSettings.cooldownMinutes
-  );
-
-  return {
-    danger,
-    relevantEvents: relevant
-  };
-}
-
 function localDecisionEngine(scan) {
-  const hiddenMacro = buildHiddenMacroContext(scan.pair);
   const strictness = appState.aiSettings.mode;
-
-  let decision = "WAIT";
-  let confidence = scan.confidence;
-  let title = "Attente prudente";
-  let reason = "Le moteur attend un alignement plus propre.";
-  let action = "Attendre";
-  let window = "Recheck dans 15 à 30 minutes";
-
   const aggressiveBias = strictness === "aggressive" ? 5 : 0;
   const strictPenalty = strictness === "strict" ? 7 : 0;
-
-  if (hiddenMacro.danger) {
-    return {
-      decision: "NO TRADE",
-      title: "Contexte macro défavorable",
-      reason: "Une fenêtre macro sensible est proche ou en cours. Le système bloque le trade.",
-      confidence: clamp(82 + strictPenalty, 1, 99),
-      action: "Ne pas entrer",
-      window: `Réévaluer après ${appState.aiSettings.cooldownMinutes} min`
-    };
-  }
 
   if (scan.gatekeeper.decision === "NO TRADE") {
     return {
@@ -839,14 +808,14 @@ function localDecisionEngine(scan) {
     };
   }
 
-  decision = "TRADE";
-  title = "Trade autorisé";
-  reason = "Le contexte technique, le risque et le timing sont suffisamment alignés.";
-  action = `Entrée ${scan.direction.toUpperCase()} possible`;
-  window = "Fenêtre exploitable maintenant";
-  confidence = clamp(scan.confidence + 4 - strictPenalty, 1, 99);
-
-  return { decision, title, reason, confidence, action, window };
+  return {
+    decision: "TRADE",
+    title: "Trade autorisé",
+    reason: "Le contexte technique, le risque et le timing sont suffisamment alignés.",
+    confidence: clamp(scan.confidence + 4 - strictPenalty, 1, 99),
+    action: `Entrée ${scan.direction.toUpperCase()} possible`,
+    window: "Fenêtre exploitable maintenant"
+  };
 }
 
 function sanitizeDecision(value) {
@@ -859,7 +828,7 @@ function sanitizeDecision(value) {
 function onAddTrade(event) {
   event.preventDefault();
 
-  const scan = appState.scans.find(s => s.pair === els.tradePair.value);
+  const scan = appState.scans.find((s) => s.pair === els.tradePair.value);
   if (!scan) return;
 
   const ai = appState.aiDecisionCache[scan.pair] || localDecisionEngine(scan);
@@ -905,7 +874,7 @@ function toggleCurrentWatchlist() {
   if (!pair) return;
 
   if (appState.watchlist.includes(pair)) {
-    appState.watchlist = appState.watchlist.filter(p => p !== pair);
+    appState.watchlist = appState.watchlist.filter((p) => p !== pair);
   } else {
     appState.watchlist.unshift(pair);
   }
@@ -922,36 +891,37 @@ function clearTrades() {
 }
 
 function exportTradesJson() {
-  const blob = new Blob([JSON.stringify(appState.trades, null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(appState.trades, null, 2)], {
+    type: "application/json"
+  });
+
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "ftmo-edge-trades.json";
-  a.click();
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "ftmo-edge-trades.json";
+  link.click();
   URL.revokeObjectURL(url);
 }
 
 function calculateOpenExposure() {
   return appState.trades
-    .filter(t => t.status === "actif")
-    .reduce((sum, t) => sum + Number(t.riskPercent || 0), 0);
+    .filter((trade) => trade.status === "actif")
+    .reduce((sum, trade) => sum + Number(trade.riskPercent || 0), 0);
 }
 
 function getGlobalRiskSnapshot() {
-  const anyDanger = appState.macroEvents.some(evt => {
-    const diff = Math.abs(evt.date.getTime() - Date.now());
-    return diff <= (appState.aiSettings.cooldownMinutes || 90) * 60 * 1000 && evt.impact === "high";
-  });
+  const exposure = calculateOpenExposure();
 
-  if (anyDanger) {
+  if (exposure >= 3) {
     return {
-      label: "Macro élevée",
-      description: "Le moteur se durcit en présence d’un événement macro fort."
+      label: "Exposition élevée",
+      description: "Le risque cumulé ouvert est déjà élevé. Le moteur devient plus dur."
     };
   }
+
   return {
     label: "Risque modéré",
-    description: "Aucune fenêtre macro forte immédiate détectée par le moteur invisible."
+    description: "Aucune surexposition immédiate détectée. Le moteur reste sélectif."
   };
 }
 
@@ -964,30 +934,31 @@ function getSessionBoost(pair) {
   return 2;
 }
 
-function getPairMacroPenalty(pair) {
-  const relevant = appState.macroEvents.filter(evt => pair.includes(evt.currency));
-  const cooldownMs = (appState.aiSettings.cooldownMinutes || 90) * 60 * 1000;
-
-  let penalty = 0;
-  relevant.forEach(evt => {
-    const diff = Math.abs(evt.date.getTime() - Date.now());
-    if (diff <= cooldownMs) penalty += evt.impact === "high" ? 18 : 10;
-    else if (diff <= cooldownMs * 2) penalty += evt.impact === "high" ? 8 : 4;
-  });
-
-  return penalty;
+function estimateMacroPenalty(pair) {
+  const session = getMarketSession(new Date()).label;
+  if (pair.includes("USD") && session.includes("New York")) return 4;
+  if ((pair === "NAS100" || pair === "XAUUSD") && session.includes("New York")) return 6;
+  return 2;
 }
 
 function getCorrelationPenalty(pair) {
-  const active = appState.trades.filter(t => t.status === "actif").map(t => t.pair);
-  const usdCount = active.filter(p => p.includes("USD")).length;
+  const activePairs = appState.trades
+    .filter((trade) => trade.status === "actif")
+    .map((trade) => trade.pair);
+
+  const usdCount = activePairs.filter((p) => p.includes("USD")).length;
   if (pair.includes("USD") && usdCount >= 2) return 12;
-  if (pair.includes("JPY") && active.some(p => p.includes("JPY"))) return 8;
+  if (pair.includes("JPY") && activePairs.some((p) => p.includes("JPY"))) return 8;
   return 0;
 }
 
 function getSpreadPenalty(pair, atrValue) {
-  const baseSpread = pair === "XAUUSD" ? 0.18 : pair === "NAS100" ? 0.28 : 0.04;
+  const baseSpread =
+    pair === "XAUUSD" ? 0.18 :
+    pair === "NAS100" ? 0.28 :
+    pair === "GER40" ? 0.22 :
+    0.04;
+
   const normalized = atrValue <= 0 ? 0 : (baseSpread / atrValue) * 100;
   if (normalized > 18) return 12;
   if (normalized > 12) return 8;
@@ -996,7 +967,9 @@ function getSpreadPenalty(pair, atrValue) {
 
 function getOffSessionPenalty(pair) {
   const session = getMarketSession(new Date()).label;
-  if (session === "Off-session") return pair === "XAUUSD" || pair === "NAS100" ? 9 : 7;
+  if (session === "Off-session") {
+    return pair === "XAUUSD" || pair === "NAS100" ? 9 : 7;
+  }
   return 0;
 }
 
@@ -1016,7 +989,11 @@ function historicalSimilarity(pair, timeframe, rsi14, momentum, atr14) {
 }
 
 function detectStructure(highs, lows) {
-  const h1 = highs.at(-1), h5 = highs.at(-5), l1 = lows.at(-1), l5 = lows.at(-5);
+  const h1 = highs.at(-1);
+  const h5 = highs.at(-5);
+  const l1 = lows.at(-1);
+  const l5 = lows.at(-5);
+
   if (h1 > h5 && l1 > l5) return 8;
   if (h1 < h5 && l1 < l5) return -8;
   return 0;
@@ -1055,12 +1032,13 @@ function generateCandles(symbol, timeframe) {
   const step = stepMap[timeframe] || 0.0014;
   const candles = [];
   let price = base;
-  let time = Math.floor(Date.now() / 1000) - 160 * 60;
+  let time = Math.floor(Date.now() / 1000) - 160 * timeframeToSeconds(timeframe);
 
   for (let i = 0; i < 160; i += 1) {
     const wave = Math.sin(i / 7) * step * 1.2;
     const drift = (hashCode(symbol) % 2 === 0 ? 1 : -1) * step * 0.08;
     const noise = (Math.random() - 0.5) * step * 1.7;
+
     const open = price;
     const close = open + wave + drift + noise;
     const high = Math.max(open, close) + Math.abs(noise) * 1.1 + step * 0.35;
@@ -1096,7 +1074,7 @@ function getSymbolBasePrice(symbol) {
     NAS100: 18240,
     GER40: 18420
   };
-  return prices[symbol] || 1.0;
+  return prices[symbol] || 1;
 }
 
 function timeframeToSeconds(tf) {
@@ -1114,18 +1092,21 @@ function roundPrice(value, symbol) {
 }
 
 function formatPrice(value) {
-  if (!Number.isFinite(Number(value))) return "--";
-  return Number(value).toFixed(value > 100 ? 2 : 5);
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "--";
+  return n.toFixed(n > 100 ? 2 : 5);
 }
 
 function emaSeries(values, period) {
   const k = 2 / (period + 1);
   const out = [];
   let prev = values[0];
+
   for (let i = 0; i < values.length; i += 1) {
     prev = i === 0 ? values[0] : values[i] * k + prev * (1 - k);
     out.push(prev);
   }
+
   return out;
 }
 
@@ -1136,11 +1117,13 @@ function ema(values, period) {
 function rsi(values, period = 14) {
   let gains = 0;
   let losses = 0;
+
   for (let i = values.length - period; i < values.length; i += 1) {
     const diff = values[i] - values[i - 1];
     if (diff >= 0) gains += diff;
     else losses += Math.abs(diff);
   }
+
   if (losses === 0) return 100;
   const rs = gains / losses;
   return 100 - (100 / (1 + rs));
@@ -1148,6 +1131,7 @@ function rsi(values, period = 14) {
 
 function atr(highs, lows, closes, period = 14) {
   const trs = [];
+
   for (let i = 1; i < highs.length; i += 1) {
     const tr = Math.max(
       highs[i] - lows[i],
@@ -1156,6 +1140,7 @@ function atr(highs, lows, closes, period = 14) {
     );
     trs.push(tr);
   }
+
   const recent = trs.slice(-period);
   return recent.reduce((a, b) => a + b, 0) / recent.length;
 }
