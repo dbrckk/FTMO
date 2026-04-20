@@ -4,118 +4,339 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>FTMO Edge AI</title>
-
+  <meta name="description" content="Scanner FTMO mobile-first avec IA, contrôle FTMO, market data, filtre macro invisible et gestion de trade." />
   <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
   <link rel="stylesheet" href="styles.css"/>
 </head>
-
 <body>
-<div class="app-shell">
+  <div class="noise"></div>
 
-  <!-- TOP -->
-  <header class="topbar">
-    <div>
-      <h1>FTMO EDGE</h1>
-      <p id="localClock"></p>
-    </div>
-
-    <div class="topbar-actions">
-      <span id="activeSessionPill" class="pill"></span>
-      <span id="riskPill" class="pill"></span>
-      <button id="settingsBtn" class="icon-btn">⚙️</button>
-    </div>
-  </header>
-
-  <!-- HERO -->
-  <section class="card hero">
-    <div class="hero-main">
+  <div class="app-shell">
+    <header class="topbar glass">
       <div>
-        <h2 id="sessionHeadline"></h2>
-        <p id="sessionSubline"></p>
+        <p class="eyebrow">FTMO / MT5 / AI Decision Layer</p>
+        <h1>FTMO Edge AI</h1>
       </div>
 
-      <div class="hero-score-wrap">
-        <div id="bestScore" class="hero-score">--</div>
-        <span>Top score</span>
+      <div class="topbar-actions">
+        <span id="activeSessionPill" class="pill">Session --</span>
+        <span id="riskPill" class="pill warning">Risque --</span>
+        <span id="marketBiasPill" class="pill positive">Bias --</span>
+        <button id="settingsBtn" class="ghost-btn">IA</button>
+        <button id="refreshBtn" class="icon-btn" aria-label="Refresh">↻</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="hero card gradient-border">
+        <div class="hero-main">
+          <div>
+            <p class="muted">Centre de décision</p>
+            <h2 id="sessionHeadline">Analyse stricte des opportunités</h2>
+            <p id="sessionSubline" class="subline">Le moteur combine structure, timing, session, risque, corrélation, macro invisible et contrôle FTMO.</p>
+          </div>
+
+          <div class="hero-score-wrap">
+            <div id="bestScore" class="hero-score">--</div>
+            <span>meilleur score</span>
+          </div>
+        </div>
+
+        <div class="hero-pills">
+          <span id="localClock" class="pill">--:--</span>
+          <span id="topPairLabel" class="pill">--</span>
+          <span id="topPairReason" class="pill">--</span>
+        </div>
+      </section>
+
+      <section class="decision-center card">
+        <div class="section-title-row">
+          <div>
+            <p class="muted">Verdict principal</p>
+            <h3 id="decisionAsset">--</h3>
+          </div>
+          <div id="decisionBadge" class="signal-badge signal-wait">WAIT</div>
+        </div>
+
+        <div class="decision-grid">
+          <article class="decision-box">
+            <span class="muted">Décision IA</span>
+            <strong id="decisionText">Analyse en cours</strong>
+            <small id="decisionReason">Le système attend un contexte propre.</small>
+          </article>
+
+          <article class="decision-box">
+            <span class="muted">Confiance</span>
+            <strong id="decisionConfidence">--</strong>
+            <small id="decisionRiskMode">Mode risque --</small>
+          </article>
+
+          <article class="decision-box">
+            <span class="muted">Action</span>
+            <strong id="decisionAction">Attendre</strong>
+            <small id="decisionWindow">Fenêtre idéale --</small>
+          </article>
+        </div>
+      </section>
+
+      <section class="card ftmo-risk-panel">
+        <div class="section-title-row">
+          <div>
+            <p class="muted">Contrôle risque FTMO</p>
+            <h3 id="ftmoRiskTitle">Statut risque</h3>
+          </div>
+          <div id="ftmoDecisionBadge" class="signal-badge signal-wait">WAIT</div>
+        </div>
+
+        <div class="decision-grid">
+          <article class="decision-box">
+            <span class="muted">Perte journalière restante</span>
+            <strong id="ftmoDailyRemaining">--</strong>
+            <small id="ftmoDailyHint">Limite journalière</small>
+          </article>
+
+          <article class="decision-box">
+            <span class="muted">Risque additionnel max</span>
+            <strong id="ftmoMaxAdditionalRisk">--</strong>
+            <small id="ftmoRiskHint">Risque encore autorisé</small>
+          </article>
+
+          <article class="decision-box">
+            <span class="muted">Décision</span>
+            <strong id="ftmoDecisionText">Analyse en cours</strong>
+            <small id="ftmoDecisionReason">Le moteur vérifie les limites de risque.</small>
+          </article>
+        </div>
+      </section>
+
+      <section class="overview-grid">
+        <article class="card stat-card">
+          <span class="muted">Meilleure paire</span>
+          <strong id="topPairLabelCard">--</strong>
+          <small id="topPairReasonCard">--</small>
+        </article>
+
+        <article class="card stat-card">
+          <span class="muted">Trades autorisés</span>
+          <strong id="allowedCount">--</strong>
+          <small>après garde-fous</small>
+        </article>
+
+        <article class="card stat-card">
+          <span class="muted">Trades refusés</span>
+          <strong id="blockedCount">--</strong>
+          <small>macro, risque, timing</small>
+        </article>
+
+        <article class="card stat-card">
+          <span class="muted">Exposition ouverte</span>
+          <strong id="globalExposure">0%</strong>
+          <small>risque cumulé</small>
+        </article>
+      </section>
+
+      <section class="card controls-section">
+        <div class="controls-header">
+          <h3>Scanner intelligent</h3>
+          <button id="recheckAiBtn" class="ghost-btn">Recheck IA</button>
+        </div>
+
+        <div class="control-grid">
+          <label>
+            <span>Timeframe</span>
+            <div id="timeframeRow" class="chip-row"></div>
+          </label>
+
+          <label>
+            <span>Style</span>
+            <select id="strategyMode">
+              <option value="balanced">Balanced</option>
+              <option value="trend">Trend follow</option>
+              <option value="reversal">Reversal</option>
+              <option value="breakout">Breakout</option>
+              <option value="scalp">Scalp session</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Filtre</span>
+            <select id="marketFilter">
+              <option value="all">Tout</option>
+              <option value="forex">Forex</option>
+              <option value="yen">JPY focus</option>
+              <option value="metals">Métaux</option>
+              <option value="indices">Indices</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Risque max / trade %</span>
+            <input id="maxRiskPerTrade" type="number" min="0.1" step="0.1" value="1" />
+          </label>
+        </div>
+
+        <div class="search-box">
+          <input id="pairSearch" type="text" placeholder="Rechercher une paire..." />
+        </div>
+      </section>
+
+      <section class="card scanner-results">
+        <div class="section-title-row">
+          <h3>Paires classées</h3>
+          <span id="pairCount" class="muted small"></span>
+        </div>
+        <div id="pairList" class="pair-list"></div>
+      </section>
+
+      <section class="card detail-panel">
+        <div class="section-title-row sticky-row">
+          <div>
+            <p class="muted">Actif sélectionné</p>
+            <h3 id="selectedPairName">EURUSD</h3>
+          </div>
+
+          <div class="row-actions">
+            <div id="selectedSignalBadge" class="signal-badge signal-wait">WAIT</div>
+            <button id="watchlistBtn" class="ghost-btn">☆ Watchlist</button>
+          </div>
+        </div>
+
+        <div id="summaryMetrics" class="metric-grid"></div>
+
+        <div class="chart-toolbar">
+          <span class="tag">Trend <strong id="trendMini">--</strong></span>
+          <span class="tag">Confidence <strong id="confidenceMini">--</strong></span>
+          <span class="tag">RR <strong id="rrMini">--</strong></span>
+          <span class="tag">IA <strong id="aiMini">--</strong></span>
+        </div>
+
+        <div id="chart" class="chart-box"></div>
+
+        <div class="insight-grid">
+          <div class="card inset-card">
+            <p class="muted">Pourquoi ce setup</p>
+            <ul id="reasonList" class="reason-list"></ul>
+          </div>
+
+          <div class="card inset-card">
+            <p class="muted">Gatekeeper</p>
+            <div id="gatekeeperBox" class="gatekeeper-box"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card trade-panel">
+        <div class="section-title-row">
+          <h3>Trade</h3>
+          <div class="row-actions">
+            <button id="exportBtn" class="ghost-btn">Exporter</button>
+            <button id="clearTradesBtn" class="ghost-btn danger">Vider</button>
+          </div>
+        </div>
+
+        <form id="tradeForm" class="trade-form">
+          <div class="field-grid">
+            <label>
+              <span>Paire</span>
+              <input id="tradePair" type="text" readonly />
+            </label>
+
+            <label>
+              <span>Direction</span>
+              <select id="tradeDirection">
+                <option value="buy">BUY</option>
+                <option value="sell">SELL</option>
+              </select>
+            </label>
+
+            <label>
+              <span>Capital</span>
+              <input id="tradeCapital" type="number" min="0" step="0.01" placeholder="10000" />
+            </label>
+
+            <label>
+              <span>Prix d'entrée</span>
+              <input id="tradeEntry" type="number" min="0" step="0.00001" placeholder="1.08250" />
+            </label>
+
+            <label>
+              <span>Risque %</span>
+              <input id="riskPercent" type="number" min="0.1" step="0.1" value="1" />
+            </label>
+
+            <label>
+              <span>Notes</span>
+              <input id="tradeNotes" type="text" placeholder="Notes..." />
+            </label>
+          </div>
+
+          <div id="tradeSuggestionBox" class="trade-output"></div>
+          <div id="exitSuggestionBox" class="trade-output"></div>
+
+          <button type="submit" class="primary-btn full-width">Ajouter Trade</button>
+        </form>
+
+        <div class="subsection">
+          <div class="section-title-row compact-gap">
+            <h4>Watchlist</h4>
+            <span id="watchlistCount" class="muted small"></span>
+          </div>
+          <div id="watchlist" class="watchlist"></div>
+        </div>
+
+        <div class="subsection">
+          <div class="section-title-row compact-gap">
+            <h4>Trades</h4>
+            <span id="tradeStats" class="muted small"></span>
+          </div>
+          <div id="tradeList" class="trade-list"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="settingsModal" class="modal hidden">
+    <div class="modal-card glass wide-modal">
+      <div class="section-title-row">
+        <h3>Configuration IA</h3>
+        <button id="closeSettingsBtn" class="icon-btn">✕</button>
+      </div>
+
+      <div class="field-grid">
+        <label>
+          <span>Modèle Groq</span>
+          <select id="groqModel">
+            <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
+            <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
+            <option value="openai/gpt-oss-20b">openai/gpt-oss-20b</option>
+          </select>
+        </label>
+
+        <label>
+          <span>Mode IA</span>
+          <select id="aiMode">
+            <option value="strict">Strict</option>
+            <option value="balanced">Balanced</option>
+            <option value="aggressive">Aggressive</option>
+          </select>
+        </label>
+
+        <label>
+          <span>Cooldown news (minutes)</span>
+          <input id="macroCooldown" type="number" min="15" step="15" value="90" />
+        </label>
+      </div>
+
+      <div class="settings-note">
+        Les news restent invisibles dans l’UI et servent uniquement au filtrage serveur / IA.
+      </div>
+
+      <div class="row-actions">
+        <button id="saveSettingsBtn" class="primary-btn">Enregistrer</button>
       </div>
     </div>
-  </section>
+  </div>
 
-  <!-- FTMO RISK -->
-  <section class="card">
-    <div class="section-title-row">
-      <h3>FTMO Risk</h3>
-      <span id="ftmoDecisionBadge" class="signal-badge">WAIT</span>
-    </div>
-
-    <div class="decision-grid">
-      <div class="decision-box">
-        <span>Daily remaining</span>
-        <strong id="ftmoDailyRemaining">--</strong>
-      </div>
-
-      <div class="decision-box">
-        <span>Max risk</span>
-        <strong id="ftmoMaxAdditionalRisk">--</strong>
-      </div>
-
-      <div class="decision-box">
-        <span>Decision</span>
-        <strong id="ftmoDecisionText">--</strong>
-        <small id="ftmoDecisionReason"></small>
-      </div>
-    </div>
-  </section>
-
-  <!-- PAIRS -->
-  <section class="card">
-    <div class="section-title-row">
-      <h3>Paires</h3>
-      <span id="pairCount"></span>
-    </div>
-
-    <input id="pairSearch" placeholder="Search pair..." />
-    <div id="pairList"></div>
-  </section>
-
-  <!-- DETAIL -->
-  <section class="card">
-    <h3 id="selectedPairName"></h3>
-    <span id="selectedSignalBadge"></span>
-
-    <div id="summaryMetrics" class="metric-grid"></div>
-
-    <div id="chart" class="chart-box"></div>
-
-    <ul id="reasonList"></ul>
-    <div id="gatekeeperBox"></div>
-  </section>
-
-  <!-- TRADE -->
-  <section class="card">
-    <h3>Trade</h3>
-
-    <form id="tradeForm">
-      <input id="tradePair" readonly />
-      <select id="tradeDirection">
-        <option value="buy">BUY</option>
-        <option value="sell">SELL</option>
-      </select>
-
-      <input id="tradeCapital" placeholder="Capital"/>
-      <input id="tradeEntry" placeholder="Entry"/>
-      <input id="riskPercent" value="1"/>
-
-      <textarea id="tradeNotes"></textarea>
-
-      <button class="primary-btn">Ajouter Trade</button>
-    </form>
-
-    <div id="tradeSuggestionBox"></div>
-  </section>
-
-</div>
-
-<script src="app.js"></script>
+  <script src="app.js"></script>
 </body>
-</html>
+  </html>
