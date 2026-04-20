@@ -1,27 +1,53 @@
 export async function onRequestPost(context) {
   try {
-    const body = await context.request.json();
+    const body = await safeJson(context.request);
+    if (!body.ok) {
+      return json({
+        ok: false,
+        error: "Invalid JSON body"
+      }, 400);
+    }
 
-    const features = normalizeFeatures(body);
+    const features = normalizeFeatures(body.data);
     const ruleScore = computeRuleScore(features);
     const mlScore = computePseudoMlScore(features, ruleScore);
 
     return json({
       ok: true,
-      source: "rule-ml-v1",
+      source: "rule-ml-v2",
       mlScore,
       confidenceBand: getConfidenceBand(mlScore),
-      features,
-      explanation: buildExplanation(features, mlScore)
+      explanation: buildExplanation(features, mlScore),
+      features: {
+        pair: features.pair,
+        timeframe: features.timeframe,
+        trendScore: features.trendScore,
+        timingScore: features.timingScore,
+        riskScore: features.riskScore,
+        contextScore: features.contextScore,
+        entryTriggerScore: features.entryTriggerScore,
+        entrySniperScore: features.entrySniperScore,
+        exitSniperScore: features.exitSniperScore,
+        rr: features.rr,
+        rsi14: features.rsi14,
+        macdLine: features.macdLine,
+        momentum: features.momentum,
+        macroPenalty: features.macroPenalty,
+        spreadPenalty: features.spreadPenalty,
+        offSessionPenalty: features.offSessionPenalty,
+        pairExpectancy: features.pairExpectancy,
+        hourExpectancy: features.hourExpectancy,
+        sessionExpectancy: features.sessionExpectancy,
+        pairWinRate: features.pairWinRate,
+        hourWinRate: features.hourWinRate,
+        sessionWinRate: features.sessionWinRate
+      }
     });
   } catch {
-    return json(
-      {
-        ok: false,
-        error: "Invalid payload"
-      },
-      400
-    );
+    return json({
+      ok: false,
+      error: "ML scoring failed"
+    }, 500);
   }
 }
 
@@ -29,24 +55,30 @@ function normalizeFeatures(body) {
   return {
     pair: cleanText(body.pair, "EURUSD"),
     timeframe: cleanText(body.timeframe, "M15"),
+
     trendScore: clamp(Number(body.trendScore) || 0, 0, 100),
     timingScore: clamp(Number(body.timingScore) || 0, 0, 100),
     riskScore: clamp(Number(body.riskScore) || 0, 0, 100),
     contextScore: clamp(Number(body.contextScore) || 0, 0, 100),
+
     entryTriggerScore: clamp(Number(body.entryTriggerScore) || 0, 0, 100),
     entrySniperScore: clamp(Number(body.entrySniperScore) || 0, 0, 100),
     exitSniperScore: clamp(Number(body.exitSniperScore) || 0, 0, 100),
+
     rsi14: clamp(Number(body.rsi14) || 50, 0, 100),
     macdLine: Number(body.macdLine) || 0,
     atr14: Math.max(Number(body.atr14) || 0, 0),
     momentum: Number(body.momentum) || 0,
     rr: Math.max(Number(body.rr) || 0, 0),
+
     macroPenalty: clamp(Number(body.macroPenalty) || 0, 0, 100),
     spreadPenalty: clamp(Number(body.spreadPenalty) || 0, 0, 100),
     offSessionPenalty: clamp(Number(body.offSessionPenalty) || 0, 0, 100),
+
     pairExpectancy: Number(body.pairExpectancy) || 0,
     hourExpectancy: Number(body.hourExpectancy) || 0,
     sessionExpectancy: Number(body.sessionExpectancy) || 0,
+
     pairWinRate: clamp(Number(body.pairWinRate) || 0, 0, 100),
     hourWinRate: clamp(Number(body.hourWinRate) || 0, 0, 100),
     sessionWinRate: clamp(Number(body.sessionWinRate) || 0, 0, 100)
@@ -104,15 +136,15 @@ function computeRuleScore(f) {
 function computePseudoMlScore(features, ruleScore) {
   let score = ruleScore;
 
-  const interactionBonus =
-    (
-      (features.trendScore >= 70 ? 1 : 0) +
-      (features.timingScore >= 70 ? 1 : 0) +
-      (features.entrySniperScore >= 72 ? 1 : 0) +
-      (features.riskScore >= 65 ? 1 : 0)
-    ) >= 3;
+  const strongCluster =
+    (features.trendScore >= 70 ? 1 : 0) +
+    (features.timingScore >= 70 ? 1 : 0) +
+    (features.entrySniperScore >= 72 ? 1 : 0) +
+    (features.riskScore >= 65 ? 1 : 0) +
+    (features.entryTriggerScore >= 70 ? 1 : 0);
 
-  if (interactionBonus) score += 6;
+  if (strongCluster >= 4) score += 8;
+  else if (strongCluster >= 3) score += 4;
 
   const weakCluster =
     features.macroPenalty >= 4 &&
@@ -134,23 +166,43 @@ function computePseudoMlScore(features, ruleScore) {
 
   if (journalHeadwind) score -= 10;
 
+  if (features.entrySniperScore <= 40) score -= 10;
+  if (features.exitSniperScore <= 40) score -= 5;
+
+  if (features.momentum > 0.15 && features.macdLine > 0) score += 4;
+  if (features.rsi14 > 78 || features.rsi14 < 22) score -= 6;
+
   return clamp(Math.round(score), 1, 99);
 }
 
 function buildExplanation(f, mlScore) {
+  const notes = [];
+
+  if (f.trendScore >= 70) notes.push("trend fort");
+  if (f.timingScore >= 70) notes.push("timing propre");
+  if (f.riskScore >= 65) notes.push("risque acceptable");
+  if (f.entrySniperScore >= 72) notes.push("entry sniper validé");
+  if (f.exitSniperScore >= 65) notes.push("exit sniper solide");
+  if (f.macroPenalty >= 4) notes.push("macro pénalisante");
+  if (f.spreadPenalty >= 8) notes.push("spread pénalisant");
+  if (f.offSessionPenalty >= 7) notes.push("hors session");
+  if (f.pairExpectancy < 0 || f.hourExpectancy < 0 || f.sessionExpectancy < 0) notes.push("journal défavorable");
+
+  const joined = notes.length ? notes.join(", ") : "lecture neutre";
+
   if (mlScore >= 80) {
-    return "Setup très propre : alignement technique, timing et risque favorable.";
+    return `Setup très propre : ${joined}.`;
   }
 
   if (mlScore >= 65) {
-    return "Setup correct mais encore sélectif, à confirmer par le filtre IA final.";
+    return `Setup correct mais encore sélectif : ${joined}.`;
   }
 
   if (mlScore >= 50) {
-    return "Setup moyen : l’avantage statistique n’est pas assez propre.";
+    return `Setup moyen : ${joined}.`;
   }
 
-  return "Setup faible : trop de frictions sur le risque, le timing ou le contexte.";
+  return `Setup faible : ${joined}.`;
 }
 
 function getConfidenceBand(score) {
@@ -164,6 +216,14 @@ function weighted(value, threshold, bonus) {
   if (value >= threshold - 10) return Math.round(bonus * 0.4);
   if (value <= threshold - 20) return -Math.round(bonus * 0.5);
   return 0;
+}
+
+async function safeJson(request) {
+  try {
+    return { ok: true, data: await request.json() };
+  } catch {
+    return { ok: false };
+  }
 }
 
 function cleanText(value, fallback) {
@@ -183,4 +243,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-        }
+      }
