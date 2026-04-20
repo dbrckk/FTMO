@@ -4,132 +4,244 @@ export async function onRequestGet(context) {
     const pair = cleanPair(url.searchParams.get("pair"));
     const timeframe = normalizeTimeframe(url.searchParams.get("timeframe"));
     const env = context.env || {};
-    const apiKey = env.ALPHAVANTAGE_API_KEY || "";
+    const apiKey = env.TWELVEDATA_API_KEY || "";
 
     if (!pair) {
-      return json(
-        {
-          ok: false,
-          error: "Missing pair"
-        },
-        400
-      );
+      return json({ ok: false, error: "Missing pair" }, 400);
     }
 
-    const meta = parsePair(pair);
-    if (!meta) {
-      return json(buildFallbackPayload(pair, timeframe, "unsupported-pair"));
+    const symbolMeta = mapSymbolForProvider(pair);
+    if (!symbolMeta) {
+      return json(buildFallbackPayload(pair, timeframe, "unsupported-symbol"));
     }
 
     let payload;
-
-    if (meta.type === "forex" && apiKey) {
-      payload = await fetchAlphaVantageForex(meta, timeframe, apiKey);
-    } else if (meta.type === "forex") {
-      payload = buildFallbackPayload(pair, timeframe, "missing-alpha-key");
+    if (apiKey) {
+      payload = await fetchTwelveDataBundle(symbolMeta, timeframe, apiKey);
     } else {
-      payload = buildFallbackPayload(pair, timeframe, "non-forex-fallback");
+      payload = buildFallbackPayload(pair, timeframe, "missing-twelvedata-key");
     }
 
     return json(payload);
   } catch {
-    return json(
-      {
-        ok: true,
-        source: "server-catch-fallback",
-        pair: "",
-        timeframe: "M15",
-        price: null,
-        candles: [],
-        indicators: {
-          atr14: 0,
-          rsi14: 50,
-          ema20: 0,
-          ema50: 0,
-          momentum: 0
-        }
-      },
-      200
-    );
+    return json({
+      ok: true,
+      source: "server-catch-fallback",
+      pair: "",
+      timeframe: "M15",
+      price: null,
+      candles: [],
+      indicators: {
+        atr14: 0,
+        rsi14: 50,
+        ema20: 0,
+        ema50: 0,
+        macd: 0,
+        momentum: 0
+      }
+    });
   }
 }
 
-async function fetchAlphaVantageForex(meta, timeframe, apiKey) {
-  const interval = mapTimeframeToAlphaInterval(timeframe);
-  const endpoint =
-    `https://www.alphavantage.co/query?function=FX_INTRADAY` +
-    `&from_symbol=${encodeURIComponent(meta.base)}` +
-    `&to_symbol=${encodeURIComponent(meta.quote)}` +
-    `&interval=${encodeURIComponent(interval)}` +
-    `&outputsize=compact` +
-    `&apikey=${encodeURIComponent(apiKey)}`;
+async function fetchTwelveDataBundle(symbolMeta, timeframe, apiKey) {
+  try {
+    const interval = mapTimeframeToProvider(timeframe);
+    const candleUrl =
+      `https://api.twelvedata.com/time_series` +
+      `?symbol=${encodeURIComponent(symbolMeta.providerSymbol)}` +
+      `&interval=${encodeURIComponent(interval)}` +
+      `&outputsize=200` +
+      `&apikey=${encodeURIComponent(apiKey)}`;
 
-  const res = await fetch(endpoint, {
-    method: "GET",
-    headers: {
-      Accept: "application/json"
+    const candleRes = await fetch(candleUrl, {
+      method: "GET",
+      headers: { Accept: "application/json" }
+    });
+
+    if (!candleRes.ok) {
+      return buildFallbackPayload(symbolMeta.localPair, timeframe, "twelvedata-http-error");
     }
-  });
 
-  if (!res.ok) {
-    return buildFallbackPayload(meta.pair, timeframe, "alpha-http-fallback");
+    const candleData = await candleRes.json();
+
+    if (!Array.isArray(candleData.values)) {
+      return buildFallbackPayload(symbolMeta.localPair, timeframe, "twelvedata-invalid-series");
+    }
+
+    const candles = candleData.values
+      .map((row) => ({
+        time: Math.floor(new Date(`${row.datetime}Z`).getTime() / 1000),
+        open: roundPrice(Number(row.open), symbolMeta.localPair),
+        high: roundPrice(Number(row.high), symbolMeta.localPair),
+        low: roundPrice(Number(row.low), symbolMeta.localPair),
+        close: roundPrice(Number(row.close), symbolMeta.localPair)
+      }))
+      .filter((c) =>
+        Number.isFinite(c.time) &&
+        Number.isFinite(c.open) &&
+        Number.isFinite(c.high) &&
+        Number.isFinite(c.low) &&
+        Number.isFinite(c.close)
+      )
+      .sort((a, b) => a.time - b.time)
+      .slice(-160);
+
+    if (!candles.length) {
+      return buildFallbackPayload(symbolMeta.localPair, timeframe, "twelvedata-empty-candles");
+    }
+
+    const closes = candles.map((c) => c.close);
+    const highs = candles.map((c) => c.high);
+    const lows = candles.map((c) => c.low);
+
+    const indicators = await fetchTwelveIndicators(
+      symbolMeta.providerSymbol,
+      interval,
+      apiKey,
+      symbolMeta.localPair
+    );
+
+    return {
+      ok: true,
+      source: "twelvedata-live",
+      pair: symbolMeta.localPair,
+      timeframe,
+      price: candles.at(-1)?.close ?? null,
+      candles,
+      indicators: {
+        atr14: safeNum(indicators.atr14 ?? atr(highs, lows, closes, 14)),
+        rsi14: safeNum(indicators.rsi14 ?? rsi(closes, 14)),
+        ema20: safeNum(indicators.ema20 ?? ema(closes, 20)),
+        ema50: safeNum(indicators.ema50 ?? ema(closes, 50)),
+        macd: safeNum(indicators.macd ?? computeMacdLine(closes)),
+        momentum: safeNum(indicators.momentum ?? computeMomentum(closes, 12))
+      }
+    };
+  } catch {
+    return buildFallbackPayload(symbolMeta.localPair, timeframe, "twelvedata-catch");
   }
+}
 
-  const data = await res.json();
+async function fetchTwelveIndicators(symbol, interval, apiKey, localPair) {
+  const endpoints = [
+    {
+      key: "rsi14",
+      url:
+        `https://api.twelvedata.com/rsi?symbol=${encodeURIComponent(symbol)}` +
+        `&interval=${encodeURIComponent(interval)}` +
+        `&time_period=14&outputsize=1&apikey=${encodeURIComponent(apiKey)}`
+    },
+    {
+      key: "ema20",
+      url:
+        `https://api.twelvedata.com/ema?symbol=${encodeURIComponent(symbol)}` +
+        `&interval=${encodeURIComponent(interval)}` +
+        `&time_period=20&outputsize=1&apikey=${encodeURIComponent(apiKey)}`
+    },
+    {
+      key: "ema50",
+      url:
+        `https://api.twelvedata.com/ema?symbol=${encodeURIComponent(symbol)}` +
+        `&interval=${encodeURIComponent(interval)}` +
+        `&time_period=50&outputsize=1&apikey=${encodeURIComponent(apiKey)}`
+    },
+    {
+      key: "atr14",
+      url:
+        `https://api.twelvedata.com/atr?symbol=${encodeURIComponent(symbol)}` +
+        `&interval=${encodeURIComponent(interval)}` +
+        `&time_period=14&outputsize=1&apikey=${encodeURIComponent(apiKey)}`
+    },
+    {
+      key: "macd",
+      url:
+        `https://api.twelvedata.com/macd?symbol=${encodeURIComponent(symbol)}` +
+        `&interval=${encodeURIComponent(interval)}` +
+        `&fast_period=12&slow_period=26&signal_period=9&outputsize=1&apikey=${encodeURIComponent(apiKey)}`
+    }
+  ];
 
-  if (data["Error Message"] || data["Information"] || data["Note"]) {
-    return buildFallbackPayload(meta.pair, timeframe, "alpha-rate-limit-fallback");
-  }
+  const results = await Promise.all(
+    endpoints.map(async (item) => {
+      try {
+        const res = await fetch(item.url, {
+          method: "GET",
+          headers: { Accept: "application/json" }
+        });
+        if (!res.ok) return [item.key, null];
+        const data = await res.json();
+        const first = Array.isArray(data.values) ? data.values[0] : null;
+        if (!first) return [item.key, null];
 
-  const seriesKey = Object.keys(data).find((key) => key.toLowerCase().includes("time series"));
-  const series = seriesKey ? data[seriesKey] : null;
+        if (item.key === "macd") {
+          return [item.key, roundPrice(Number(first.macd), localPair)];
+        }
 
-  if (!series || typeof series !== "object") {
-    return buildFallbackPayload(meta.pair, timeframe, "alpha-empty-series");
-  }
-
-  const candles = Object.entries(series)
-    .map(([timestamp, value]) => {
-      const open = Number(value["1. open"]);
-      const high = Number(value["2. high"]);
-      const low = Number(value["3. low"]);
-      const close = Number(value["4. close"]);
-
-      return {
-        time: Math.floor(new Date(timestamp + "Z").getTime() / 1000),
-        open: roundPrice(open, meta.pair),
-        high: roundPrice(high, meta.pair),
-        low: roundPrice(low, meta.pair),
-        close: roundPrice(close, meta.pair)
-      };
+        const value = first[item.key.replace(/[0-9]/g, "")] ?? first.value;
+        return [item.key, roundPrice(Number(value), localPair)];
+      } catch {
+        return [item.key, null];
+      }
     })
-    .filter((c) => Number.isFinite(c.open) && Number.isFinite(c.close))
-    .sort((a, b) => a.time - b.time)
-    .slice(-160);
+  );
 
-  if (!candles.length) {
-    return buildFallbackPayload(meta.pair, timeframe, "alpha-no-candles");
-  }
+  return Object.fromEntries(results);
+}
 
-  const closes = candles.map((c) => c.close);
-  const highs = candles.map((c) => c.high);
-  const lows = candles.map((c) => c.low);
+function mapSymbolForProvider(pair) {
+  const map = {
+    EURUSD: "EUR/USD",
+    GBPUSD: "GBP/USD",
+    USDJPY: "USD/JPY",
+    USDCHF: "USD/CHF",
+    USDCAD: "USD/CAD",
+    AUDUSD: "AUD/USD",
+    NZDUSD: "NZD/USD",
+    EURGBP: "EUR/GBP",
+    EURJPY: "EUR/JPY",
+    GBPJPY: "GBP/JPY",
+    AUDJPY: "AUD/JPY",
+    CADJPY: "CAD/JPY",
+    CHFJPY: "CHF/JPY",
+    EURAUD: "EUR/AUD",
+    EURNZD: "EUR/NZD",
+    EURCAD: "EUR/CAD",
+    EURCHF: "EUR/CHF",
+    GBPAUD: "GBP/AUD",
+    GBPNZD: "GBP/NZD",
+    GBPCAD: "GBP/CAD",
+    GBPCHF: "GBP/CHF",
+    AUDNZD: "AUD/NZD",
+    AUDCAD: "AUD/CAD",
+    AUDCHF: "AUD/CHF",
+    NZDCAD: "NZD/CAD",
+    NZDCHF: "NZD/CHF",
+    NZDJPY: "NZD/JPY",
+    XAUUSD: "XAU/USD",
+    NAS100: "NDX",
+    GER40: "DAX"
+  };
+
+  const providerSymbol = map[pair];
+  if (!providerSymbol) return null;
 
   return {
-    ok: true,
-    source: "alphavantage-fx-intraday",
-    pair: meta.pair,
-    timeframe,
-    price: candles.at(-1)?.close ?? null,
-    candles,
-    indicators: {
-      atr14: safeNum(atr(highs, lows, closes, 14)),
-      rsi14: safeNum(rsi(closes, 14)),
-      ema20: safeNum(ema(closes, 20)),
-      ema50: safeNum(ema(closes, 50)),
-      momentum: safeNum(computeMomentum(closes, 12))
-    }
+    localPair: pair,
+    providerSymbol
   };
+}
+
+function normalizeTimeframe(value) {
+  const allowed = ["M5", "M15", "H1", "H4"];
+  const tf = String(value || "").toUpperCase();
+  return allowed.includes(tf) ? tf : "M15";
+}
+
+function mapTimeframeToProvider(tf) {
+  if (tf === "M5") return "5min";
+  if (tf === "M15") return "15min";
+  if (tf === "H1") return "1h";
+  return "4h";
 }
 
 function buildFallbackPayload(pair, timeframe, source) {
@@ -150,51 +262,10 @@ function buildFallbackPayload(pair, timeframe, source) {
       rsi14: safeNum(rsi(closes, 14)),
       ema20: safeNum(ema(closes, 20)),
       ema50: safeNum(ema(closes, 50)),
+      macd: safeNum(computeMacdLine(closes)),
       momentum: safeNum(computeMomentum(closes, 12))
     }
   };
-}
-
-function parsePair(pair) {
-  const special = {
-    XAUUSD: { pair: "XAUUSD", type: "special", base: "XAU", quote: "USD" },
-    NAS100: { pair: "NAS100", type: "special", base: "NAS", quote: "USD" },
-    GER40: { pair: "GER40", type: "special", base: "GER", quote: "EUR" }
-  };
-
-  if (special[pair]) return special[pair];
-
-  if (/^[A-Z]{6}$/.test(pair)) {
-    return {
-      pair,
-      type: "forex",
-      base: pair.slice(0, 3),
-      quote: pair.slice(3, 6)
-    };
-  }
-
-  return null;
-}
-
-function normalizeTimeframe(value) {
-  const allowed = ["M5", "M15", "H1", "H4"];
-  return allowed.includes(String(value || "").toUpperCase())
-    ? String(value).toUpperCase()
-    : "M15";
-}
-
-function mapTimeframeToAlphaInterval(timeframe) {
-  if (timeframe === "M5") return "5min";
-  if (timeframe === "M15") return "15min";
-  if (timeframe === "H1") return "60min";
-  return "60min";
-}
-
-function cleanPair(value) {
-  return String(value || "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "")
-    .slice(0, 10);
 }
 
 function generateFallbackCandles(pair, timeframe) {
@@ -242,12 +313,30 @@ function getSymbolBasePrice(symbol) {
     EURUSD: 1.0835,
     GBPUSD: 1.271,
     USDJPY: 151.15,
-    EURJPY: 163.4,
-    GBPJPY: 192.3,
+    USDCHF: 0.903,
+    USDCAD: 1.352,
     AUDUSD: 0.661,
     NZDUSD: 0.607,
-    USDCAD: 1.352,
-    USDCHF: 0.903,
+    EURGBP: 0.851,
+    EURJPY: 163.4,
+    GBPJPY: 192.3,
+    AUDJPY: 99.1,
+    CADJPY: 111.4,
+    CHFJPY: 167.3,
+    EURAUD: 1.639,
+    EURNZD: 1.775,
+    EURCAD: 1.465,
+    EURCHF: 0.978,
+    GBPAUD: 1.924,
+    GBPNZD: 2.083,
+    GBPCAD: 1.719,
+    GBPCHF: 1.149,
+    AUDNZD: 1.082,
+    AUDCAD: 0.894,
+    AUDCHF: 0.597,
+    NZDCAD: 0.822,
+    NZDCHF: 0.552,
+    NZDJPY: 91.7,
     XAUUSD: 2350.5,
     NAS100: 18240,
     GER40: 18420
@@ -287,12 +376,15 @@ function emaSeries(values, period) {
   return out;
 }
 
+function computeMacdLine(closes) {
+  return ema(closes, 12) - ema(closes, 26);
+}
+
 function rsi(values, period = 14) {
   if (values.length <= period) return 50;
 
   let gains = 0;
   let losses = 0;
-
   for (let i = values.length - period; i < values.length; i += 1) {
     const diff = values[i] - values[i - 1];
     if (diff >= 0) gains += diff;
@@ -323,10 +415,18 @@ function atr(highs, lows, closes, period = 14) {
 }
 
 function roundPrice(value, symbol) {
+  if (!Number.isFinite(value)) return 0;
   if (symbol === "XAUUSD") return Number(value.toFixed(2));
   if (symbol === "NAS100" || symbol === "GER40") return Number(value.toFixed(1));
   if (symbol.includes("JPY")) return Number(value.toFixed(3));
   return Number(value.toFixed(5));
+}
+
+function cleanPair(value) {
+  return String(value || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 10);
 }
 
 function safeNum(value) {
