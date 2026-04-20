@@ -1,4 +1,4 @@
-const STORAGE_KEY = "ftmo-edge-ai-state-v1";
+const STORAGE_KEY = "ftmo-edge-ai-state-v2";
 
 const TIMEFRAMES = ["M5", "M15", "H1", "H4"];
 const PAIRS = [
@@ -33,7 +33,6 @@ const defaultState = {
   macroEvents: [],
   aiDecisionCache: {},
   aiSettings: {
-    apiKey: "",
     model: "llama-3.1-8b-instant",
     mode: "strict",
     cooldownMinutes: 90
@@ -66,7 +65,7 @@ function cacheEls() {
     "decisionAsset", "decisionBadge", "decisionText", "decisionReason", "decisionConfidence",
     "decisionRiskMode", "decisionAction", "decisionWindow",
     "settingsBtn", "settingsModal", "closeSettingsBtn", "saveSettingsBtn",
-    "groqApiKey", "groqModel", "aiMode", "macroCooldown", "maxRiskPerTrade"
+    "groqModel", "aiMode", "macroCooldown", "maxRiskPerTrade"
   ].forEach(id => {
     els[id] = document.getElementById(id);
   });
@@ -99,7 +98,6 @@ function hydrateUiFromState() {
   els.strategyMode.value = appState.strategy;
   els.marketFilter.value = appState.marketFilter;
   els.pairSearch.value = appState.search;
-  els.groqApiKey.value = appState.aiSettings.apiKey || "";
   els.groqModel.value = appState.aiSettings.model || "llama-3.1-8b-instant";
   els.aiMode.value = appState.aiSettings.mode || "strict";
   els.macroCooldown.value = appState.aiSettings.cooldownMinutes || 90;
@@ -155,7 +153,6 @@ function bindEvents() {
 }
 
 function saveAiSettings() {
-  appState.aiSettings.apiKey = els.groqApiKey.value.trim();
   appState.aiSettings.model = els.groqModel.value;
   appState.aiSettings.mode = els.aiMode.value;
   appState.aiSettings.cooldownMinutes = Number(els.macroCooldown.value) || 90;
@@ -301,7 +298,6 @@ function makeEvent(name, date, currency, impact) {
 
 function scanPair(item, timeframe, strategy) {
   const candles = generateCandles(item.symbol, timeframe);
-  appState.priceSeries[item.symbol] = candles;
 
   const closes = candles.map(c => c.close);
   const highs = candles.map(c => c.high);
@@ -420,46 +416,18 @@ function scanPair(item, timeframe, strategy) {
 function buildGatekeeper({ macroPenalty, spreadPenalty, offSessionPenalty, correlationPenalty, finalScore, atr14, current }) {
   const volatilityRisk = (atr14 / current) * 100;
   const checks = [
-    {
-      label: "Macro",
-      ok: macroPenalty < 14,
-      value: macroPenalty < 14 ? "OK" : "Bloqué"
-    },
-    {
-      label: "Spread",
-      ok: spreadPenalty < 10,
-      value: spreadPenalty < 10 ? "OK" : "Trop cher"
-    },
-    {
-      label: "Session",
-      ok: offSessionPenalty < 8,
-      value: offSessionPenalty < 8 ? "OK" : "Faible liquidité"
-    },
-    {
-      label: "Corrélation",
-      ok: correlationPenalty < 10,
-      value: correlationPenalty < 10 ? "OK" : "Surexposé"
-    },
-    {
-      label: "Volatilité",
-      ok: volatilityRisk < 1.6,
-      value: volatilityRisk < 1.6 ? "OK" : "Instable"
-    },
-    {
-      label: "Setup",
-      ok: finalScore >= 58,
-      value: finalScore >= 58 ? "Valide" : "Faible"
-    }
+    { label: "Macro", ok: macroPenalty < 14, value: macroPenalty < 14 ? "OK" : "Bloqué" },
+    { label: "Spread", ok: spreadPenalty < 10, value: spreadPenalty < 10 ? "OK" : "Trop cher" },
+    { label: "Session", ok: offSessionPenalty < 8, value: offSessionPenalty < 8 ? "OK" : "Faible liquidité" },
+    { label: "Corrélation", ok: correlationPenalty < 10, value: correlationPenalty < 10 ? "OK" : "Surexposé" },
+    { label: "Volatilité", ok: volatilityRisk < 1.6, value: volatilityRisk < 1.6 ? "OK" : "Instable" },
+    { label: "Setup", ok: finalScore >= 58, value: finalScore >= 58 ? "Valide" : "Faible" }
   ];
 
   const failed = checks.filter(c => !c.ok).length;
 
-  if (failed >= 2) {
-    return { allowed: false, decision: "NO TRADE", checks };
-  }
-  if (failed === 1 || finalScore < 65) {
-    return { allowed: false, decision: "WAIT", checks };
-  }
+  if (failed >= 2) return { allowed: false, decision: "NO TRADE", checks };
+  if (failed === 1 || finalScore < 65) return { allowed: false, decision: "WAIT", checks };
   return { allowed: true, decision: "TRADE", checks };
 }
 
@@ -596,7 +564,7 @@ function renderChart(candles) {
 function renderTradeSuggestion(scan, ai) {
   const decision = ai?.decision || scan.gatekeeper.decision;
   const confidence = ai?.confidence ?? scan.confidence;
-  const explanation = ai?.reason || "Le fallback local privilégie prudence et sélection stricte.";
+  const explanation = ai?.reason || "Le moteur privilégie prudence et sélection stricte.";
   const sl = formatPrice(scan.stopLoss);
   const tp = formatPrice(scan.takeProfit);
 
@@ -721,7 +689,7 @@ async function refreshAiDecision(force = false) {
   if (!selectedScan) return;
 
   els.decisionAsset.textContent = selectedScan.pair;
-  const cacheKey = `${selectedScan.pair}_${selectedScan.finalScore}_${selectedScan.gatekeeper.decision}_${appState.aiSettings.mode}`;
+  const cacheKey = `${selectedScan.pair}_${selectedScan.finalScore}_${selectedScan.gatekeeper.decision}_${appState.aiSettings.mode}_${appState.aiSettings.model}_${appState.aiSettings.cooldownMinutes}`;
   if (!force && appState.aiDecisionCache[selectedScan.pair]?.cacheKey === cacheKey) {
     applyDecisionUi(selectedScan.pair, appState.aiDecisionCache[selectedScan.pair]);
     renderSelectedPair();
@@ -730,9 +698,9 @@ async function refreshAiDecision(force = false) {
   }
 
   let decision;
-  if (appState.aiSettings.apiKey) {
-    decision = await askGroqForDecision(selectedScan);
-  } else {
+  try {
+    decision = await askServerForDecision(selectedScan);
+  } catch {
     decision = localDecisionEngine(selectedScan);
   }
 
@@ -756,74 +724,55 @@ function applyDecisionUi(pair, decision) {
   els.decisionWindow.textContent = decision.window;
 }
 
-async function askGroqForDecision(scan) {
+async function askServerForDecision(scan) {
   const hiddenMacro = buildHiddenMacroContext(scan.pair);
-  const payload = {
-    model: appState.aiSettings.model,
-    temperature: 0.15,
-    response_format: { type: "json_object" },
-    messages: [
-      {
-        role: "system",
-        content:
-          "Tu es un filtre de trading ultra strict. Tu dois répondre en JSON avec decision,title,reason,confidence,action,window. decision doit être TRADE, WAIT ou NO TRADE. Si le doute existe, choisis WAIT ou NO TRADE."
-      },
-      {
-        role: "user",
-        content: JSON.stringify({
-          aiMode: appState.aiSettings.mode,
-          leverage: "x10",
-          pair: scan.pair,
-          timeframe: scan.timeframe,
-          signal: scan.signal,
-          trend: scan.trend,
-          finalScore: scan.finalScore,
-          confidence: scan.confidence,
-          trendScore: scan.trendScore,
-          timingScore: scan.timingScore,
-          riskScore: scan.riskScore,
-          contextScore: scan.contextScore,
-          rr: scan.rr,
-          gatekeeper: scan.gatekeeper,
-          reasons: scan.reasons,
-          hiddenMacroContext: hiddenMacro
-        })
+
+  const res = await fetch("/api/ai-decision", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      aiMode: appState.aiSettings.mode,
+      model: appState.aiSettings.model,
+      leverage: "x10",
+      pair: scan.pair,
+      timeframe: scan.timeframe,
+      signal: scan.signal,
+      trend: scan.trend,
+      finalScore: scan.finalScore,
+      confidence: scan.confidence,
+      trendScore: scan.trendScore,
+      timingScore: scan.timingScore,
+      riskScore: scan.riskScore,
+      contextScore: scan.contextScore,
+      rr: scan.rr,
+      gatekeeper: scan.gatekeeper,
+      reasons: scan.reasons,
+      hiddenMacroContext: {
+        ...hiddenMacro,
+        cooldownMinutes: appState.aiSettings.cooldownMinutes
       }
-    ]
-  };
+    })
+  });
 
-  try {
-    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${appState.aiSettings.apiKey}`
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!res.ok) throw new Error(`Groq ${res.status}`);
-
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content || "{}";
-    const parsed = JSON.parse(content);
-
-    return {
-      decision: sanitizeDecision(parsed.decision),
-      title: parsed.title || "Décision IA",
-      reason: parsed.reason || "Le modèle recommande la prudence.",
-      confidence: clamp(Number(parsed.confidence) || scan.confidence, 1, 99),
-      action: parsed.action || "Attendre une meilleure fenêtre",
-      window: parsed.window || "À revalider au prochain refresh"
-    };
-  } catch {
-    return localDecisionEngine(scan);
+  if (!res.ok) {
+    throw new Error(`Server ${res.status}`);
   }
+
+  const data = await res.json();
+  return {
+    decision: sanitizeDecision(data.decision),
+    title: data.title || "Décision IA",
+    reason: data.reason || "Le moteur recommande la prudence.",
+    confidence: clamp(Number(data.confidence) || scan.confidence, 1, 99),
+    action: data.action || "Attendre une meilleure fenêtre",
+    window: data.window || "À revalider au prochain refresh"
+  };
 }
 
 function buildHiddenMacroContext(pair) {
   const now = Date.now();
-  const cooldownMs = (appState.aiSettings.cooldownMinutes || 90) * 60 * 1000;
   const relevant = appState.macroEvents
     .filter(evt => pair.includes(evt.currency))
     .map(evt => ({
@@ -833,10 +782,12 @@ function buildHiddenMacroContext(pair) {
       minutesFromNow: Math.round((evt.date.getTime() - now) / 60000)
     }));
 
-  const danger = relevant.some(evt => Math.abs(evt.minutesFromNow) <= appState.aiSettings.cooldownMinutes);
+  const danger = relevant.some(
+    evt => Math.abs(evt.minutesFromNow) <= appState.aiSettings.cooldownMinutes
+  );
+
   return {
     danger,
-    cooldownMinutes: appState.aiSettings.cooldownMinutes,
     relevantEvents: relevant
   };
 }
@@ -1029,8 +980,8 @@ function getPairMacroPenalty(pair) {
 
 function getCorrelationPenalty(pair) {
   const active = appState.trades.filter(t => t.status === "actif").map(t => t.pair);
-  const quoteUsdCount = active.filter(p => p.includes("USD")).length;
-  if (pair.includes("USD") && quoteUsdCount >= 2) return 12;
+  const usdCount = active.filter(p => p.includes("USD")).length;
+  if (pair.includes("USD") && usdCount >= 2) return 12;
   if (pair.includes("JPY") && active.some(p => p.includes("JPY"))) return 8;
   return 0;
 }
