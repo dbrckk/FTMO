@@ -4,7 +4,6 @@ export async function onRequestGet(context) {
     const pair = cleanPair(url.searchParams.get("pair"));
     const cooldownMinutes = clamp(Number(url.searchParams.get("cooldown")) || 90, 15, 240);
     const currencies = extractCurrenciesFromPair(pair);
-    const now = new Date();
 
     if (!currencies.length) {
       return json({
@@ -12,31 +11,42 @@ export async function onRequestGet(context) {
         pair,
         cooldownMinutes,
         danger: false,
-        source: "fallback-empty",
-        relevantEvents: []
+        source: "empty-pair",
+        relevantEvents: [],
+        dangerScore: 0
       });
     }
 
-    const fallbackEvents = buildFallbackEvents(now)
-      .filter((evt) => currencies.includes(evt.currency))
-      .map((evt) => ({
-        ...evt,
-        minutesFromNow: diffMinutes(now, new Date(evt.date))
-      }))
-      .sort((a, b) => Math.abs(a.minutesFromNow) - Math.abs(b.minutesFromNow))
-      .slice(0, 10);
+    const feed = await getMacroFeed(context.request);
+    const now = new Date();
 
-    const danger = fallbackEvents.some(
-      (evt) => Math.abs(evt.minutesFromNow) <= cooldownMinutes && evt.impact === "high"
-    );
+    const relevantEvents = (feed.events || [])
+      .filter((evt) => currencies.includes(String(evt.currency || "").toUpperCase()))
+      .map((evt) => {
+        const date = new Date(evt.date);
+        return {
+          name: String(evt.name || "").slice(0, 120),
+          currency: String(evt.currency || "").toUpperCase(),
+          impact: normalizeImpact(evt.impact),
+          date: date.toISOString(),
+          minutesFromNow: Math.round((date.getTime() - now.getTime()) / 60000)
+        };
+      })
+      .filter((evt) => Number.isFinite(evt.minutesFromNow))
+      .sort((a, b) => Math.abs(a.minutesFromNow) - Math.abs(b.minutesFromNow))
+      .slice(0, 12);
+
+    const dangerScore = computeDangerScore(relevantEvents, cooldownMinutes);
+    const danger = dangerScore >= 60;
 
     return json({
       ok: true,
       pair,
       cooldownMinutes,
       danger,
-      source: "fallback-static",
-      relevantEvents: fallbackEvents
+      dangerScore,
+      source: feed.source || "macro-feed",
+      relevantEvents
     });
   } catch {
     return json({
@@ -44,47 +54,62 @@ export async function onRequestGet(context) {
       pair: "",
       cooldownMinutes: 90,
       danger: false,
-      source: "fallback-catch",
+      dangerScore: 0,
+      source: "macro-context-catch",
       relevantEvents: []
     });
   }
 }
 
-function buildFallbackEvents(now) {
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  const d = now.getDate();
+async function getMacroFeed(request) {
+  try {
+    const url = new URL(request.url);
+    url.pathname = "/api/macro-feed";
+    url.search = "";
 
-  return [
-    event("US CPI", new Date(y, m, d, 14, 30), "USD", "high"),
-    event("FOMC Member Speech", new Date(y, m, d, 18, 45), "USD", "medium"),
-    event("US PPI", new Date(y, m, d + 1, 14, 30), "USD", "medium"),
-    event("UK CPI", new Date(y, m, d + 1, 8, 0), "GBP", "high"),
-    event("BoE Remarks", new Date(y, m, d + 1, 12, 0), "GBP", "medium"),
-    event("EZ PMI", new Date(y, m, d + 1, 10, 0), "EUR", "medium"),
-    event("ECB Speech", new Date(y, m, d + 2, 11, 15), "EUR", "medium"),
-    event("BoJ Outlook", new Date(y, m, d + 2, 5, 0), "JPY", "high"),
-    event("Japan CPI", new Date(y, m, d + 3, 1, 30), "JPY", "high"),
-    event("CAD Employment", new Date(y, m, d + 2, 14, 30), "CAD", "medium"),
-    event("SNB Remarks", new Date(y, m, d + 3, 9, 30), "CHF", "medium"),
-    event("Swiss CPI", new Date(y, m, d + 4, 8, 30), "CHF", "medium"),
-    event("RBA Minutes", new Date(y, m, d + 3, 3, 30), "AUD", "medium"),
-    event("Australian Employment", new Date(y, m, d + 4, 2, 30), "AUD", "high"),
-    event("NZ GDP", new Date(y, m, d + 4, 0, 45), "NZD", "high"),
-    event("RBNZ Remarks", new Date(y, m, d + 5, 1, 0), "NZD", "medium"),
-    event("Gold Volatility Proxy", new Date(y, m, d, 15, 0), "XAU", "medium"),
-    event("US Tech Risk Window", new Date(y, m, d, 16, 0), "NAS", "medium"),
-    event("EU Equity Risk Window", new Date(y, m, d, 11, 0), "GER", "medium")
-  ];
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        Accept: "application/json"
+      }
+    });
+
+    if (!res.ok) throw new Error("macro-feed failed");
+    return await res.json();
+  } catch {
+    return {
+      source: "macro-feed-fallback-empty",
+      events: []
+    };
+  }
 }
 
-function event(name, date, currency, impact) {
-  return {
-    name,
-    date: date.toISOString(),
-    currency,
-    impact
-  };
+function computeDangerScore(events, cooldownMinutes) {
+  let score = 0;
+
+  for (const evt of events) {
+    const minutes = Math.abs(Number(evt.minutesFromNow || 99999));
+    const impact = normalizeImpact(evt.impact);
+
+    if (impact === "high") {
+      if (minutes <= cooldownMinutes) score += 70;
+      else if (minutes <= cooldownMinutes * 2) score += 30;
+    } else if (impact === "medium") {
+      if (minutes <= cooldownMinutes) score += 35;
+      else if (minutes <= cooldownMinutes * 2) score += 14;
+    } else {
+      if (minutes <= cooldownMinutes) score += 10;
+    }
+  }
+
+  return Math.min(100, score);
+}
+
+function normalizeImpact(value) {
+  const v = String(value || "").toLowerCase();
+  if (v.includes("high")) return "high";
+  if (v.includes("medium")) return "medium";
+  return "low";
 }
 
 function extractCurrenciesFromPair(pair) {
@@ -96,7 +121,7 @@ function extractCurrenciesFromPair(pair) {
 
   if (specialMap[pair]) return specialMap[pair];
 
-  if (pair.length >= 6) {
+  if (/^[A-Z]{6}$/.test(pair)) {
     return [pair.slice(0, 3), pair.slice(3, 6)];
   }
 
@@ -108,10 +133,6 @@ function cleanPair(value) {
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "")
     .slice(0, 10);
-}
-
-function diffMinutes(a, b) {
-  return Math.round((b.getTime() - a.getTime()) / 60000);
 }
 
 function clamp(value, min, max) {
@@ -126,4 +147,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-                                            }
+      }
