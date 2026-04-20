@@ -1,4 +1,4 @@
-const STORAGE_KEY = "ftmo-edge-ai-state-v3";
+const STORAGE_KEY = "ftmo-edge-ai-state-v4";
 
 const TIMEFRAMES = ["M5", "M15", "H1", "H4"];
 const PAIRS = [
@@ -103,11 +103,15 @@ function hydrateUiFromState() {
 
 function renderTimeframeButtons() {
   els.timeframeRow.innerHTML = "";
+
   TIMEFRAMES.forEach((tf) => {
     const btn = document.createElement("button");
     btn.className = "ghost-btn";
     btn.textContent = tf;
-    if (appState.timeframe === tf) btn.classList.add("active-chip");
+
+    if (appState.timeframe === tf) {
+      btn.classList.add("active-chip");
+    }
 
     btn.addEventListener("click", () => {
       appState.timeframe = tf;
@@ -143,6 +147,7 @@ function bindEvents() {
 
   els.refreshBtn.addEventListener("click", () => refreshAll(true));
   els.recheckAiBtn.addEventListener("click", () => refreshAll(true));
+
   els.tradeForm.addEventListener("submit", onAddTrade);
   els.watchlistBtn.addEventListener("click", toggleCurrentWatchlist);
   els.exportBtn.addEventListener("click", exportTradesJson);
@@ -198,9 +203,11 @@ function setupChart() {
 async function refreshAll(forceAi = false) {
   updateClockAndSession();
 
-  appState.scans = PAIRS
-    .map((item) => scanPair(item, appState.timeframe, appState.strategy))
-    .sort((a, b) => b.finalScore - a.finalScore);
+  const scans = await Promise.all(
+    PAIRS.map((item) => scanPair(item, appState.timeframe, appState.strategy))
+  );
+
+  appState.scans = scans.sort((a, b) => b.finalScore - a.finalScore);
 
   if (!appState.scans.some((scan) => scan.pair === appState.selectedPair)) {
     appState.selectedPair = appState.scans[0]?.pair || "EURUSD";
@@ -237,11 +244,13 @@ function updateClockAndSession() {
 }
 
 function getMarketSession(date) {
-  const hourParis = Number(date.toLocaleString("en-GB", {
-    hour: "2-digit",
-    hour12: false,
-    timeZone: "Europe/Paris"
-  }));
+  const hourParis = Number(
+    date.toLocaleString("en-GB", {
+      hour: "2-digit",
+      hour12: false,
+      timeZone: "Europe/Paris"
+    })
+  );
 
   const tokyo = hourParis >= 1 && hourParis < 10;
   const london = hourParis >= 9 && hourParis < 18;
@@ -287,18 +296,24 @@ function getMarketSession(date) {
   };
 }
 
-function scanPair(item, timeframe, strategy) {
-  const candles = generateCandles(item.symbol, timeframe);
+async function scanPair(item, timeframe, strategy) {
+  const market = await fetchMarketData(item.symbol, timeframe);
+  const candles = market.candles?.length ? market.candles : generateCandles(item.symbol, timeframe);
+
   const closes = candles.map((c) => c.close);
   const highs = candles.map((c) => c.high);
   const lows = candles.map((c) => c.low);
 
-  const current = closes.at(-1);
-  const ema20 = emaSeries(closes, 20).at(-1);
-  const ema50 = emaSeries(closes, 50).at(-1);
-  const rsi14 = rsi(closes, 14);
-  const atr14 = atr(highs, lows, closes, 14);
-  const momentum = ((current - closes.at(-12)) / closes.at(-12)) * 100;
+  const current = Number(market.price ?? closes.at(-1));
+  const ema20 = Number(market.indicators?.ema20 ?? emaSeries(closes, 20).at(-1));
+  const ema50 = Number(market.indicators?.ema50 ?? emaSeries(closes, 50).at(-1));
+  const rsi14 = Number(market.indicators?.rsi14 ?? rsi(closes, 14));
+  const atr14 = Number(market.indicators?.atr14 ?? atr(highs, lows, closes, 14));
+  const momentum = Number(
+    market.indicators?.momentum ??
+    (((current - closes.at(-12)) / closes.at(-12)) * 100)
+  );
+
   const support = Math.min(...lows.slice(-20));
   const resistance = Math.max(...highs.slice(-20));
   const macdLine = ema(closes, 12) - ema(closes, 26);
@@ -331,7 +346,14 @@ function scanPair(item, timeframe, strategy) {
   let contextScore = 50;
   contextScore += sessionBoost;
   contextScore += historicalEdge;
-  contextScore += strategyBonus(strategy, { rsi14, current, support, resistance, ema20, ema50 });
+  contextScore += strategyBonus(strategy, {
+    rsi14,
+    current,
+    support,
+    resistance,
+    ema20,
+    ema50
+  });
 
   const finalScore = clamp(
     Math.round(
@@ -355,11 +377,15 @@ function scanPair(item, timeframe, strategy) {
   });
 
   const signal = gatekeeper.allowed
-    ? finalScore >= 82 ? "STRONG BUY"
-      : finalScore >= 68 ? "BUY"
-      : finalScore <= 22 ? "STRONG SELL"
-      : finalScore <= 36 ? "SELL"
-      : "WAIT"
+    ? finalScore >= 82
+      ? "STRONG BUY"
+      : finalScore >= 68
+        ? "BUY"
+        : finalScore <= 22
+          ? "STRONG SELL"
+          : finalScore <= 36
+            ? "SELL"
+            : "WAIT"
     : gatekeeper.decision;
 
   const direction = signal.includes("SELL") ? "sell" : "buy";
@@ -371,6 +397,7 @@ function scanPair(item, timeframe, strategy) {
     pair: item.symbol,
     group: item.group,
     timeframe,
+    marketSource: market.source || "unknown",
     candles,
     current,
     ema20,
@@ -411,8 +438,17 @@ function scanPair(item, timeframe, strategy) {
   };
 }
 
-function buildGatekeeper({ macroPenalty, spreadPenalty, offSessionPenalty, correlationPenalty, finalScore, atr14, current }) {
+function buildGatekeeper({
+  macroPenalty,
+  spreadPenalty,
+  offSessionPenalty,
+  correlationPenalty,
+  finalScore,
+  atr14,
+  current
+}) {
   const volatilityRisk = (atr14 / current) * 100;
+
   const checks = [
     { label: "Macro", ok: macroPenalty < 14, value: macroPenalty < 14 ? "OK" : "Bloqué" },
     { label: "Spread", ok: spreadPenalty < 10, value: spreadPenalty < 10 ? "OK" : "Trop cher" },
@@ -474,12 +510,11 @@ function renderPairList() {
       refreshAiDecision(true);
     });
 
-    const signalClass =
-      scan.signal.includes("BUY")
-        ? "signal-buy"
-        : scan.signal.includes("SELL") || scan.signal.includes("NO")
-          ? "signal-sell"
-          : "signal-wait";
+    const signalClass = scan.signal.includes("BUY")
+      ? "signal-buy"
+      : scan.signal.includes("SELL") || scan.signal.includes("NO")
+        ? "signal-sell"
+        : "signal-wait";
 
     item.innerHTML = `
       <div class="pair-left">
@@ -520,7 +555,7 @@ function renderSelectedPair() {
     metricCard("Timing", `${scan.timingScore}`, "qualité d’entrée"),
     metricCard("Risk", `${scan.riskScore}`, "macro, spread, corrélation"),
     metricCard("Context", `${scan.contextScore}`, "session + historique"),
-    metricCard("Final", `${scan.finalScore}`, `RR ${scan.rr}`)
+    metricCard("Source", scan.marketSource || "--", "marché live / fallback")
   ].join("");
 
   els.trendMini.textContent = scan.trend;
@@ -781,6 +816,40 @@ async function askServerForDecision(scan) {
   };
 }
 
+async function fetchMarketData(pair, timeframe) {
+  try {
+    const res = await fetch(
+      `/api/market-data?pair=${encodeURIComponent(pair)}&timeframe=${encodeURIComponent(timeframe)}`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json"
+        }
+      }
+    );
+
+    if (!res.ok) {
+      throw new Error(`market-data ${res.status}`);
+    }
+
+    const data = await res.json();
+
+    return {
+      source: data.source || "unknown",
+      price: data.price,
+      candles: Array.isArray(data.candles) ? data.candles : [],
+      indicators: data.indicators || {}
+    };
+  } catch {
+    return {
+      source: "client-fallback",
+      price: null,
+      candles: [],
+      indicators: {}
+    };
+  }
+}
+
 function localDecisionEngine(scan) {
   const strictness = appState.aiSettings.mode;
   const aggressiveBias = strictness === "aggressive" ? 5 : 0;
@@ -927,17 +996,21 @@ function getGlobalRiskSnapshot() {
 
 function getSessionBoost(pair) {
   const session = getMarketSession(new Date()).label;
+
   if (session.includes("London") && (pair.includes("EUR") || pair.includes("GBP") || pair === "GER40")) return 10;
   if (session.includes("New York") && (pair.includes("USD") || pair === "XAUUSD" || pair === "NAS100")) return 10;
   if (session.includes("Tokyo") && pair.includes("JPY")) return 10;
   if (session === "Off-session") return -8;
+
   return 2;
 }
 
 function estimateMacroPenalty(pair) {
   const session = getMarketSession(new Date()).label;
+
   if (pair.includes("USD") && session.includes("New York")) return 4;
   if ((pair === "NAS100" || pair === "XAUUSD") && session.includes("New York")) return 6;
+
   return 2;
 }
 
@@ -947,8 +1020,10 @@ function getCorrelationPenalty(pair) {
     .map((trade) => trade.pair);
 
   const usdCount = activePairs.filter((p) => p.includes("USD")).length;
+
   if (pair.includes("USD") && usdCount >= 2) return 12;
   if (pair.includes("JPY") && activePairs.some((p) => p.includes("JPY"))) return 8;
+
   return 0;
 }
 
@@ -960,16 +1035,20 @@ function getSpreadPenalty(pair, atrValue) {
     0.04;
 
   const normalized = atrValue <= 0 ? 0 : (baseSpread / atrValue) * 100;
+
   if (normalized > 18) return 12;
   if (normalized > 12) return 8;
+
   return 3;
 }
 
 function getOffSessionPenalty(pair) {
   const session = getMarketSession(new Date()).label;
+
   if (session === "Off-session") {
     return pair === "XAUUSD" || pair === "NAS100" ? 9 : 7;
   }
+
   return 0;
 }
 
@@ -1010,6 +1089,7 @@ function detectLastCandleSignal(candles) {
   if (upperWick > body * 1.3 && c.close < c.open) return -8;
   if (body / range > 0.6 && c.close > c.open) return 5;
   if (body / range > 0.6 && c.close < c.open) return -5;
+
   return 0;
 }
 
@@ -1029,7 +1109,13 @@ function buildReasons(ctx) {
 function generateCandles(symbol, timeframe) {
   const base = getSymbolBasePrice(symbol);
   const stepMap = { M5: 0.0008, M15: 0.0014, H1: 0.0038, H4: 0.009 };
-  const step = stepMap[timeframe] || 0.0014;
+  const step =
+    symbol === "XAUUSD" ? 4.8 :
+    symbol === "NAS100" ? 28 :
+    symbol === "GER40" ? 18 :
+    symbol.includes("JPY") ? (stepMap[timeframe] || 0.0014) * 100 :
+    (stepMap[timeframe] || 0.0014);
+
   const candles = [];
   let price = base;
   let time = Math.floor(Date.now() / 1000) - 160 * timeframeToSeconds(timeframe);
@@ -1074,6 +1160,7 @@ function getSymbolBasePrice(symbol) {
     NAS100: 18240,
     GER40: 18420
   };
+
   return prices[symbol] || 1;
 }
 
