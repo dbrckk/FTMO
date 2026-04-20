@@ -30,8 +30,24 @@ export async function onRequestPost(context) {
       });
     }
 
+    const mlBlock = shouldBlockForMl(payload);
+    if (mlBlock.blocked) {
+      return json({
+        ok: true,
+        decision: "NO TRADE",
+        title: "Blocage ML",
+        reason: mlBlock.reason,
+        confidence: 89,
+        action: "Ne pas entrer",
+        window: "Attendre un setup plus propre",
+        source: "ml-hard-block",
+        macroSource: macroContext.source || "macro-context"
+      });
+    }
+
     const journalPenalty = computeJournalPenalty(payload.journalContext);
-    const effectiveScore = clamp(payload.finalScore - journalPenalty, 0, 100);
+    const mlPenalty = computeMlPenalty(payload);
+    const effectiveScore = clamp(payload.finalScore - journalPenalty - mlPenalty, 0, 100);
 
     if (!groqKey) {
       const fallback = localDecisionEngine({
@@ -125,7 +141,10 @@ async function askGroq(apiKey, payload, macroContext) {
             gatekeeper: payload.gatekeeper,
             reasons: payload.reasons,
             hiddenMacroContext: macroContext,
-            journalContext: payload.journalContext
+            journalContext: payload.journalContext,
+            mlScore: payload.mlScore,
+            mlConfidenceBand: payload.mlConfidenceBand,
+            mlExplanation: payload.mlExplanation
           })
         }
       ]
@@ -160,7 +179,12 @@ function parseGroqResponse(groqData, payload) {
   return {
     decision: sanitizeDecision(parsed.decision),
     title: cleanText(parsed.title, "Décision IA"),
-    reason: cleanText(parsed.reason, "Le moteur recommande la prudence."),
+    reason: cleanText(
+      parsed.reason,
+      payload.mlExplanation
+        ? `${payload.mlExplanation} Le moteur recommande la prudence.`
+        : "Le moteur recommande la prudence."
+    ),
     confidence: clamp(
       Number(parsed.confidence) || Number(payload.confidence) || 70,
       1,
@@ -228,12 +252,29 @@ function shouldBlockForMacro(macroContext) {
   return { blocked: false, reason: "" };
 }
 
+function shouldBlockForMl(payload) {
+  const mlScore = Number(payload.mlScore || 0);
+
+  if (mlScore > 0 && mlScore <= 30) {
+    return {
+      blocked: true,
+      reason: "Le modèle ML considère ce setup comme trop faible."
+    };
+  }
+
+  return {
+    blocked: false,
+    reason: ""
+  };
+}
+
 function localDecisionEngine(body) {
   const hiddenMacro = body.hiddenMacroContext || {};
   const strictness = body.aiMode || "strict";
   const finalScore = Number(body.finalScore || 0);
   const gateDecision = body.gatekeeper?.decision || "WAIT";
   const confidenceBase = Number(body.confidence || 72);
+  const mlScore = Number(body.mlScore || 0);
 
   const aggressiveBias = strictness === "aggressive" ? 5 : 0;
   const strictPenalty = strictness === "strict" ? 7 : 0;
@@ -249,6 +290,17 @@ function localDecisionEngine(body) {
     };
   }
 
+  if (mlScore > 0 && mlScore <= 30) {
+    return {
+      decision: "NO TRADE",
+      title: "Refus ML",
+      reason: "Le modèle juge que l’avantage statistique du setup est trop faible.",
+      confidence: clamp(88 + strictPenalty, 1, 99),
+      action: "Ne pas trader cet actif maintenant",
+      window: "Attendre un meilleur alignement"
+    };
+  }
+
   if (gateDecision === "NO TRADE") {
     return {
       decision: "NO TRADE",
@@ -260,11 +312,13 @@ function localDecisionEngine(body) {
     };
   }
 
-  if (gateDecision === "WAIT" || finalScore < 72 - aggressiveBias) {
+  if (gateDecision === "WAIT" || finalScore < 72 - aggressiveBias || (mlScore > 0 && mlScore <= 50)) {
     return {
       decision: "WAIT",
       title: "Attendre confirmation",
-      reason: "Le setup existe mais l’avantage n’est pas encore assez propre pour du x10.",
+      reason: mlScore > 0 && mlScore <= 50
+        ? "Le modèle ML reste trop réservé sur ce setup."
+        : "Le setup existe mais l’avantage n’est pas encore assez propre pour du x10.",
       confidence: clamp(70 + strictPenalty, 1, 99),
       action: "Attendre confirmation ou meilleur timing",
       window: "Surveiller prochaine impulsion / cassure"
@@ -274,7 +328,9 @@ function localDecisionEngine(body) {
   return {
     decision: "TRADE",
     title: "Trade autorisé",
-    reason: "Le contexte technique, le risque et le timing sont suffisamment alignés.",
+    reason: mlScore >= 80
+      ? "Le contexte technique, le risque, le timing et le modèle ML sont bien alignés."
+      : "Le contexte technique, le risque et le timing sont suffisamment alignés.",
     confidence: clamp(confidenceBase + 4 - strictPenalty, 1, 99),
     action: `Entrée ${(String(body.signal || "").includes("SELL")) ? "SELL" : "BUY"} possible`,
     window: "Fenêtre exploitable maintenant"
@@ -305,6 +361,23 @@ function computeJournalPenalty(journalContext) {
   return penalty;
 }
 
+function computeMlPenalty(payload) {
+  const mlScore = Number(payload.mlScore || 0);
+  const band = String(payload.mlConfidenceBand || "medium");
+
+  let penalty = 0;
+
+  if (mlScore <= 35) penalty += 22;
+  else if (mlScore <= 50) penalty += 14;
+  else if (mlScore <= 60) penalty += 8;
+  else if (mlScore >= 80) penalty -= 4;
+
+  if (band === "low" && mlScore <= 50) penalty += 4;
+  if (band === "high" && mlScore >= 75) penalty -= 2;
+
+  return penalty;
+}
+
 function normalizePayload(data) {
   return {
     aiMode: oneOf(
@@ -330,7 +403,14 @@ function normalizePayload(data) {
       ? data.reasons.slice(0, 12).map((x) => cleanText(x, "")).filter(Boolean)
       : [],
     cooldownMinutes: clamp(Number(data.cooldownMinutes) || 90, 15, 360),
-    journalContext: normalizeJournalContext(data.journalContext)
+    journalContext: normalizeJournalContext(data.journalContext),
+    mlScore: clamp(Number(data.mlScore) || 0, 0, 100),
+    mlConfidenceBand: oneOf(
+      String(data.mlConfidenceBand || "medium"),
+      ["low", "medium", "high"],
+      "medium"
+    ),
+    mlExplanation: cleanText(data.mlExplanation, "")
   };
 }
 
