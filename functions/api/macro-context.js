@@ -1,34 +1,39 @@
 export async function onRequestGet(context) {
   try {
     const url = new URL(context.request.url);
-    const pair = String(url.searchParams.get("pair") || "").toUpperCase().trim();
+    const pair = cleanPair(url.searchParams.get("pair"));
+    const cooldownMinutes = clamp(Number(url.searchParams.get("cooldown")) || 90, 15, 240);
     const currencies = extractCurrenciesFromPair(pair);
+    const now = new Date();
 
     if (!currencies.length) {
       return json({
         ok: true,
         pair,
+        cooldownMinutes,
         danger: false,
         source: "fallback-empty",
         relevantEvents: []
       });
     }
 
-    const now = new Date();
     const fallbackEvents = buildFallbackEvents(now)
-      .filter(evt => currencies.includes(evt.currency))
-      .map(evt => ({
+      .filter((evt) => currencies.includes(evt.currency))
+      .map((evt) => ({
         ...evt,
         minutesFromNow: diffMinutes(now, new Date(evt.date))
-      }));
+      }))
+      .sort((a, b) => Math.abs(a.minutesFromNow) - Math.abs(b.minutesFromNow))
+      .slice(0, 10);
 
-    const danger = fallbackEvents.some(evt =>
-      Math.abs(evt.minutesFromNow) <= 90 && evt.impact === "high"
+    const danger = fallbackEvents.some(
+      (evt) => Math.abs(evt.minutesFromNow) <= cooldownMinutes && evt.impact === "high"
     );
 
     return json({
       ok: true,
       pair,
+      cooldownMinutes,
       danger,
       source: "fallback-static",
       relevantEvents: fallbackEvents
@@ -37,6 +42,7 @@ export async function onRequestGet(context) {
     return json({
       ok: true,
       pair: "",
+      cooldownMinutes: 90,
       danger: false,
       source: "fallback-catch",
       relevantEvents: []
@@ -52,13 +58,20 @@ function buildFallbackEvents(now) {
   return [
     event("US CPI", new Date(y, m, d, 14, 30), "USD", "high"),
     event("FOMC Member Speech", new Date(y, m, d, 18, 45), "USD", "medium"),
+    event("US PPI", new Date(y, m, d + 1, 14, 30), "USD", "medium"),
     event("UK CPI", new Date(y, m, d + 1, 8, 0), "GBP", "high"),
+    event("BoE Remarks", new Date(y, m, d + 1, 12, 0), "GBP", "medium"),
     event("EZ PMI", new Date(y, m, d + 1, 10, 0), "EUR", "medium"),
+    event("ECB Speech", new Date(y, m, d + 2, 11, 15), "EUR", "medium"),
     event("BoJ Outlook", new Date(y, m, d + 2, 5, 0), "JPY", "high"),
+    event("Japan CPI", new Date(y, m, d + 3, 1, 30), "JPY", "high"),
     event("CAD Employment", new Date(y, m, d + 2, 14, 30), "CAD", "medium"),
     event("SNB Remarks", new Date(y, m, d + 3, 9, 30), "CHF", "medium"),
+    event("Swiss CPI", new Date(y, m, d + 4, 8, 30), "CHF", "medium"),
     event("RBA Minutes", new Date(y, m, d + 3, 3, 30), "AUD", "medium"),
+    event("Australian Employment", new Date(y, m, d + 4, 2, 30), "AUD", "high"),
     event("NZ GDP", new Date(y, m, d + 4, 0, 45), "NZD", "high"),
+    event("RBNZ Remarks", new Date(y, m, d + 5, 1, 0), "NZD", "medium"),
     event("Gold Volatility Proxy", new Date(y, m, d, 15, 0), "XAU", "medium"),
     event("US Tech Risk Window", new Date(y, m, d, 16, 0), "NAS", "medium"),
     event("EU Equity Risk Window", new Date(y, m, d, 11, 0), "GER", "medium")
@@ -90,8 +103,19 @@ function extractCurrenciesFromPair(pair) {
   return [];
 }
 
+function cleanPair(value) {
+  return String(value || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 10);
+}
+
 function diffMinutes(a, b) {
   return Math.round((b.getTime() - a.getTime()) / 60000);
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
 function json(data, status = 200) {
@@ -102,4 +126,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-        }
+                                            }
