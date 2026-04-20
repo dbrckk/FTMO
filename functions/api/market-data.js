@@ -46,11 +46,12 @@ export async function onRequestGet(context) {
 async function fetchTwelveDataBundle(symbolMeta, timeframe, apiKey) {
   try {
     const interval = mapTimeframeToProvider(timeframe);
+
     const candleUrl =
       `https://api.twelvedata.com/time_series` +
       `?symbol=${encodeURIComponent(symbolMeta.providerSymbol)}` +
       `&interval=${encodeURIComponent(interval)}` +
-      `&outputsize=200` +
+      `&outputsize=220` +
       `&apikey=${encodeURIComponent(apiKey)}`;
 
     const candleRes = await fetch(candleUrl, {
@@ -70,7 +71,7 @@ async function fetchTwelveDataBundle(symbolMeta, timeframe, apiKey) {
 
     const candles = candleData.values
       .map((row) => ({
-        time: Math.floor(new Date(`${row.datetime}Z`).getTime() / 1000),
+        time: toUnixSeconds(row.datetime),
         open: roundPrice(Number(row.open), symbolMeta.localPair),
         high: roundPrice(Number(row.high), symbolMeta.localPair),
         low: roundPrice(Number(row.low), symbolMeta.localPair),
@@ -81,10 +82,11 @@ async function fetchTwelveDataBundle(symbolMeta, timeframe, apiKey) {
         Number.isFinite(c.open) &&
         Number.isFinite(c.high) &&
         Number.isFinite(c.low) &&
-        Number.isFinite(c.close)
+        Number.isFinite(c.close) &&
+        c.time > 0
       )
       .sort((a, b) => a.time - b.time)
-      .slice(-160);
+      .slice(-180);
 
     if (!candles.length) {
       return buildFallbackPayload(symbolMeta.localPair, timeframe, "twelvedata-empty-candles");
@@ -168,7 +170,9 @@ async function fetchTwelveIndicators(symbol, interval, apiKey, localPair) {
           method: "GET",
           headers: { Accept: "application/json" }
         });
+
         if (!res.ok) return [item.key, null];
+
         const data = await res.json();
         const first = Array.isArray(data.values) ? data.values[0] : null;
         if (!first) return [item.key, null];
@@ -177,8 +181,13 @@ async function fetchTwelveIndicators(symbol, interval, apiKey, localPair) {
           return [item.key, roundPrice(Number(first.macd), localPair)];
         }
 
-        const value = first[item.key.replace(/[0-9]/g, "")] ?? first.value;
-        return [item.key, roundPrice(Number(value), localPair)];
+        const rawValue =
+          first.rsi ??
+          first.ema ??
+          first.atr ??
+          first.value;
+
+        return [item.key, roundPrice(Number(rawValue), localPair)];
       } catch {
         return [item.key, null];
       }
@@ -281,9 +290,9 @@ function generateFallbackCandles(pair, timeframe) {
 
   const candles = [];
   let price = base;
-  let time = Math.floor(Date.now() / 1000) - 160 * timeframeToSeconds(timeframe);
+  let time = Math.floor(Date.now() / 1000) - 180 * timeframeToSeconds(timeframe);
 
-  for (let i = 0; i < 160; i += 1) {
+  for (let i = 0; i < 180; i += 1) {
     const wave = Math.sin(i / 7) * step * 1.2;
     const drift = (hashCode(pair) % 2 === 0 ? 1 : -1) * step * 0.08;
     const noise = (Math.random() - 0.5) * step * 1.7;
@@ -414,6 +423,20 @@ function atr(highs, lows, closes, period = 14) {
   return recent.reduce((a, b) => a + b, 0) / recent.length;
 }
 
+function toUnixSeconds(datetimeValue) {
+  const direct = new Date(datetimeValue).getTime();
+  if (Number.isFinite(direct) && direct > 0) {
+    return Math.floor(direct / 1000);
+  }
+
+  const fallback = new Date(`${datetimeValue}Z`).getTime();
+  if (Number.isFinite(fallback) && fallback > 0) {
+    return Math.floor(fallback / 1000);
+  }
+
+  return 0;
+}
+
 function roundPrice(value, symbol) {
   if (!Number.isFinite(value)) return 0;
   if (symbol === "XAUUSD") return Number(value.toFixed(2));
@@ -450,4 +473,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-      }
+}
