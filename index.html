@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FTMO Edge Mobile</title>
+  <meta name="description" content="App mobile-first FTMO/MT5 pour scanner les paires, évaluer le meilleur setup, suivre les trades et filtrer le risque macro." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+  <div class="noise"></div>
+  <div class="app-shell">
+    <header class="topbar glass">
+      <div>
+        <p class="eyebrow">FTMO / MT5 / Mobile First</p>
+        <h1>FTMO Edge</h1>
+      </div>
+      <div class="topbar-actions">
+        <button id="bridgeBtn" class="ghost-btn">Bridge</button>
+        <button id="refreshBtn" class="icon-btn" aria-label="Rafraîchir">↻</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="hero card gradient-border">
+        <div class="hero-main">
+          <div>
+            <p class="muted">Moteur de décision</p>
+            <h2 id="sessionHeadline">Analyse des meilleures opportunités</h2>
+            <p id="sessionSubline" class="subline">Sessions, macro, momentum, structure et comparaison historique.</p>
+          </div>
+          <div class="hero-score-wrap">
+            <div class="hero-score" id="bestScore">--</div>
+            <span>top score</span>
+          </div>
+        </div>
+        <div class="hero-pills">
+          <span class="pill" id="localClock">--:--</span>
+          <span class="pill" id="activeSessionPill">Session --</span>
+          <span class="pill warning" id="riskPill">Macro --</span>
+          <span class="pill positive" id="marketBiasPill">Bias --</span>
+        </div>
+      </section>
+
+      <section class="overview-grid">
+        <article class="card stat-card">
+          <span class="muted">Meilleure paire</span>
+          <strong id="topPairLabel">--</strong>
+          <small id="topPairReason">--</small>
+        </article>
+        <article class="card stat-card">
+          <span class="muted">Setups BUY</span>
+          <strong id="buyCount">--</strong>
+          <small>signaux favorables</small>
+        </article>
+        <article class="card stat-card">
+          <span class="muted">Setups SELL</span>
+          <strong id="sellCount">--</strong>
+          <small>signaux vendeurs</small>
+        </article>
+        <article class="card stat-card">
+          <span class="muted">Risque global</span>
+          <strong id="globalRisk">--</strong>
+          <small>selon news + horaire</small>
+        </article>
+      </section>
+
+      <section class="card controls-section">
+        <div class="controls-header">
+          <h3>Scanner intelligent</h3>
+          <button id="settingsBtn" class="ghost-btn">Paramètres</button>
+        </div>
+
+        <div class="control-grid">
+          <label>
+            <span>Timeframe</span>
+            <div class="chip-row" id="timeframeRow"></div>
+          </label>
+
+          <label>
+            <span>Style d'analyse</span>
+            <select id="strategyMode">
+              <option value="balanced">Balanced</option>
+              <option value="trend">Trend follow</option>
+              <option value="reversal">Mean reversion</option>
+              <option value="breakout">Breakout</option>
+              <option value="scalp">Scalp session</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Filtre de marché</span>
+            <select id="marketFilter">
+              <option value="all">Tout</option>
+              <option value="forex">Forex majors</option>
+              <option value="yen">JPY focus</option>
+              <option value="metals">Métaux</option>
+              <option value="indices">Indices</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="search-box">
+          <input id="pairSearch" type="text" placeholder="Rechercher une paire... ex: EURUSD" />
+        </div>
+      </section>
+
+      <section class="card scanner-results">
+        <div class="section-title-row">
+          <h3>Paires classées</h3>
+          <span id="pairCount" class="muted small"></span>
+        </div>
+        <div id="pairList" class="pair-list"></div>
+      </section>
+
+      <section class="card detail-panel">
+        <div class="section-title-row sticky-row">
+          <div>
+            <p class="muted">Pair sélectionnée</p>
+            <h3 id="selectedPairName">EURUSD</h3>
+          </div>
+          <div class="row-actions">
+            <div class="signal-badge" id="selectedSignalBadge">WAIT</div>
+            <button id="watchlistBtn" class="ghost-btn">☆ Watchlist</button>
+          </div>
+        </div>
+
+        <div class="metric-grid" id="summaryMetrics"></div>
+
+        <div class="chart-toolbar">
+          <span class="tag">Trend <strong id="trendMini">--</strong></span>
+          <span class="tag">Confidence <strong id="confidenceMini">--</strong></span>
+          <span class="tag">RR <strong id="rrMini">--</strong></span>
+        </div>
+        <div id="chart" class="chart-box"></div>
+
+        <div class="insight-grid">
+          <div class="card inset-card">
+            <p class="muted">Pourquoi ce setup</p>
+            <ul id="reasonList" class="reason-list"></ul>
+          </div>
+          <div class="card inset-card">
+            <p class="muted">Comparaison historique</p>
+            <div id="historicalComparison" class="history-box"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card macro-panel">
+        <div class="section-title-row">
+          <h3>Calendrier macro</h3>
+          <span class="muted small">éviter les fenêtres dangereuses, repérer les catalyseurs</span>
+        </div>
+        <div id="macroEvents" class="macro-list"></div>
+      </section>
+
+      <section class="card trade-panel">
+        <div class="section-title-row">
+          <h3>Journal & suivi</h3>
+          <div class="row-actions">
+            <button id="exportBtn" class="ghost-btn">Exporter</button>
+            <button id="clearTradesBtn" class="ghost-btn danger">Vider</button>
+          </div>
+        </div>
+
+        <form id="tradeForm" class="trade-form">
+          <div class="field-grid">
+            <label>
+              <span>Paire</span>
+              <input id="tradePair" type="text" readonly />
+            </label>
+            <label>
+              <span>Direction</span>
+              <select id="tradeDirection">
+                <option value="buy">Buy</option>
+                <option value="sell">Sell</option>
+              </select>
+            </label>
+            <label>
+              <span>Capital engagé</span>
+              <input id="tradeCapital" type="number" min="0" step="0.01" placeholder="1000" />
+            </label>
+            <label>
+              <span>Prix d'entrée</span>
+              <input id="tradeEntry" type="number" min="0" step="0.00001" placeholder="1.08250" />
+            </label>
+            <label>
+              <span>Risque %</span>
+              <input id="riskPercent" type="number" min="0.1" step="0.1" value="1" />
+            </label>
+            <label>
+              <span>Notes</span>
+              <input id="tradeNotes" type="text" placeholder="ex: cassure London open" />
+            </label>
+          </div>
+
+          <div class="trade-output" id="tradeSuggestionBox"></div>
+
+          <button type="submit" class="primary-btn full-width">Ajouter au suivi</button>
+        </form>
+
+        <div class="subsection">
+          <div class="section-title-row compact-gap">
+            <h4>Watchlist</h4>
+            <span id="watchlistCount" class="muted small"></span>
+          </div>
+          <div id="watchlist" class="watchlist"></div>
+        </div>
+
+        <div class="subsection">
+          <div class="section-title-row compact-gap">
+            <h4>Trades actifs / archivés</h4>
+            <span id="tradeStats" class="muted small"></span>
+          </div>
+          <div id="tradeList" class="trade-list"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="settingsModal" class="modal hidden">
+    <div class="modal-card glass wide-modal">
+      <div class="section-title-row">
+        <h3>Architecture & connecteurs</h3>
+        <button id="closeSettingsBtn" class="icon-btn">✕</button>
+      </div>
+      <div class="connector-list">
+        <div class="connector-item">
+          <strong>Prix live</strong>
+          <span>prévu pour bridge MT5 Python / MetaTrader5 package / API forex</span>
+        </div>
+        <div class="connector-item">
+          <strong>Calendrier économique</strong>
+          <span>prévu pour FMP Economics Calendar ou équivalent</span>
+        </div>
+        <div class="connector-item">
+          <strong>Historique</strong>
+          <span>module de comparaison locale inclus, backend recommandé pour vraie base multi-années</span>
+        </div>
+        <div class="connector-item">
+          <strong>Exécution</strong>
+          <span>cette version ne place aucun ordre réel, elle sert au scan, au suivi et à l'aide à décision</span>
+        </div>
+      </div>
+      <div class="bridge-box">
+        <h4>Exemple de bridge à brancher</h4>
+<pre><code>GET /api/scan?timeframe=H1
+GET /api/calendar
+POST /api/trades
+GET /api/trades
+
+Response scan:
+{
+  "pairs": [
+    {
+      "pair": "EURUSD",
+      "price": 1.08452,
+      "score": 81,
+      "signal": "BUY",
+      "rsi": 58.1,
+      "ema20": 1.0838,
+      "ema50": 1.0829
+    }
+  ]
+}</code></pre>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
