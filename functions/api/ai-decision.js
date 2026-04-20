@@ -18,7 +18,7 @@ export async function onRequestPost(context) {
         decision: "NO TRADE",
         title: "Blocage macro",
         reason: riskBlock.reason,
-        confidence: 91,
+        confidence: 93,
         action: "Ne pas entrer",
         window: `Réévaluer après ${macroContext.cooldownMinutes || payload.cooldownMinutes} min`,
         source: "macro-hard-block",
@@ -26,9 +26,13 @@ export async function onRequestPost(context) {
       });
     }
 
+    const journalPenalty = computeJournalPenalty(payload.journalContext);
+    const effectiveScore = clamp(payload.finalScore - journalPenalty, 0, 100);
+
     if (!groqKey) {
       const fallback = localDecisionEngine({
         ...payload,
+        finalScore: effectiveScore,
         hiddenMacroContext: macroContext
       });
 
@@ -40,11 +44,12 @@ export async function onRequestPost(context) {
       });
     }
 
-    const groqResult = await askGroq(groqKey, payload, macroContext);
+    const groqResult = await askGroq(groqKey, { ...payload, finalScore: effectiveScore }, macroContext);
 
     if (!groqResult.ok) {
       const fallback = localDecisionEngine({
         ...payload,
+        finalScore: effectiveScore,
         hiddenMacroContext: macroContext
       });
 
@@ -56,7 +61,7 @@ export async function onRequestPost(context) {
       });
     }
 
-    const parsed = parseGroqResponse(groqResult.data, payload);
+    const parsed = parseGroqResponse(groqResult.data, { ...payload, finalScore: effectiveScore });
 
     return json({
       ok: true,
@@ -82,13 +87,13 @@ async function askGroq(apiKey, payload, macroContext) {
   try {
     const requestBody = {
       model: payload.model,
-      temperature: 0.1,
+      temperature: 0.08,
       response_format: { type: "json_object" },
       messages: [
         {
           role: "system",
           content:
-            "Tu es un filtre de trading ultra strict. Tu réponds uniquement en JSON avec les clés decision,title,reason,confidence,action,window. decision doit être exactement TRADE, WAIT ou NO TRADE. Si un événement macro important est proche, retourne NO TRADE ou WAIT. Tu ne promets jamais un gain certain."
+            "Tu es un filtre de trading ultra strict. Réponds uniquement en JSON avec decision,title,reason,confidence,action,window. decision doit être exactement TRADE, WAIT ou NO TRADE. Si macro risquée, qualité moyenne, ou doute sur levier x10, retourne WAIT ou NO TRADE."
         },
         {
           role: "user",
@@ -108,7 +113,8 @@ async function askGroq(apiKey, payload, macroContext) {
             rr: payload.rr,
             gatekeeper: payload.gatekeeper,
             reasons: payload.reasons,
-            hiddenMacroContext: macroContext
+            hiddenMacroContext: macroContext,
+            journalContext: payload.journalContext
           })
         }
       ]
@@ -158,9 +164,7 @@ async function getMacroContext(request, pair, cooldownMinutes) {
 
     const response = await fetch(url.toString(), {
       method: "GET",
-      headers: {
-        Accept: "application/json"
-      }
+      headers: { Accept: "application/json" }
     });
 
     if (!response.ok) throw new Error("macro-context failed");
@@ -168,6 +172,7 @@ async function getMacroContext(request, pair, cooldownMinutes) {
 
     return {
       danger: Boolean(data.danger),
+      hardBlock: Boolean(data.hardBlock),
       dangerScore: Number(data.dangerScore) || 0,
       cooldownMinutes: Number(data.cooldownMinutes) || cooldownMinutes,
       source: data.source || "macro-context",
@@ -176,6 +181,7 @@ async function getMacroContext(request, pair, cooldownMinutes) {
   } catch {
     return {
       danger: false,
+      hardBlock: false,
       dangerScore: 0,
       cooldownMinutes,
       source: "macro-fallback-empty",
@@ -185,25 +191,20 @@ async function getMacroContext(request, pair, cooldownMinutes) {
 }
 
 function shouldBlockForMacro(macroContext) {
-  if (!macroContext?.danger) {
-    return { blocked: false, reason: "" };
-  }
-
-  const highNear = (macroContext.relevantEvents || []).find(
-    (evt) => evt.impact === "high" && Math.abs(Number(evt.minutesFromNow || 9999)) <= Number(macroContext.cooldownMinutes || 90)
-  );
-
-  if (highNear) {
+  if (macroContext?.hardBlock) {
+    const evt = macroContext.relevantEvents?.[0];
     return {
       blocked: true,
-      reason: `Événement macro fort proche sur ${highNear.currency} : ${highNear.name}.`
+      reason: evt
+        ? `Événement macro majeur proche : ${evt.name} (${evt.currency}).`
+        : "Contexte macro majeur détecté."
     };
   }
 
-  if (Number(macroContext.dangerScore || 0) >= 75) {
+  if (Number(macroContext?.dangerScore || 0) >= 85) {
     return {
       blocked: true,
-      reason: "Le contexte macro global est trop instable pour une entrée propre."
+      reason: "Le contexte macro global est trop dangereux pour une entrée propre."
     };
   }
 
@@ -220,7 +221,7 @@ function localDecisionEngine(body) {
   const aggressiveBias = strictness === "aggressive" ? 5 : 0;
   const strictPenalty = strictness === "strict" ? 7 : 0;
 
-  if (hiddenMacro.danger) {
+  if (hiddenMacro.danger || hiddenMacro.hardBlock) {
     return {
       decision: "NO TRADE",
       title: "Contexte macro défavorable",
@@ -263,6 +264,21 @@ function localDecisionEngine(body) {
   };
 }
 
+function computeJournalPenalty(journalContext) {
+  if (!journalContext || typeof journalContext !== "object") return 0;
+
+  let penalty = 0;
+  const pairExpectancy = Number(journalContext.pairExpectancy);
+  const hourExpectancy = Number(journalContext.hourExpectancy);
+  const sessionExpectancy = Number(journalContext.sessionExpectancy);
+
+  if (Number.isFinite(pairExpectancy) && pairExpectancy < 0) penalty += 8;
+  if (Number.isFinite(hourExpectancy) && hourExpectancy < 0) penalty += 6;
+  if (Number.isFinite(sessionExpectancy) && sessionExpectancy < 0) penalty += 6;
+
+  return penalty;
+}
+
 function normalizePayload(data) {
   return {
     aiMode: oneOf(String(data.aiMode || "strict"), ["strict", "balanced", "aggressive"], "strict"),
@@ -281,7 +297,8 @@ function normalizePayload(data) {
     rr: cleanText(data.rr, "0.00"),
     gatekeeper: normalizeGatekeeper(data.gatekeeper),
     reasons: Array.isArray(data.reasons) ? data.reasons.slice(0, 12).map((x) => cleanText(x, "")).filter(Boolean) : [],
-    cooldownMinutes: clamp(Number(data.cooldownMinutes) || 90, 15, 240)
+    cooldownMinutes: clamp(Number(data.cooldownMinutes) || 90, 15, 360),
+    journalContext: normalizeJournalContext(data.journalContext)
   };
 }
 
@@ -296,6 +313,15 @@ function normalizeGatekeeper(gatekeeper) {
     : [];
 
   return { decision, checks };
+}
+
+function normalizeJournalContext(ctx) {
+  if (!ctx || typeof ctx !== "object") return null;
+  return {
+    pairExpectancy: Number(ctx.pairExpectancy),
+    hourExpectancy: Number(ctx.hourExpectancy),
+    sessionExpectancy: Number(ctx.sessionExpectancy)
+  };
 }
 
 function cleanModel(value) {
@@ -350,4 +376,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-  }
+                        }
