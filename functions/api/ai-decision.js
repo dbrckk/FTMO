@@ -9,7 +9,11 @@ export async function onRequestPost(context) {
     const env = context.env || {};
     const groqKey = env.GROQ_API_KEY || "";
 
-    const macroContext = await getMacroContext(context.request, payload.pair, payload.cooldownMinutes);
+    const macroContext = await getMacroContext(
+      context.request,
+      payload.pair,
+      payload.cooldownMinutes
+    );
 
     const riskBlock = shouldBlockForMacro(macroContext);
     if (riskBlock.blocked) {
@@ -44,7 +48,11 @@ export async function onRequestPost(context) {
       });
     }
 
-    const groqResult = await askGroq(groqKey, { ...payload, finalScore: effectiveScore }, macroContext);
+    const groqResult = await askGroq(
+      groqKey,
+      { ...payload, finalScore: effectiveScore },
+      macroContext
+    );
 
     if (!groqResult.ok) {
       const fallback = localDecisionEngine({
@@ -61,7 +69,10 @@ export async function onRequestPost(context) {
       });
     }
 
-    const parsed = parseGroqResponse(groqResult.data, { ...payload, finalScore: effectiveScore });
+    const parsed = parseGroqResponse(
+      groqResult.data,
+      { ...payload, finalScore: effectiveScore }
+    );
 
     return json({
       ok: true,
@@ -150,7 +161,11 @@ function parseGroqResponse(groqData, payload) {
     decision: sanitizeDecision(parsed.decision),
     title: cleanText(parsed.title, "Décision IA"),
     reason: cleanText(parsed.reason, "Le moteur recommande la prudence."),
-    confidence: clamp(Number(parsed.confidence) || Number(payload.confidence) || 70, 1, 99),
+    confidence: clamp(
+      Number(parsed.confidence) || Number(payload.confidence) || 70,
+      1,
+      99
+    ),
     action: cleanText(parsed.action, "Attendre une meilleure fenêtre"),
     window: cleanText(parsed.window, "À revalider au prochain refresh")
   };
@@ -176,7 +191,9 @@ async function getMacroContext(request, pair, cooldownMinutes) {
       dangerScore: Number(data.dangerScore) || 0,
       cooldownMinutes: Number(data.cooldownMinutes) || cooldownMinutes,
       source: data.source || "macro-context",
-      relevantEvents: Array.isArray(data.relevantEvents) ? data.relevantEvents.slice(0, 10) : []
+      relevantEvents: Array.isArray(data.relevantEvents)
+        ? data.relevantEvents.slice(0, 10)
+        : []
     };
   } catch {
     return {
@@ -268,20 +285,33 @@ function computeJournalPenalty(journalContext) {
   if (!journalContext || typeof journalContext !== "object") return 0;
 
   let penalty = 0;
+
   const pairExpectancy = Number(journalContext.pairExpectancy);
   const hourExpectancy = Number(journalContext.hourExpectancy);
   const sessionExpectancy = Number(journalContext.sessionExpectancy);
 
+  const pairWinRate = Number(journalContext.pairWinRate);
+  const hourWinRate = Number(journalContext.hourWinRate);
+  const sessionWinRate = Number(journalContext.sessionWinRate);
+
   if (Number.isFinite(pairExpectancy) && pairExpectancy < 0) penalty += 8;
   if (Number.isFinite(hourExpectancy) && hourExpectancy < 0) penalty += 6;
   if (Number.isFinite(sessionExpectancy) && sessionExpectancy < 0) penalty += 6;
+
+  if (Number.isFinite(pairWinRate) && pairWinRate < 45) penalty += 4;
+  if (Number.isFinite(hourWinRate) && hourWinRate < 45) penalty += 3;
+  if (Number.isFinite(sessionWinRate) && sessionWinRate < 45) penalty += 3;
 
   return penalty;
 }
 
 function normalizePayload(data) {
   return {
-    aiMode: oneOf(String(data.aiMode || "strict"), ["strict", "balanced", "aggressive"], "strict"),
+    aiMode: oneOf(
+      String(data.aiMode || "strict"),
+      ["strict", "balanced", "aggressive"],
+      "strict"
+    ),
     model: cleanModel(data.model),
     leverage: "x10",
     pair: cleanPair(data.pair),
@@ -296,7 +326,9 @@ function normalizePayload(data) {
     contextScore: clamp(Number(data.contextScore) || 0, 0, 100),
     rr: cleanText(data.rr, "0.00"),
     gatekeeper: normalizeGatekeeper(data.gatekeeper),
-    reasons: Array.isArray(data.reasons) ? data.reasons.slice(0, 12).map((x) => cleanText(x, "")).filter(Boolean) : [],
+    reasons: Array.isArray(data.reasons)
+      ? data.reasons.slice(0, 12).map((x) => cleanText(x, "")).filter(Boolean)
+      : [],
     cooldownMinutes: clamp(Number(data.cooldownMinutes) || 90, 15, 360),
     journalContext: normalizeJournalContext(data.journalContext)
   };
@@ -320,7 +352,10 @@ function normalizeJournalContext(ctx) {
   return {
     pairExpectancy: Number(ctx.pairExpectancy),
     hourExpectancy: Number(ctx.hourExpectancy),
-    sessionExpectancy: Number(ctx.sessionExpectancy)
+    sessionExpectancy: Number(ctx.sessionExpectancy),
+    pairWinRate: Number(ctx.pairWinRate),
+    hourWinRate: Number(ctx.hourWinRate),
+    sessionWinRate: Number(ctx.sessionWinRate)
   };
 }
 
@@ -376,4 +411,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-                        }
+  }
