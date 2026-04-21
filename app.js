@@ -1,4 +1,4 @@
-const STORAGE_KEY = "ftmo-edge-ai-state-v8"; 
+const STORAGE_KEY = "ftmo-edge-ai-state-v8";
 
 const TIMEFRAMES = ["M5", "M15", "H1", "H4"];
 
@@ -79,12 +79,16 @@ const defaultState = {
 
 const appState = loadState();
 
-document.addEventListener("DOMContentLoaded", () => {
-  cacheEls();
-  hydrateUiFromState();
-  bindEvents();
-  setupChart();
-  refreshAll();
+document.addEventListener("DOMContentLoaded", async () => {
+  try {
+    cacheEls();
+    hydrateUiFromState();
+    bindEvents();
+    setupChart();
+    await refreshAll();
+  } catch (error) {
+    console.error("Init error:", error);
+  }
 });
 
 function cacheEls() {
@@ -118,7 +122,7 @@ function cacheEls() {
     "activePriorityLabel", "activePriorityHint", "entryQualityLabel", "entryQualityHint",
     "exitQualityLabel", "exitQualityHint", "contextQualityLabel", "contextQualityHint"
   ].forEach((id) => {
-    els[id] = document.getElementById(id);
+    els[id] = document.getElementById(id) || null;
   });
 }
 
@@ -202,9 +206,9 @@ function bindEvents() {
   });
 
   els.saveSettingsBtn?.addEventListener("click", () => {
-    appState.aiSettings.model = els.groqModel.value;
-    appState.aiSettings.mode = els.aiMode.value;
-    appState.aiSettings.cooldownMinutes = Number(els.macroCooldown.value) || 90;
+    appState.aiSettings.model = els.groqModel?.value || appState.aiSettings.model;
+    appState.aiSettings.mode = els.aiMode?.value || appState.aiSettings.mode;
+    appState.aiSettings.cooldownMinutes = Number(els.macroCooldown?.value) || 90;
     persistState();
     els.settingsModal?.classList.add("hidden");
     refreshAll(true);
@@ -309,7 +313,15 @@ async function refreshAll(forceAi = false) {
     scan.mlExplanation = ml.explanation;
   }));
 
-  appState.scans = appState.scans.map(applyMlScoreCap);
+  await Promise.all(appState.scans.map(async (scan) => {
+    const vb = await fetchVectorbtScore(scan);
+    scan.vectorbtScore = vb.vectorbtScore;
+    scan.vectorbtConfidenceBand = vb.confidenceBand;
+    scan.vectorbtExplanation = vb.explanation;
+    scan.vectorbtMetrics = vb.metrics || {};
+  }));
+
+  appState.scans = appState.scans.map(applyMlScoreCap).map(applyVectorbtCap);
 
   appState.scans = appState.scans.sort((a, b) => {
     const aPriority = getDecisionPriority(a);
@@ -635,6 +647,10 @@ async function scanPair(item, timeframe, strategy) {
     mlScore: 0,
     mlConfidenceBand: "medium",
     mlExplanation: "",
+    vectorbtScore: 0,
+    vectorbtConfidenceBand: "medium",
+    vectorbtExplanation: "",
+    vectorbtMetrics: {},
     reasons: buildReasons({
       ema20,
       ema50,
@@ -663,7 +679,9 @@ async function scanPair(item, timeframe, strategy) {
       exitSniperAction: exitSniper.action,
       exitSniperScore: exitSniper.score,
       mlScore: 0,
-      mlExplanation: ""
+      mlExplanation: "",
+      vectorbtScore: 0,
+      vectorbtExplanation: ""
     })
   };
 }
@@ -733,6 +751,58 @@ async function fetchMlScore(scan) {
   }
 }
 
+async function fetchVectorbtScore(scan) {
+  try {
+    const response = await fetch("/api/vectorbt-score", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        pair: scan.pair,
+        timeframe: scan.timeframe,
+        candles: scan.candles,
+        fee: 0.0002,
+        slippage: 0.0001,
+        fast_ema: 20,
+        slow_ema: 50,
+        rsi_period: 14,
+        atr_period: 14,
+        macd_fast: 12,
+        macd_slow: 26,
+        macd_signal: 9,
+        rsi_buy_min: 45,
+        rsi_buy_max: 65,
+        rsi_sell_min: 35,
+        rsi_sell_max: 55,
+        stop_atr_mult: 1.4,
+        take_atr_mult: 2.6
+      })
+    });
+
+    if (!response.ok) throw new Error(`vectorbt-score ${response.status}`);
+
+    return await response.json();
+  } catch {
+    return {
+      ok: true,
+      source: "vectorbt-fallback",
+      vectorbtScore: 55,
+      confidenceBand: "medium",
+      explanation: "VectorBT indisponible, fallback neutre utilisé.",
+      metrics: {
+        totalReturnPct: 0,
+        winRatePct: 0,
+        maxDrawdownPct: 0,
+        totalTrades: 0,
+        profitFactor: 0,
+        sharpeRatio: 0,
+        expectancy: 0
+      }
+    };
+  }
+}
+
 function applyMlScoreCap(scan) {
   const mlScore = Number(scan.mlScore || 0);
 
@@ -750,6 +820,26 @@ function applyMlScoreCap(scan) {
   } else if (mlScore <= 50 && scan.gatekeeper.decision === "TRADE") {
     scan.gatekeeper.allowed = false;
     scan.gatekeeper.decision = "WAIT";
+  }
+
+  return scan;
+}
+
+function applyVectorbtCap(scan) {
+  const score = Number(scan.vectorbtScore || 0);
+
+  if (score <= 35) {
+    scan.finalScore = Math.min(scan.finalScore, 20);
+    scan.gatekeeper.allowed = false;
+    scan.gatekeeper.decision = "NO TRADE";
+  } else if (score <= 50) {
+    scan.finalScore = Math.min(scan.finalScore, 36);
+    if (scan.gatekeeper.decision === "TRADE") {
+      scan.gatekeeper.allowed = false;
+      scan.gatekeeper.decision = "WAIT";
+    }
+  } else if (score <= 60) {
+    scan.finalScore = Math.min(scan.finalScore, 54);
   }
 
   return scan;
@@ -776,12 +866,6 @@ function renderOverview() {
 
   if (els.topPairLabel) els.topPairLabel.textContent = best ? `${best.pair} · ${best.signal}` : "--";
   if (els.topPairReason) els.topPairReason.textContent = best ? `${best.trend} · confiance ${best.confidence}` : "--";
-
-  const topPairLabelCard = document.getElementById("topPairLabelCard");
-  const topPairReasonCard = document.getElementById("topPairReasonCard");
-  if (topPairLabelCard) topPairLabelCard.textContent = best ? `${best.pair} · ${best.signal}` : "--";
-  if (topPairReasonCard) topPairReasonCard.textContent = best ? `${best.trend} · confiance ${best.confidence}` : "--";
-
   if (els.allowedCount) els.allowedCount.textContent = String(allowed);
   if (els.blockedCount) els.blockedCount.textContent = String(blocked);
   if (els.globalExposure) els.globalExposure.textContent = `${exposure.toFixed(2)}%`;
@@ -847,6 +931,7 @@ function renderTopPriorityTrades() {
             <span class="tag">${scan.trend}</span>
             <span class="tag">Score ${scan.finalScore}</span>
             <span class="tag">ML ${scan.mlScore ?? "--"}</span>
+            <span class="tag">VBT ${scan.vectorbtScore ?? "--"}</span>
             <span class="tag">Conf ${scan.confidence}</span>
             <span class="tag">RR ${scan.rr}</span>
           </div>
@@ -912,6 +997,7 @@ function renderTopBlockedTrades() {
             <span class="tag">${scan.trend}</span>
             <span class="tag">Score ${scan.finalScore}</span>
             <span class="tag">ML ${scan.mlScore ?? "--"}</span>
+            <span class="tag">VBT ${scan.vectorbtScore ?? "--"}</span>
             <span class="tag">Conf ${scan.confidence}</span>
           </div>
           <div class="muted small" style="margin-top:8px;">${reason}</div>
@@ -974,6 +1060,7 @@ function renderPairList() {
           <span class="tag">${priorityLabel}</span>
           <span class="tag">${scan.trend}</span>
           <span class="tag">ML ${scan.mlScore ?? "--"}</span>
+          <span class="tag">VBT ${scan.vectorbtScore ?? "--"}</span>
           <span class="tag">Conf ${scan.confidence}</span>
           <span class="tag">RR ${scan.rr}</span>
           <span class="tag">IA ${appState.aiDecisionCache[scan.pair]?.decision || "--"}</span>
@@ -1005,6 +1092,7 @@ function renderSelectedPair() {
 
   if (els.tradePair) els.tradePair.value = scan.pair;
   if (els.tradeDirection) els.tradeDirection.value = scan.direction;
+  if (els.tradeEntry) els.tradeEntry.value = String(scan.current);
 
   if (els.summaryMetrics) {
     els.summaryMetrics.innerHTML = [
@@ -1015,6 +1103,7 @@ function renderSelectedPair() {
       metricCard("Sniper", `${scan.entrySniper?.score ?? "--"}`, scan.entrySniper?.quality || "entry filter"),
       metricCard("Exit", `${scan.exitSniper?.score ?? "--"}`, scan.exitSniper?.action || "exit filter"),
       metricCard("ML", `${scan.mlScore ?? "--"}`, scan.mlConfidenceBand || "model"),
+      metricCard("VBT", `${scan.vectorbtScore ?? "--"}`, scan.vectorbtConfidenceBand || "backtest"),
       metricCard("RSI", `${Math.round(scan.rsi14)}`, "zone entrée"),
       metricCard("MACD", `${Number(scan.macdLine).toFixed(3)}`, "momentum"),
       metricCard("Risk", `${scan.riskScore}`, "macro, spread, corrélation"),
@@ -1051,6 +1140,16 @@ function renderSelectedPair() {
   renderProfessionalStatus(scan, ai);
 }
 
+function metricCard(label, value, hint) {
+  return `
+    <article class="metric-card">
+      <span class="muted">${label}</span>
+      <strong>${value}</strong>
+      <small>${hint}</small>
+    </article>
+  `;
+}
+
 function renderTradeSuggestion(scan, ai) {
   const decision = ai?.decision || scan.gatekeeper.decision;
   const confidence = ai?.confidence ?? scan.confidence;
@@ -1071,6 +1170,12 @@ function renderTradeSuggestion(scan, ai) {
     scan.mlScore >= 50 ? "ML neutre" :
     "ML défavorable";
 
+  const vbtRead =
+    scan.vectorbtScore >= 80 ? "Backtest très favorable" :
+    scan.vectorbtScore >= 65 ? "Backtest favorable" :
+    scan.vectorbtScore >= 50 ? "Backtest neutre" :
+    "Backtest défavorable";
+
   if (!els.tradeSuggestionBox) return;
 
   els.tradeSuggestionBox.innerHTML = `
@@ -1079,6 +1184,7 @@ function renderTradeSuggestion(scan, ai) {
     ${!hardBlockCombined.blocked && hardBlockLocal.blocked ? `Blocage local : ${hardBlockLocal.reason}<br/>` : ""}
     Confiance : ${confidence}%<br/>
     Lecture ML : ${mlRead} (${scan.mlScore ?? "--"})<br/>
+    Lecture VBT : ${vbtRead} (${scan.vectorbtScore ?? "--"})<br/>
     Qualité d'entrée : ${entryQuality}<br/>
     Mode sniper : ${scan.entrySniper?.quality || "--"} (${scan.entrySniper?.score ?? "--"})<br/>
     Lecture sniper : ${sniperReason}<br/>
@@ -1105,16 +1211,6 @@ function renderChart(candles) {
     }))
   );
   chart.timeScale().fitContent();
-}
-
-function metricCard(label, value, hint) {
-  return `
-    <article class="metric-card">
-      <span class="muted">${label}</span>
-      <strong>${value}</strong>
-      <small>${hint}</small>
-    </article>
-  `;
 }
 
 function renderWatchlist() {
@@ -1145,6 +1241,8 @@ function renderWatchlist() {
       <div class="watch-item-body">
         <div>Prix: ${formatPrice(scan.current)}</div>
         <div>Trend: ${scan.trend}</div>
+        <div>ML: ${scan.mlScore ?? "--"}</div>
+        <div>VBT: ${scan.vectorbtScore ?? "--"}</div>
       </div>
       <div class="watch-actions">
         <button class="mini-btn" data-open="${scan.pair}">Ouvrir</button>
@@ -1242,7 +1340,8 @@ async function refreshAiDecision(force = false) {
     appState.aiSettings.mode,
     appState.aiSettings.model,
     appState.aiSettings.cooldownMinutes,
-    selectedScan.mlScore
+    selectedScan.mlScore,
+    selectedScan.vectorbtScore
   ].join("_");
 
   if (!force && appState.aiDecisionCache[selectedScan.pair]?.cacheKey === cacheKey) {
@@ -1310,7 +1409,9 @@ async function askServerForDecision(scan) {
       journalContext,
       mlScore: scan.mlScore || 0,
       mlConfidenceBand: scan.mlConfidenceBand || "medium",
-      mlExplanation: scan.mlExplanation || ""
+      mlExplanation: scan.mlExplanation || "",
+      vectorbtScore: scan.vectorbtScore || 0,
+      vectorbtExplanation: scan.vectorbtExplanation || ""
     })
   });
 
@@ -1390,6 +1491,7 @@ async function fetchFtmoRisk() {
   } catch {
     appState.ftmoRiskResult = {
       ok: false,
+      allowed: false,
       decision: "WAIT",
       reason: "Impossible de vérifier le risque pour le moment.",
       remainingDailyLoss: 0,
@@ -1436,7 +1538,7 @@ function renderFtmoRiskPanel() {
 
 async function fetchExitSuggestion(scan, aiDecision) {
   try {
-    const entry = Number(els.tradeEntry.value || scan.current);
+    const entry = Number(els.tradeEntry?.value || scan.current);
     const localExitSniper = scan.exitSniper || null;
 
     const response = await fetch("/api/exit-engine", {
@@ -1755,13 +1857,37 @@ function renderProfessionalStatus(scan, ai) {
   if (els.exitQualityLabel) els.exitQualityLabel.textContent = exitQuality;
   if (els.exitQualityHint) els.exitQualityHint.textContent = `${scan.exitSniper?.action || "HOLD"} · RR ${scan.rr}`;
   if (els.contextQualityLabel) els.contextQualityLabel.textContent = contextQuality;
-  if (els.contextQualityHint) els.contextQualityHint.textContent = `Risk ${scan.riskScore} · Ctx ${scan.contextScore} · ML ${scan.mlScore ?? "--"}`;
+  if (els.contextQualityHint) {
+    els.contextQualityHint.textContent = `Risk ${scan.riskScore} · Ctx ${scan.contextScore} · ML ${scan.mlScore ?? "--"} · VBT ${scan.vectorbtScore ?? "--"}`;
+  }
 }
 
 function localDecisionEngine(scan) {
   const strictness = appState.aiSettings.mode;
   const aggressiveBias = strictness === "aggressive" ? 5 : 0;
   const strictPenalty = strictness === "strict" ? 7 : 0;
+
+  if (scan.mlScore > 0 && scan.mlScore <= 30) {
+    return {
+      decision: "NO TRADE",
+      title: "Refus ML",
+      reason: "Le modèle juge que l’avantage statistique du setup est trop faible.",
+      confidence: clamp(88 + strictPenalty, 1, 99),
+      action: "Ne pas trader cet actif maintenant",
+      window: "Attendre un meilleur alignement"
+    };
+  }
+
+  if (scan.vectorbtScore > 0 && scan.vectorbtScore <= 35) {
+    return {
+      decision: "NO TRADE",
+      title: "Refus backtest",
+      reason: "Le backtest local du setup est trop faible.",
+      confidence: clamp(86 + strictPenalty, 1, 99),
+      action: "Ne pas trader cet actif maintenant",
+      window: "Attendre une meilleure structure"
+    };
+  }
 
   if (scan.gatekeeper.decision === "NO TRADE") {
     return {
@@ -1774,7 +1900,12 @@ function localDecisionEngine(scan) {
     };
   }
 
-  if (scan.gatekeeper.decision === "WAIT" || scan.finalScore < 72 - aggressiveBias) {
+  if (
+    scan.gatekeeper.decision === "WAIT" ||
+    scan.finalScore < 72 - aggressiveBias ||
+    (scan.mlScore > 0 && scan.mlScore <= 50) ||
+    (scan.vectorbtScore > 0 && scan.vectorbtScore <= 50)
+  ) {
     return {
       decision: "WAIT",
       title: "Attendre confirmation",
@@ -1788,7 +1919,7 @@ function localDecisionEngine(scan) {
   return {
     decision: "TRADE",
     title: "Trade autorisé",
-    reason: "Le contexte technique, le risque et le timing sont suffisamment alignés.",
+    reason: "Le contexte technique, ML, backtest, risque et timing sont suffisamment alignés.",
     confidence: clamp(scan.confidence + 4 - strictPenalty, 1, 99),
     action: `Entrée ${scan.direction.toUpperCase()} possible`,
     window: "Fenêtre exploitable maintenant"
@@ -1831,6 +1962,16 @@ async function onAddTrade(event) {
   }
 
   const ai = appState.aiDecisionCache[scan.pair] || localDecisionEngine(scan);
+  if (ai.decision !== "TRADE") {
+    if (els.tradeSuggestionBox) {
+      els.tradeSuggestionBox.innerHTML = `
+        <strong>${ai.decision}</strong><br/>
+        ${ai.reason}
+      `;
+    }
+    return;
+  }
+
   const capital = Number(els.tradeCapital?.value || 0);
   const entry = Number(els.tradeEntry?.value || scan.current);
   const riskPercent = Number(els.riskPercent?.value || 1);
@@ -1868,6 +2009,7 @@ async function onAddTrade(event) {
   if (els.tradePair) els.tradePair.value = scan.pair;
   if (els.tradeDirection) els.tradeDirection.value = scan.direction;
   if (els.riskPercent) els.riskPercent.value = "1";
+  if (els.tradeEntry) els.tradeEntry.value = String(scan.current);
 }
 
 function toggleCurrentWatchlist() {
@@ -2151,6 +2293,7 @@ function buildReasons(ctx) {
   if (ctx.entrySniperReason) reasons.push(`Sniper ${ctx.entrySniperScore ?? "--"} : ${ctx.entrySniperReason}`);
   if (ctx.exitSniperReason) reasons.push(`Exit sniper ${ctx.exitSniperScore ?? "--"} : ${ctx.exitSniperAction || "--"} · ${ctx.exitSniperReason}`);
   if (typeof ctx.mlScore === "number" && ctx.mlScore > 0) reasons.push(`ML ${ctx.mlScore} : ${ctx.mlExplanation || "lecture modèle disponible."}`);
+  if (typeof ctx.vectorbtScore === "number" && ctx.vectorbtScore > 0) reasons.push(`VectorBT ${ctx.vectorbtScore} : ${ctx.vectorbtExplanation || "lecture backtest disponible."}`);
 
   return reasons;
 }
@@ -2447,6 +2590,19 @@ function applyFinalScoreCap({ rawFinalScore, gatekeeperDecision, hardBlockLocal,
   return Math.max(1, Math.round(cappedScore));
 }
 
+function getDecisionPriority(scan) {
+  const ai = appState.aiDecisionCache[scan.pair];
+  const localCombinedBlock = computeCombinedRiskBlock(scan.pair);
+
+  if (scan.blocked || localCombinedBlock.blocked) return 0;
+
+  const decision = ai?.decision || scan.gatekeeper?.decision || "WAIT";
+
+  if (decision === "TRADE") return 3;
+  if (decision === "WAIT") return 2;
+  return 1;
+}
+
 function computeJournalLocalBonus(pair) {
   const journal = appState.journal;
   if (!journal || !Array.isArray(journal.pairStats)) return 0;
@@ -2464,7 +2620,9 @@ function computeJournalLocalBonus(pair) {
 
 function computeTimeSessionLocalBonus() {
   const journal = appState.journal;
-  if (!journal) return { bonus: 0, hourExpectancy: 0, sessionExpectancy: 0 };
+  if (!journal) {
+    return { bonus: 0, hourExpectancy: 0, sessionExpectancy: 0 };
+  }
 
   const now = new Date();
   const hour = Number(now.toLocaleString("en-GB", {
@@ -2500,35 +2658,6 @@ function computeTimeSessionLocalBonus() {
   else if (sessionExpectancy < -0.15) bonus -= 3;
 
   return { bonus, hourExpectancy, sessionExpectancy };
-}
-
-function buildPremiumCombo() {
-  const journal = appState.journal;
-  if (!journal) return null;
-
-  const bestPair = journal.bestPair || null;
-  const bestHour = journal.bestHour || null;
-  const bestSession = journal.bestSession || null;
-  if (!bestPair && !bestHour && !bestSession) return null;
-
-  const pairExp = Number(bestPair?.expectancy || 0);
-  const hourExp = Number(bestHour?.expectancy || 0);
-  const sessionExp = Number(bestSession?.expectancy || 0);
-  const pairWR = Number(bestPair?.winRate || 0);
-  const hourWR = Number(bestHour?.winRate || 0);
-  const sessionWR = Number(bestSession?.winRate || 0);
-
-  const comboScoreRaw =
-    pairExp * 40 +
-    hourExp * 25 +
-    sessionExp * 25 +
-    (pairWR / 100) * 5 +
-    (hourWR / 100) * 2.5 +
-    (sessionWR / 100) * 2.5;
-
-  const comboScore = Math.max(0, Math.min(100, Math.round(comboScoreRaw * 10)));
-
-  return { bestPair, bestHour, bestSession, comboScore };
 }
 
 function computePremiumComboBonus(pair) {
@@ -2609,7 +2738,9 @@ function autoSelectBestP1() {
     .filter((scan) => getDecisionPriority(scan) === 3)
     .sort((a, b) => (b.finalScore ?? 0) - (a.finalScore ?? 0))[0];
 
-  if (bestP1) appState.selectedPair = bestP1.pair;
+  if (bestP1) {
+    appState.selectedPair = bestP1.pair;
+  }
 }
 
 function updateOnlyP1Button() {
