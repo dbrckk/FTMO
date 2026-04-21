@@ -23,9 +23,18 @@
 
 * {
   box-sizing: border-box;
+  min-width: 0;
 }
 
-html,
+html {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  color-scheme: dark;
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
 body {
   margin: 0;
   padding: 0;
@@ -36,11 +45,9 @@ body {
     radial-gradient(circle at top, rgba(114, 168, 255, 0.11), transparent 25%),
     radial-gradient(circle at bottom right, rgba(143, 114, 255, 0.13), transparent 24%),
     linear-gradient(180deg, #050913 0%, #070d18 40%, #03070f 100%);
-}
-
-body {
-  min-height: 100vh;
   -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 button,
@@ -48,10 +55,24 @@ input,
 select,
 textarea {
   font: inherit;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 14px;
+}
+
+button,
+input,
+button,
+select,
+textarea {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 button {
   cursor: pointer;
+  color: var(--text) !important;
+  -webkit-text-fill-color: var(--text);
 }
 
 input,
@@ -60,10 +81,12 @@ textarea {
   width: 100%;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.035);
-  color: var(--text);
+  color: var(--text) !important;
+  -webkit-text-fill-color: var(--text);
   border-radius: var(--radius-sm);
   padding: 14px 14px;
   outline: none;
+  box-shadow: none;
   transition:
     border-color 0.18s ease,
     background 0.18s ease,
@@ -82,6 +105,19 @@ textarea:focus {
 input::placeholder,
 textarea::placeholder {
   color: #6d82a6;
+  -webkit-text-fill-color: #6d82a6;
+}
+
+select {
+  background-image:
+    linear-gradient(45deg, transparent 50%, #8ea3c7 50%),
+    linear-gradient(135deg, #8ea3c7 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) calc(50% - 3px),
+    calc(100% - 12px) calc(50% - 3px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 34px;
 }
 
 textarea {
@@ -119,6 +155,15 @@ h4 {
   line-height: 1.2;
 }
 
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+strong {
+  font-weight: 800;
+}
+
 .noise {
   position: fixed;
   inset: 0;
@@ -126,6 +171,7 @@ h4 {
   opacity: 0.15;
   background-image: radial-gradient(rgba(255, 255, 255, 0.06) 0.65px, transparent 0.65px);
   background-size: 13px 13px;
+  z-index: 0;
 }
 
 .app-shell {
@@ -142,6 +188,9 @@ h4 {
 }
 
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -154,6 +203,7 @@ h4 {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .eyebrow {
@@ -243,7 +293,6 @@ h4 {
 }
 
 .hero-pills,
-.row-actions,
 .section-title-row,
 .chart-toolbar,
 .pair-meta,
@@ -259,10 +308,19 @@ h4 {
   margin-top: 16px;
 }
 
+.row-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
 .pill,
 .tag,
 .signal-badge,
 .score-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.05);
@@ -270,6 +328,7 @@ h4 {
   font-size: 12px;
   line-height: 1;
   backdrop-filter: blur(10px);
+  white-space: nowrap;
 }
 
 .pill.warning {
@@ -312,7 +371,8 @@ h4 {
     border-color 0.18s ease,
     background 0.18s ease,
     opacity 0.18s ease,
-    box-shadow 0.18s ease;
+    box-shadow 0.18s ease,
+    filter 0.18s ease;
 }
 
 .ghost-btn:hover,
@@ -332,6 +392,7 @@ h4 {
 .ghost-btn,
 .icon-btn,
 .primary-btn {
+  min-height: 46px;
   border: 1px solid var(--line);
   color: var(--text);
   background: rgba(255, 255, 255, 0.04);
@@ -347,11 +408,12 @@ h4 {
 }
 
 .icon-btn {
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   padding: 0;
   display: grid;
   place-items: center;
+  flex: 0 0 auto;
 }
 
 .primary-btn {
@@ -366,7 +428,8 @@ h4 {
 }
 
 .ghost-btn.danger {
-  color: #ff9cae;
+  color: #ff9cae !important;
+  -webkit-text-fill-color: #ff9cae;
 }
 
 .full-width {
@@ -500,6 +563,7 @@ h4 {
 
 .pair-left {
   min-width: 0;
+  width: 100%;
 }
 
 .pair-title-row {
@@ -513,6 +577,7 @@ h4 {
   font-size: 18px;
   font-weight: 800;
   letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
 }
 
 .score-badge {
@@ -520,6 +585,7 @@ h4 {
   text-align: center;
   font-size: 16px;
   font-weight: 800;
+  flex: 0 0 auto;
 }
 
 .score-badge.good {
@@ -577,7 +643,7 @@ h4 {
   overflow: hidden;
   border: 1px solid var(--line);
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0.01)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.01)),
     rgba(255, 255, 255, 0.03);
 }
 
@@ -629,7 +695,7 @@ h4 {
 
 .trade-output {
   border: 1px solid var(--line);
-  background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.03));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.03));
   border-radius: var(--radius-md);
   padding: 14px;
   color: #dbe7ff;
@@ -665,6 +731,7 @@ h4 {
 }
 
 .mini-btn {
+  min-height: 40px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
@@ -685,7 +752,7 @@ h4 {
 }
 
 .hidden {
-  display: none;
+  display: none !important;
 }
 
 .modal-card {
@@ -712,16 +779,16 @@ h4 {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(255,255,255,0.03);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.12);
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255,255,255,0.18);
+  background: rgba(255, 255, 255, 0.18);
 }
 
 @media (max-width: 700px) {
@@ -757,6 +824,11 @@ h4 {
     flex-direction: column;
   }
 
+  .topbar-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
   h1 {
     font-size: 24px;
   }
@@ -769,10 +841,36 @@ h4 {
     font-size: 38px;
   }
 
+  .row-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .ghost-btn,
+  .primary-btn,
+  .icon-btn {
+    font-size: 15px;
+    padding: 12px 14px;
+  }
+
+  .pill,
+  .tag,
+  .signal-badge {
+    font-size: 11px;
+  }
+
   .pair-item,
   .trade-item-header,
   .watch-item-header {
     flex-direction: column;
     align-items: flex-start;
   }
-                    }
+
+  .pair-title-row,
+  .pair-meta {
+    gap: 8px;
+  }
+
+  .chart-box {
+    height: 240px;
+  }
+  }
