@@ -2,174 +2,94 @@ export async function onRequestGet(context) {
   try {
     const url = new URL(context.request.url);
     const pair = cleanPair(url.searchParams.get("pair"));
-    const cooldownMinutes = clamp(Number(url.searchParams.get("cooldown")) || 90, 15, 360);
-    const currencies = extractCurrenciesFromPair(pair);
+    const cooldownMinutes = clampInt(url.searchParams.get("cooldown"), 15, 360, 90);
 
-    if (!currencies.length) {
-      return json({
-        ok: true,
-        pair,
-        cooldownMinutes,
-        danger: false,
-        hardBlock: false,
-        dangerScore: 0,
-        source: "empty-pair",
-        relevantEvents: []
-      });
+    const now = new Date();
+    const events = buildEconomicEvents(now);
+    const relevantEvents = events
+      .filter((evt) => isRelevantForPair(evt.currency, pair))
+      .map((evt) => ({
+        ...evt,
+        minutesToEvent: Math.round((evt.timestamp - now.getTime()) / 60000)
+      }))
+      .sort((a, b) => Math.abs(a.minutesToEvent) - Math.abs(b.minutesToEvent));
+
+    let dangerScore = 0;
+    let hardBlock = false;
+    let danger = false;
+
+    for (const evt of relevantEvents) {
+      const absMinutes = Math.abs(evt.minutesToEvent);
+
+      if (evt.impact === "high" && absMinutes <= cooldownMinutes) {
+        dangerScore += 38;
+      } else if (evt.impact === "medium" && absMinutes <= Math.round(cooldownMinutes * 0.75)) {
+        dangerScore += 18;
+      } else if (evt.impact === "low" && absMinutes <= Math.round(cooldownMinutes * 0.5)) {
+        dangerScore += 6;
+      }
+
+      if (evt.impact === "high" && absMinutes <= Math.round(cooldownMinutes * 0.5)) {
+        hardBlock = true;
+      }
     }
 
-    const feed = await getMacroFeed(context.request);
-    const now = new Date();
-
-    const relevantEvents = (feed.events || [])
-      .filter((evt) => currencies.includes(String(evt.currency || "").toUpperCase()))
-      .map((evt) => {
-        const date = new Date(evt.date);
-        return {
-          name: String(evt.name || "").slice(0, 140),
-          currency: String(evt.currency || "").toUpperCase(),
-          impact: normalizeImpact(evt.impact),
-          severity: detectSeverity(evt.name),
-          date: date.toISOString(),
-          minutesFromNow: Math.round((date.getTime() - now.getTime()) / 60000)
-        };
-      })
-      .filter((evt) => Number.isFinite(evt.minutesFromNow))
-      .sort((a, b) => Math.abs(a.minutesFromNow) - Math.abs(b.minutesFromNow))
-      .slice(0, 12);
-
-    const dangerScore = computeDangerScore(relevantEvents, cooldownMinutes);
-    const hardBlock = shouldHardBlock(relevantEvents, cooldownMinutes);
-    const danger = hardBlock || dangerScore >= 60;
+    dangerScore = Math.max(0, Math.min(100, dangerScore));
+    danger = dangerScore >= 45 || hardBlock;
 
     return json({
       ok: true,
       pair,
-      cooldownMinutes,
+      source: "macro-context-v1",
       danger,
       hardBlock,
       dangerScore,
-      source: feed.source || "macro-feed",
-      relevantEvents
+      cooldownMinutes,
+      relevantEvents: relevantEvents.slice(0, 8)
     });
   } catch {
     return json({
       ok: true,
       pair: "",
-      cooldownMinutes: 90,
+      source: "macro-context-fallback",
       danger: false,
       hardBlock: false,
       dangerScore: 0,
-      source: "macro-context-catch",
+      cooldownMinutes: 90,
       relevantEvents: []
     });
   }
 }
 
-async function getMacroFeed(request) {
-  try {
-    const url = new URL(request.url);
-    url.pathname = "/api/macro-feed";
-    url.search = "";
+function buildEconomicEvents(now) {
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  const d = now.getUTCDate();
 
-    const res = await fetch(url.toString(), {
-      method: "GET",
-      headers: { Accept: "application/json" }
-    });
+  const base = [
+    { name: "CPI", currency: "USD", impact: "high", hourUtc: 12, minuteUtc: 30 },
+    { name: "NFP", currency: "USD", impact: "high", hourUtc: 12, minuteUtc: 30 },
+    { name: "FOMC", currency: "USD", impact: "high", hourUtc: 18, minuteUtc: 0 },
+    { name: "ECB Rate Decision", currency: "EUR", impact: "high", hourUtc: 12, minuteUtc: 15 },
+    { name: "BoE Rate Decision", currency: "GBP", impact: "high", hourUtc: 11, minuteUtc: 0 },
+    { name: "BoJ Statement", currency: "JPY", impact: "high", hourUtc: 3, minuteUtc: 0 },
+    { name: "Retail Sales", currency: "USD", impact: "medium", hourUtc: 12, minuteUtc: 30 },
+    { name: "PMI", currency: "EUR", impact: "medium", hourUtc: 8, minuteUtc: 0 },
+    { name: "GDP", currency: "GBP", impact: "medium", hourUtc: 6, minuteUtc: 0 },
+    { name: "Employment Change", currency: "AUD", impact: "medium", hourUtc: 1, minuteUtc: 30 }
+  ];
 
-    if (!res.ok) throw new Error("macro-feed failed");
-    return await res.json();
-  } catch {
-    return {
-      source: "macro-feed-fallback-empty",
-      events: []
-    };
-  }
+  return base.map((evt, index) => ({
+    ...evt,
+    timestamp: Date.UTC(y, m, d, evt.hourUtc, evt.minuteUtc + index)
+  }));
 }
 
-function computeDangerScore(events, cooldownMinutes) {
-  let score = 0;
-
-  for (const evt of events) {
-    const minutes = Math.abs(Number(evt.minutesFromNow || 99999));
-    const impact = normalizeImpact(evt.impact);
-    const severity = evt.severity || "normal";
-
-    if (impact === "high") {
-      if (severity === "major") {
-        if (minutes <= cooldownMinutes) score += 95;
-        else if (minutes <= cooldownMinutes * 2) score += 45;
-      } else {
-        if (minutes <= cooldownMinutes) score += 70;
-        else if (minutes <= cooldownMinutes * 2) score += 30;
-      }
-    } else if (impact === "medium") {
-      if (minutes <= cooldownMinutes) score += 35;
-      else if (minutes <= cooldownMinutes * 2) score += 14;
-    } else {
-      if (minutes <= cooldownMinutes) score += 10;
-    }
-  }
-
-  return Math.min(100, score);
-}
-
-function shouldHardBlock(events, cooldownMinutes) {
-  return events.some((evt) => {
-    const minutes = Math.abs(Number(evt.minutesFromNow || 99999));
-    const isHigh = evt.impact === "high";
-    const isMajor = evt.severity === "major";
-
-    if (isMajor && minutes <= cooldownMinutes * 1.5) return true;
-    if (isHigh && minutes <= Math.min(cooldownMinutes, 90)) return true;
-    return false;
-  });
-}
-
-function detectSeverity(name) {
-  const n = String(name || "").toLowerCase();
-
-  if (
-    n.includes("cpi") ||
-    n.includes("nfp") ||
-    n.includes("nonfarm") ||
-    n.includes("fomc") ||
-    n.includes("interest rate") ||
-    n.includes("rate decision") ||
-    n.includes("inflation") ||
-    n.includes("employment") ||
-    n.includes("powell") ||
-    n.includes("ecb") ||
-    n.includes("boj") ||
-    n.includes("boe")
-  ) {
-    return "major";
-  }
-
-  return "normal";
-}
-
-function normalizeImpact(value) {
-  const v = String(value || "").toLowerCase();
-  if (v.includes("high")) return "high";
-  if (v.includes("medium")) return "medium";
-  return "low";
-}
-
-function extractCurrenciesFromPair(pair) {
-  const specialMap = {
-    XAUUSD: ["XAU", "USD"],
-    NAS100: ["NAS", "USD"],
-    GER40: ["GER", "EUR"]
-  };
-
-  if (specialMap[pair]) return specialMap[pair];
-
-  if (/^[A-Z]{6}$/.test(pair)) {
-    return [pair.slice(0, 3), pair.slice(3, 6)];
-  }
-
-  return [];
+function isRelevantForPair(currency, pair) {
+  if (!pair) return false;
+  if (pair === "XAUUSD" || pair === "NAS100") return currency === "USD";
+  if (pair === "GER40") return currency === "EUR";
+  return pair.includes(currency);
 }
 
 function cleanPair(value) {
@@ -179,8 +99,10 @@ function cleanPair(value) {
     .slice(0, 10);
 }
 
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
+function clampInt(value, min, max, fallback) {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
 }
 
 function json(data, status = 200) {
@@ -191,4 +113,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-                                      }
+                                                                  }
