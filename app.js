@@ -1,4 +1,4 @@
-const STORAGE_KEY = "ftmo-edge-ai-state-v8";
+const STORAGE_KEY = "ftmo-edge-ai-state-v8"; 
 
 const TIMEFRAMES = ["M5", "M15", "H1", "H4"];
 
