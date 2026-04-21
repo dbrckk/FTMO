@@ -1,4 +1,10 @@
-flask==3.0.3
+fastapi==0.115.0
+uvicorn==0.30.6
 pandas==2.2.2
 numpy==1.26.4
+vectorbt==0.26.2
+requests==2.32.3
+python-dotenv==1.0.1
+pydantic==2.8.2
+numba==0.60.0
 gunicorn==23.0.0
