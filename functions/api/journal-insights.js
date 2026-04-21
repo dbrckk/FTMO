@@ -1,222 +1,235 @@
 export async function onRequestPost(context) {
   try {
-    const body = await context.request.json();
-    const trades = Array.isArray(body.trades) ? body.trades : [];
+    const body = await safeJson(context.request);
+    if (!body.ok) {
+      return json({ ok: false, error: "Invalid JSON body" }, 400);
+    }
 
+    const trades = Array.isArray(body.data?.trades) ? body.data.trades : [];
     const normalizedTrades = trades
       .map(normalizeTrade)
-      .filter(Boolean);
+      .filter((t) => t && Number.isFinite(t.entry) && Number.isFinite(t.exitPrice));
 
-    const byPair = groupBy(normalizedTrades, (t) => t.pair);
-    const byHour = groupBy(normalizedTrades, (t) => String(t.hour));
-    const bySession = groupBy(normalizedTrades, (t) => t.session);
-    const byDirection = groupBy(normalizedTrades, (t) => t.direction);
+    if (!normalizedTrades.length) {
+      return json({
+        ok: true,
+        totalTrades: 0,
+        winRate: 0,
+        expectancy: 0,
+        pairStats: [],
+        hourStats: [],
+        sessionStats: [],
+        bestPair: null,
+        bestHour: null,
+        worstHour: null,
+        bestSession: null,
+        worstSession: null,
+        insights: ["Pas assez de données pour produire des insights."]
+      });
+    }
 
-    const pairStats = summarizeBuckets(byPair);
-    const hourStats = summarizeBuckets(byHour);
-    const sessionStats = summarizeBuckets(bySession);
-    const directionStats = summarizeBuckets(byDirection);
+    const enriched = normalizedTrades.map((trade) => {
+      const pnl = computePnl(trade);
+      const win = pnl > 0 ? 1 : 0;
+      const expectancy = pnl;
 
-    const bestPair = getBestBucket(pairStats);
-    const worstPair = getWorstBucket(pairStats);
-    const bestHour = getBestBucket(hourStats);
-    const worstHour = getWorstBucket(hourStats);
-    const bestSession = getBestBucket(sessionStats);
-    const worstSession = getWorstBucket(sessionStats);
-    const bestDirection = getBestBucket(directionStats);
+      const tradeDate = trade.createdAtDate || new Date();
+      const hour = Number(
+        tradeDate.toLocaleString("en-GB", {
+          hour: "2-digit",
+          hour12: false,
+          timeZone: "Europe/Paris"
+        })
+      );
+
+      const session = getSessionLabel(hour);
+
+      return {
+        ...trade,
+        pnl,
+        win,
+        expectancy,
+        hour,
+        session
+      };
+    });
+
+    const pairStats = aggregateBy(enriched, (t) => t.pair);
+    const hourStats = aggregateBy(enriched, (t) => String(t.hour));
+    const sessionStats = aggregateBy(enriched, (t) => t.session);
+
+    const bestPair = maxBy(pairStats, "expectancy");
+    const bestHour = maxBy(hourStats, "expectancy");
+    const worstHour = minBy(hourStats, "expectancy");
+    const bestSession = maxBy(sessionStats, "expectancy");
+    const worstSession = minBy(sessionStats, "expectancy");
+
+    const winRate =
+      (enriched.reduce((sum, t) => sum + t.win, 0) / enriched.length) * 100;
+
+    const expectancy =
+      enriched.reduce((sum, t) => sum + t.expectancy, 0) / enriched.length;
 
     const insights = buildInsights({
-      normalizedTrades,
+      totalTrades: enriched.length,
+      winRate,
+      expectancy,
       bestPair,
-      worstPair,
       bestHour,
       worstHour,
       bestSession,
-      worstSession,
-      bestDirection
+      worstSession
     });
 
     return json({
       ok: true,
-      totalTrades: normalizedTrades.length,
-      winRate: round2(computeWinRate(normalizedTrades)),
-      expectancy: round4(computeExpectancy(normalizedTrades)),
-      averageR: round4(computeAverageR(normalizedTrades)),
+      totalTrades: enriched.length,
+      winRate: round(winRate, 2),
+      expectancy: round(expectancy, 4),
+      pairStats,
+      hourStats,
+      sessionStats,
       bestPair,
-      worstPair,
       bestHour,
       worstHour,
       bestSession,
       worstSession,
-      bestDirection,
-      insights,
-      pairStats,
-      hourStats,
-      sessionStats
+      insights
     });
   } catch {
-    return json({ ok: false, error: "Invalid payload" }, 400);
+    return json({
+      ok: false,
+      error: "Journal insights failed"
+    }, 500);
   }
 }
 
-function normalizeTrade(t) {
-  const pair = cleanText(t.pair, "");
-  const direction = cleanText((t.direction || "").toLowerCase(), "buy");
-  const status = cleanText((t.status || "").toLowerCase(), "actif");
-  const notes = cleanText(t.notes, "");
-  const createdAt = parseDate(t.createdAt);
-  const entry = Number(t.entry);
-  const stopLoss = Number(t.stopLoss);
-  const takeProfit = Number(t.takeProfit);
-
-  if (!pair || !createdAt || !Number.isFinite(entry)) return null;
-
-  const currentPrice = Number(t.currentPrice || t.exitPrice || entry);
-  const rr = estimateRMultiple({
-    direction,
-    entry,
-    stopLoss,
-    currentPrice
-  });
+function normalizeTrade(trade) {
+  const createdAtDate = safeDate(trade.createdAt);
 
   return {
-    pair,
-    direction,
-    status,
-    notes,
-    createdAt,
-    hour: createdAt.getHours(),
-    session: detectSession(createdAt),
-    rr,
-    win: rr > 0,
-    loss: rr < 0
+    pair: cleanText(trade.pair, "UNKNOWN"),
+    direction: String(trade.direction || "buy").toLowerCase() === "sell" ? "sell" : "buy",
+    entry: Number(trade.entry),
+    exitPrice: Number(trade.exitPrice ?? trade.currentPrice ?? trade.entry),
+    createdAtDate
   };
 }
 
-function estimateRMultiple({ direction, entry, stopLoss, currentPrice }) {
-  const risk = Math.abs(entry - stopLoss) || Math.max(Math.abs(entry) * 0.002, 0.0001);
-  const pnl = direction === "sell" ? entry - currentPrice : currentPrice - entry;
-  return pnl / risk;
+function computePnl(trade) {
+  if (trade.direction === "sell") {
+    return trade.entry - trade.exitPrice;
+  }
+  return trade.exitPrice - trade.entry;
 }
 
-function detectSession(date) {
-  const h = Number(date.toLocaleString("en-GB", {
-    hour: "2-digit",
-    hour12: false,
-    timeZone: "Europe/Paris"
-  }));
+function aggregateBy(items, keyFn) {
+  const map = new Map();
 
-  if (h >= 1 && h < 10) return "Tokyo";
-  if (h >= 9 && h < 14) return "London";
-  if (h >= 14 && h < 18) return "London+NewYork";
-  if (h >= 18 && h < 23) return "NewYork";
-  return "OffSession";
+  for (const item of items) {
+    const key = keyFn(item);
+    if (!map.has(key)) {
+      map.set(key, {
+        key,
+        total: 0,
+        wins: 0,
+        pnl: 0
+      });
+    }
+
+    const bucket = map.get(key);
+    bucket.total += 1;
+    bucket.wins += item.win;
+    bucket.pnl += item.pnl;
+  }
+
+  return [...map.values()]
+    .map((bucket) => ({
+      key: bucket.key,
+      totalTrades: bucket.total,
+      winRate: round(bucket.total > 0 ? (bucket.wins / bucket.total) * 100 : 0, 2),
+      expectancy: round(bucket.total > 0 ? bucket.pnl / bucket.total : 0, 4)
+    }))
+    .sort((a, b) => b.expectancy - a.expectancy);
 }
 
-function groupBy(items, fn) {
-  return items.reduce((acc, item) => {
-    const key = fn(item);
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(item);
-    return acc;
-  }, {});
-}
-
-function summarizeBuckets(grouped) {
-  return Object.entries(grouped).map(([key, items]) => ({
-    key,
-    count: items.length,
-    winRate: round2(computeWinRate(items)),
-    expectancy: round4(computeExpectancy(items)),
-    averageR: round4(computeAverageR(items))
-  })).sort((a, b) => b.expectancy - a.expectancy);
-}
-
-function getBestBucket(stats) {
-  return stats.length ? stats[0] : null;
-}
-
-function getWorstBucket(stats) {
-  return stats.length ? stats[stats.length - 1] : null;
-}
-
-function computeWinRate(items) {
-  if (!items.length) return 0;
-  return (items.filter((x) => x.win).length / items.length) * 100;
-}
-
-function computeAverageR(items) {
-  if (!items.length) return 0;
-  return items.reduce((sum, x) => sum + x.rr, 0) / items.length;
-}
-
-function computeExpectancy(items) {
-  if (!items.length) return 0;
-  const wins = items.filter((x) => x.win);
-  const losses = items.filter((x) => x.loss);
-
-  const avgWin = wins.length ? wins.reduce((s, x) => s + x.rr, 0) / wins.length : 0;
-  const avgLoss = losses.length ? Math.abs(losses.reduce((s, x) => s + x.rr, 0) / losses.length) : 0;
-  const winRate = wins.length / items.length;
-  const lossRate = losses.length / items.length;
-
-  return (winRate * avgWin) - (lossRate * avgLoss);
-}
-
-function buildInsights(ctx) {
+function buildInsights(data) {
   const insights = [];
 
-  if (ctx.bestPair) {
-    insights.push(`Meilleure paire: ${ctx.bestPair.key} · expectancy ${ctx.bestPair.expectancy}`);
-  }
-  if (ctx.worstPair) {
-    insights.push(`Paire la plus faible: ${ctx.worstPair.key} · expectancy ${ctx.worstPair.expectancy}`);
-  }
-  if (ctx.bestHour) {
-    insights.push(`Meilleure heure: ${ctx.bestHour.key}h · win rate ${ctx.bestHour.winRate}%`);
-  }
-  if (ctx.worstHour) {
-    insights.push(`Heure à éviter: ${ctx.worstHour.key}h · expectancy ${ctx.worstHour.expectancy}`);
-  }
-  if (ctx.bestSession) {
-    insights.push(`Meilleure session: ${ctx.bestSession.key}`);
-  }
-  if (ctx.worstSession) {
-    insights.push(`Session la plus faible: ${ctx.worstSession.key}`);
-  }
-  if (ctx.bestDirection) {
-    insights.push(`Direction la plus rentable: ${ctx.bestDirection.key}`);
+  insights.push(`Win rate global: ${round(data.winRate, 2)}%.`);
+  insights.push(`Expectancy globale: ${round(data.expectancy, 4)}.`);
+
+  if (data.bestPair) {
+    insights.push(`Meilleure paire actuelle: ${data.bestPair.key}.`);
   }
 
-  const earlyEntries = ctx.normalizedTrades.filter((t) => t.notes.toLowerCase().includes("early")).length;
-  if (earlyEntries >= 2) {
-    insights.push("Tu entres souvent trop tôt sur certains trades.");
+  if (data.bestHour) {
+    insights.push(`Meilleure heure actuelle: ${data.bestHour.key}h.`);
   }
 
-  const offSessionCount = ctx.normalizedTrades.filter((t) => t.session === "OffSession").length;
-  if (offSessionCount >= 2) {
-    insights.push("Tu trades trop souvent hors session active.");
+  if (data.worstHour) {
+    insights.push(`Heure la plus faible: ${data.worstHour.key}h.`);
+  }
+
+  if (data.bestSession) {
+    insights.push(`Meilleure session actuelle: ${data.bestSession.key}.`);
+  }
+
+  if (data.worstSession) {
+    insights.push(`Session la plus faible: ${data.worstSession.key}.`);
+  }
+
+  if (data.expectancy <= 0) {
+    insights.push("Le journal reste défensif : il faut réduire les setups moyens.");
+  } else if (data.winRate >= 55) {
+    insights.push("Le journal devient exploitable : l’avantage commence à se confirmer.");
+  } else {
+    insights.push("L’avantage est encore fragile : reste très sélectif.");
   }
 
   return insights;
 }
 
-function parseDate(value) {
+function getSessionLabel(hour) {
+  if (hour >= 9 && hour < 14) return "London";
+  if (hour >= 14 && hour < 18) return "London+NewYork";
+  if (hour >= 18 && hour < 23) return "NewYork";
+  if (hour >= 1 && hour < 9) return "Tokyo";
+  return "OffSession";
+}
+
+function maxBy(items, key) {
+  if (!items.length) return null;
+  return [...items].sort((a, b) => Number(b[key] || 0) - Number(a[key] || 0))[0];
+}
+
+function minBy(items, key) {
+  if (!items.length) return null;
+  return [...items].sort((a, b) => Number(a[key] || 0) - Number(b[key] || 0))[0];
+}
+
+function safeDate(value) {
   const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
+  if (Number.isFinite(d.getTime())) return d;
+  return new Date();
+}
+
+function round(value, decimals = 2) {
+  const factor = 10 ** decimals;
+  return Math.round((Number(value) || 0) * factor) / factor;
 }
 
 function cleanText(value, fallback) {
   const text = String(value ?? "").trim();
-  return text ? text.slice(0, 120) : fallback;
+  return text ? text.slice(0, 40) : fallback;
 }
 
-function round2(v) {
-  return Math.round(v * 100) / 100;
-}
-
-function round4(v) {
-  return Math.round(v * 10000) / 10000;
+async function safeJson(request) {
+  try {
+    return { ok: true, data: await request.json() };
+  } catch {
+    return { ok: false };
+  }
 }
 
 function json(data, status = 200) {
