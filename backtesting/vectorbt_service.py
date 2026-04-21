@@ -1,12 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from typing import List, Dict, Any
 import pandas as pd
 import numpy as np
 import vectorbt as vbt
-import talib
 
-app = FastAPI(title="FTMO Edge VectorBT Service")
+app = FastAPI(title="FTMO Edge VectorBT Advanced Service")
 
 
 class Candle(BaseModel):
@@ -28,9 +27,6 @@ class BacktestPayload(BaseModel):
     slow_ema: int = 50
     rsi_period: int = 14
     atr_period: int = 14
-    macd_fast: int = 12
-    macd_slow: int = 26
-    macd_signal: int = 9
 
     rsi_buy_min: float = 45
     rsi_buy_max: float = 65
@@ -43,7 +39,7 @@ class BacktestPayload(BaseModel):
 
 def build_dataframe(candles: List[Candle]) -> pd.DataFrame:
     if len(candles) < 120:
-      raise HTTPException(status_code=400, detail="Not enough candles for backtest")
+        raise HTTPException(status_code=400, detail="Not enough candles for backtest")
 
     df = pd.DataFrame([c.model_dump() for c in candles])
     df["datetime"] = pd.to_datetime(df["time"], unit="s", utc=True)
@@ -59,34 +55,49 @@ def build_dataframe(candles: List[Candle]) -> pd.DataFrame:
     return df
 
 
+def ema(series: pd.Series, period: int) -> pd.Series:
+    return series.ewm(span=period, adjust=False).mean()
+
+
+def rsi(series: pd.Series, period: int = 14) -> pd.Series:
+    delta = series.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+
+    avg_gain = gain.ewm(alpha=1 / period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1 / period, adjust=False).mean()
+
+    rs = avg_gain / avg_loss.replace(0, np.nan)
+    out = 100 - (100 / (1 + rs))
+    return out.fillna(50)
+
+
+def atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
+    prev_close = df["close"].shift(1)
+    tr = pd.concat([
+        df["high"] - df["low"],
+        (df["high"] - prev_close).abs(),
+        (df["low"] - prev_close).abs()
+    ], axis=1).max(axis=1)
+    return tr.rolling(period).mean().fillna(method="bfill")
+
+
+def macd_hist(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> pd.Series:
+    macd_line = ema(series, fast) - ema(series, slow)
+    signal_line = macd_line.ewm(span=signal, adjust=False).mean()
+    return macd_line - signal_line
+
+
 def add_indicators(df: pd.DataFrame, payload: BacktestPayload) -> pd.DataFrame:
-    close = df["close"].values.astype(float)
-    high = df["high"].values.astype(float)
-    low = df["low"].values.astype(float)
+    df["ema_fast"] = ema(df["close"], payload.fast_ema)
+    df["ema_slow"] = ema(df["close"], payload.slow_ema)
+    df["rsi"] = rsi(df["close"], payload.rsi_period)
+    df["atr"] = atr(df, payload.atr_period)
+    df["macd_hist"] = macd_hist(df["close"])
 
-    df["ema_fast"] = talib.EMA(close, timeperiod=payload.fast_ema)
-    df["ema_slow"] = talib.EMA(close, timeperiod=payload.slow_ema)
-    df["rsi"] = talib.RSI(close, timeperiod=payload.rsi_period)
-    df["atr"] = talib.ATR(high, low, close, timeperiod=payload.atr_period)
-
-    macd, macd_signal, macd_hist = talib.MACD(
-        close,
-        fastperiod=payload.macd_fast,
-        slowperiod=payload.macd_slow,
-        signalperiod=payload.macd_signal
-    )
-    df["macd"] = macd
-    df["macd_signal"] = macd_signal
-    df["macd_hist"] = macd_hist
-
-    upper, middle, lower = talib.BBANDS(close, timeperiod=20)
-    df["bb_upper"] = upper
-    df["bb_middle"] = middle
-    df["bb_lower"] = lower
-
-    df["adx"] = talib.ADX(high, low, close, timeperiod=14)
-    df["plus_di"] = talib.PLUS_DI(high, low, close, timeperiod=14)
-    df["minus_di"] = talib.MINUS_DI(high, low, close, timeperiod=14)
+    df["rolling_high_20"] = df["high"].rolling(20).max()
+    df["rolling_low_20"] = df["low"].rolling(20).min()
+    df["rolling_mid_20"] = (df["rolling_high_20"] + df["rolling_low_20"]) / 2
 
     return df.dropna().copy()
 
@@ -95,16 +106,14 @@ def build_long_signals(df: pd.DataFrame, payload: BacktestPayload):
     trend_ok = df["ema_fast"] > df["ema_slow"]
     rsi_ok = (df["rsi"] >= payload.rsi_buy_min) & (df["rsi"] <= payload.rsi_buy_max)
     macd_ok = df["macd_hist"] > 0
-    adx_ok = df["adx"] >= 18
-    breakout_ok = df["close"] > df["bb_middle"]
+    structure_ok = df["close"] > df["rolling_mid_20"]
 
-    entries = trend_ok & rsi_ok & macd_ok & adx_ok & breakout_ok
-
+    entries = trend_ok & rsi_ok & macd_ok & structure_ok
     exits = (
         (df["ema_fast"] < df["ema_slow"]) |
         (df["rsi"] >= 72) |
         (df["macd_hist"] < 0) |
-        (df["close"] < df["bb_middle"])
+        (df["close"] < df["rolling_mid_20"])
     )
 
     return entries.fillna(False), exits.fillna(False)
@@ -114,16 +123,14 @@ def build_short_signals(df: pd.DataFrame, payload: BacktestPayload):
     trend_ok = df["ema_fast"] < df["ema_slow"]
     rsi_ok = (df["rsi"] >= payload.rsi_sell_min) & (df["rsi"] <= payload.rsi_sell_max)
     macd_ok = df["macd_hist"] < 0
-    adx_ok = df["adx"] >= 18
-    breakdown_ok = df["close"] < df["bb_middle"]
+    structure_ok = df["close"] < df["rolling_mid_20"]
 
-    entries = trend_ok & rsi_ok & macd_ok & adx_ok & breakdown_ok
-
+    entries = trend_ok & rsi_ok & macd_ok & structure_ok
     exits = (
         (df["ema_fast"] > df["ema_slow"]) |
         (df["rsi"] <= 28) |
         (df["macd_hist"] > 0) |
-        (df["close"] > df["bb_middle"])
+        (df["close"] > df["rolling_mid_20"])
     )
 
     return entries.fillna(False), exits.fillna(False)
@@ -181,7 +188,6 @@ def compute_vectorbt_score(metrics: Dict[str, Any]) -> int:
     score += min(10, max(0, (profit_factor - 1) * 8))
     score += min(8, max(0, sharpe * 3))
     score += min(6, max(0, calmar * 2))
-
     score -= min(22, max(0, max_drawdown * 0.8))
 
     if total_trades < 8:
@@ -209,9 +215,14 @@ def choose_best_side(long_metrics: Dict[str, Any], short_metrics: Dict[str, Any]
     return "short", short_score, short_metrics
 
 
+@app.get("/")
+def root():
+    return {"ok": True, "service": "vectorbt-advanced-running"}
+
+
 @app.get("/health")
 def health():
-    return {"ok": True, "service": "vectorbt-ta-lib"}
+    return {"ok": True, "service": "vectorbt-advanced-running"}
 
 
 @app.post("/backtest")
@@ -266,7 +277,7 @@ def run_backtest(payload: BacktestPayload):
 
     return {
         "ok": True,
-        "source": "vectorbt-talib",
+        "source": "vectorbt-advanced",
         "pair": payload.pair,
         "timeframe": payload.timeframe,
         "bestSide": best_side,
