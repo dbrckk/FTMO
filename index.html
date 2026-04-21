@@ -1,77 +1,338 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  />
   <title>FTMO Edge AI</title>
-
-  <link rel="stylesheet" href="styles.css">
+  <meta name="color-scheme" content="dark" />
+  <link rel="stylesheet" href="styles.css" />
   <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 </head>
-
 <body>
-<div class="app-shell">
+  <div class="noise"></div>
 
-<header class="topbar glass">
-  <h1>FTMO Edge AI</h1>
-  <button id="refreshBtn">↻</button>
-</header>
+  <div class="app-shell">
+    <header class="topbar glass">
+      <div>
+        <div class="eyebrow">AI Trading Terminal</div>
+        <h1>FTMO Edge AI</h1>
+      </div>
 
-<main class="layout">
+      <div class="topbar-actions">
+        <div class="pill" id="localClock">--</div>
+        <div class="pill" id="activeSessionPill">--</div>
+        <div class="pill" id="riskPill">--</div>
+        <button id="refreshBtn" class="icon-btn" type="button">↻</button>
+      </div>
+    </header>
 
-<!-- HERO -->
-<section class="card">
-  <h2 id="sessionHeadline">Analyse en cours</h2>
-  <div id="topPairLabel">--</div>
-</section>
+    <main class="layout">
+      <section class="card hero glass gradient-border">
+        <div class="hero-main">
+          <div>
+            <div class="eyebrow">Live overview</div>
+            <h2 id="sessionHeadline">Analyse en cours</h2>
+            <p class="subline" id="sessionSubline">--</p>
+          </div>
 
-<!-- TOP P1 -->
-<section class="card">
-  <h3>Top 3 trades</h3>
-  <div id="topPriorityTrades"></div>
-</section>
+          <div class="hero-score-wrap">
+            <div class="hero-score" id="bestScore">--</div>
+            <span>best score</span>
+          </div>
+        </div>
 
-<!-- BLOCKED -->
-<section class="card">
-  <h3>Top NO TRADE</h3>
-  <div id="topBlockedTrades"></div>
-</section>
+        <div class="hero-pills">
+          <span class="pill" id="marketBiasPill">--</span>
+          <span class="pill" id="topPairLabel">--</span>
+          <span class="pill" id="topPairReason">--</span>
+          <span class="pill">Allowed <strong id="allowedCount">0</strong></span>
+          <span class="pill warning">Blocked <strong id="blockedCount">0</strong></span>
+          <span class="pill">Exposure <strong id="globalExposure">0%</strong></span>
+        </div>
+      </section>
 
-<!-- CONTROLS -->
-<section class="card">
+      <section class="card scanner-results">
+        <div class="section-title-row">
+          <h3>Top 3 trades</h3>
+        </div>
+        <div id="topPriorityTrades" class="pair-list"></div>
+      </section>
 
-<div class="row-actions">
-  <button id="onlyP1Btn">Only P1</button>
-  <button id="autoFocusBtn">Auto Focus</button>
-  <button id="entrySniperBtn">Entry Sniper</button>
-  <button id="exitSniperBtn">Exit Sniper</button>
-</div>
+      <section class="card scanner-results">
+        <div class="section-title-row">
+          <h3>Top NO TRADE</h3>
+        </div>
+        <div id="topBlockedTrades" class="pair-list"></div>
+      </section>
 
-</section>
+      <section class="card">
+        <div class="controls-header">
+          <div>
+            <div class="eyebrow">Scanner controls</div>
+            <h3>Filtres</h3>
+          </div>
+        </div>
 
-<!-- LIST -->
-<section class="card">
-  <h3>Scanner</h3>
-  <div id="pairList"></div>
-</section>
+        <div class="chip-row compact-gap" id="timeframeRow"></div>
 
-<!-- DETAIL -->
-<section class="card">
-  <h3 id="selectedPairName">EURUSD</h3>
+        <div class="field-grid">
+          <div>
+            <label class="muted small" for="strategyMode">Strategy</label>
+            <select id="strategyMode">
+              <option value="balanced">Balanced</option>
+              <option value="trend">Trend</option>
+              <option value="breakout">Breakout</option>
+              <option value="reversal">Reversal</option>
+              <option value="scalp">Scalp</option>
+            </select>
+          </div>
 
-  <div id="summaryMetrics"></div>
+          <div>
+            <label class="muted small" for="marketFilter">Marché</label>
+            <select id="marketFilter">
+              <option value="all">Tous</option>
+              <option value="forex">Forex</option>
+              <option value="yen">Yen</option>
+              <option value="metals">Metals</option>
+              <option value="indices">Indices</option>
+            </select>
+          </div>
+        </div>
 
-  <div id="chart"></div>
+        <div class="search-box">
+          <input id="pairSearch" type="text" placeholder="Rechercher une paire..." />
+        </div>
 
-  <ul id="reasonList"></ul>
+        <div class="row-actions" style="margin-top:12px;">
+          <button id="onlyP1Btn" class="ghost-btn" type="button">Only P1: OFF</button>
+          <button id="autoFocusBtn" class="ghost-btn active-chip" type="button">Auto Focus: ON</button>
+          <button id="entrySniperBtn" class="ghost-btn active-chip" type="button">Entry Sniper: ON</button>
+          <button id="exitSniperBtn" class="ghost-btn active-chip" type="button">Exit Sniper: ON</button>
+        </div>
+      </section>
 
-  <div id="tradeSuggestionBox"></div>
-  <div id="exitSuggestionBox"></div>
-</section>
+      <section class="card scanner-results">
+        <div class="section-title-row">
+          <h3>Scanner</h3>
+          <span class="pill" id="pairCount">0 paire(s)</span>
+        </div>
+        <div id="pairList" class="pair-list"></div>
+      </section>
 
-</main>
-</div>
+      <section class="card detail-panel">
+        <div class="section-title-row">
+          <div>
+            <div class="eyebrow">Actif sélectionné</div>
+            <h2 id="selectedPairName">EURUSD</h2>
+          </div>
+          <span id="selectedSignalBadge" class="signal-badge signal-wait">WAIT</span>
+        </div>
 
-<script src="app.js"></script>
-</body>
-                                            </html>
+        <div class="overview-grid">
+          <article class="stat-card">
+            <span class="muted">Trend</span>
+            <strong id="trendMini">--</strong>
+          </article>
+          <article class="stat-card">
+            <span class="muted">Confidence</span>
+            <strong id="confidenceMini">--</strong>
+          </article>
+          <article class="stat-card">
+            <span class="muted">RR</span>
+            <strong id="rrMini">--</strong>
+          </article>
+        </div>
+
+        <div class="overview-grid" style="margin-top:12px;">
+          <article class="stat-card">
+            <span class="muted">AI</span>
+            <strong id="aiMini">--</strong>
+          </article>
+          <article class="stat-card">
+            <span class="muted">Priority</span>
+            <strong id="activePriorityLabel">--</strong>
+            <small id="activePriorityHint">--</small>
+          </article>
+          <article class="stat-card">
+            <span class="muted">Entry quality</span>
+            <strong id="entryQualityLabel">--</strong>
+            <small id="entryQualityHint">--</small>
+          </article>
+        </div>
+
+        <div class="overview-grid" style="margin-top:12px;">
+          <article class="stat-card">
+            <span class="muted">Exit quality</span>
+            <strong id="exitQualityLabel">--</strong>
+            <small id="exitQualityHint">--</small>
+          </article>
+          <article class="stat-card">
+            <span class="muted">Context quality</span>
+            <strong id="contextQualityLabel">--</strong>
+            <small id="contextQualityHint">--</small>
+          </article>
+          <article class="stat-card">
+            <span class="muted">Decision</span>
+            <strong id="decisionBadge">--</strong>
+            <small id="decisionText">--</small>
+          </article>
+        </div>
+
+        <div class="metric-grid" id="summaryMetrics"></div>
+
+        <div class="chart-toolbar">
+          <span class="pill" id="decisionAsset">--</span>
+          <span class="pill" id="decisionConfidence">--</span>
+          <span class="pill" id="decisionRiskMode">--</span>
+          <span class="pill" id="decisionAction">--</span>
+          <span class="pill" id="decisionWindow">--</span>
+        </div>
+
+        <div id="chart" class="chart-box"></div>
+
+        <div class="subsection">
+          <h3>Raisons</h3>
+          <ul id="reasonList" class="reason-list"></ul>
+        </div>
+
+        <div class="subsection">
+          <h3>Gatekeeper</h3>
+          <div id="gatekeeperBox" class="gatekeeper-box"></div>
+        </div>
+
+        <div class="subsection">
+          <h3>Lecture IA</h3>
+          <div id="decisionReason" class="trade-output">--</div>
+        </div>
+
+        <div class="subsection">
+          <h3>Trade suggestion</h3>
+          <div id="tradeSuggestionBox" class="trade-output">--</div>
+        </div>
+
+        <div class="subsection">
+          <h3>Exit suggestion</h3>
+          <div id="exitSuggestionBox" class="trade-output">--</div>
+        </div>
+      </section>
+
+      <section class="card trade-panel">
+        <div class="section-title-row">
+          <h3>Trade workspace</h3>
+        </div>
+
+        <form id="tradeForm" class="trade-form">
+          <div class="field-grid">
+            <div>
+              <label class="muted small" for="tradePair">Pair</label>
+              <input id="tradePair" type="text" />
+            </div>
+            <div>
+              <label class="muted small" for="tradeDirection">Direction</label>
+              <select id="tradeDirection">
+                <option value="buy">BUY</option>
+                <option value="sell">SELL</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field-grid">
+            <div>
+              <label class="muted small" for="tradeCapital">Capital</label>
+              <input id="tradeCapital" type="number" placeholder="1000" />
+            </div>
+            <div>
+              <label class="muted small" for="riskPercent">Risk %</label>
+              <input id="riskPercent" type="number" step="0.1" placeholder="1" />
+            </div>
+          </div>
+
+          <div class="field-grid">
+            <div>
+              <label class="muted small" for="tradeEntry">Entry</label>
+              <input id="tradeEntry" type="number" step="0.00001" placeholder="Prix d'entrée" />
+            </div>
+            <div>
+              <label class="muted small" for="tradeNotes">Notes</label>
+              <input id="tradeNotes" type="text" placeholder="Notes..." />
+            </div>
+          </div>
+
+          <button type="submit" class="primary-btn full-width">Ajouter le trade</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <div class="section-title-row">
+          <h3>FTMO Risk</h3>
+        </div>
+
+        <div class="overview-grid">
+          <article class="stat-card">
+            <span class="muted" id="ftmoRiskTitle">Contrôle FTMO</span>
+            <strong id="ftmoDecisionBadge">--</strong>
+          </article>
+          <article class="stat-card">
+            <span class="muted">Remaining daily</span>
+            <strong id="ftmoDailyRemaining">--</strong>
+            <small id="ftmoDailyHint">--</small>
+          </article>
+          <article class="stat-card">
+            <span class="muted">Max additional risk</span>
+            <strong id="ftmoMaxAdditionalRisk">--</strong>
+            <small id="ftmoRiskHint">--</small>
+          </article>
+        </div>
+
+        <div class="trade-output" style="margin-top:12px;">
+          <strong id="ftmoDecisionText">--</strong><br />
+          <span id="ftmoDecisionReason">--</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-title-row">
+          <h3>Watchlist</h3>
+          <span class="pill" id="watchlistCount">0 actif(s)</span>
+        </div>
+        <div class="row-actions" style="margin-bottom:12px;">
+          <button id="watchlistBtn" class="ghost-btn" type="button">Ajouter / retirer</button>
+        </div>
+        <div id="watchlist" class="watchlist"></div>
+      </section>
+
+      <section class="card">
+        <div class="section-title-row">
+          <h3>Trades</h3>
+          <span class="pill" id="tradeStats">0 trade(s)</span>
+        </div>
+        <div class="row-actions" style="margin-bottom:12px;">
+          <button id="exportBtn" class="ghost-btn" type="button">Exporter</button>
+          <button id="clearTradesBtn" class="ghost-btn danger" type="button">Clear</button>
+          <button id="recheckAiBtn" class="ghost-btn" type="button">Recheck AI</button>
+        </div>
+        <div id="tradeList" class="trade-list"></div>
+      </section>
+
+      <section class="card">
+        <div class="section-title-row">
+          <h3>Journal insights</h3>
+        </div>
+
+        <div class="overview-grid">
+          <article class="stat-card">
+            <span class="muted">Meta</span>
+            <strong id="journalMeta">--</strong>
+          </article>
+          <article class="stat-card">
+            <span class="muted">Win rate</span>
+            <strong id="journalWinRate">--</strong>
+          </article>
+          <article class="stat-card">
+            <span class="muted">Expectancy</span>
+            <strong id="journalExpectancy">--</strong>
+          </article>
+        </div
