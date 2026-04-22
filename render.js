@@ -295,4 +295,4 @@ export function renderFtmoRisk() {
 
   const badge = document.getElementById("ftmoDecisionBadge");
   if (badge) badge.textContent = maxRisk >= requested ? "OK" : "BLOCK";
-             }
+}
