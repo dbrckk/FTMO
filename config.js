@@ -1,6 +1,5 @@
-// ==========================
 // config.js
-// ==========================
+
 export const STORAGE_KEY = "ftmo-edge-ai-v4";
 
 export const TIMEFRAMES = ["M5", "M15", "H1", "H4"];
