@@ -134,4 +134,4 @@ export function getTradeFilterDecision(scan) {
     reason: "Ultra score too low",
     ultra
   };
-}
+    }
