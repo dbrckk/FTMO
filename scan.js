@@ -1,3 +1,5 @@
+// scan.fixed.js
+
 import { API } from "./config.js";
 import { appState } from "./state.js";
 import { normalizeCandles, clamp } from "./utils.js";
@@ -10,15 +12,13 @@ export async function scanPair(pair) {
   let candles = [];
 
   try {
-    const response = await fetch(API.market, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        pair: pair.symbol,
-        timeframe: appState.timeframe
-      })
+    const url = new URL(API.market, window.location.origin);
+    url.searchParams.set("pair", pair.symbol);
+    url.searchParams.set("timeframe", appState.timeframe);
+
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: { Accept: "application/json" }
     });
 
     if (!response.ok) throw new Error(`market ${response.status}`);
@@ -239,4 +239,4 @@ export function computeConfluenceScore(scan) {
               : "weak",
     blocked: score < 55
   };
-}
+      }
