@@ -1,6 +1,6 @@
+// app.js
+
 import { PAIRS } from "./config.js";
-import { runPaperEngine } from "./paper-engine.js";
-import { renderPaperLab, renderTabs, setActiveTab } from "./render.js";
 import { appState, persistState, els } from "./state.js";
 import { setupChart } from "./chart.js";
 import { fetchCorrelationMatrix, refreshAiDecision } from "./api.js";
@@ -14,7 +14,10 @@ import {
   renderSelectedPair,
   renderTrades,
   renderWatchlist,
-  renderFtmoRisk
+  renderFtmoRisk,
+  renderPaperLab,
+  renderTabs,
+  setActiveTab
 } from "./render.js";
 import {
   onAddTrade,
@@ -22,12 +25,18 @@ import {
   toggleCurrentWatchlist,
   exportTradesJson
 } from "./trades.js";
+import { runPaperEngine } from "./paper-engine.js";
+
+let paperLoop = null;
 
 document.addEventListener("DOMContentLoaded", async () => {
   cacheEls();
   bindEvents();
   setupChart();
+  setActiveTab("dashboard");
+  renderTabs();
   await refreshAll(true);
+  startPaperLoop();
 });
 
 function cacheEls() {
@@ -67,7 +76,17 @@ function cacheEls() {
     "ftmoMaxAdditionalRisk",
     "ftmoDecisionText",
     "ftmoDecisionReason",
-    "ftmoDecisionBadge"
+    "ftmoDecisionBadge",
+    "dashboardTab",
+    "paperTab",
+    "tabDashboardBtn",
+    "tabPaperBtn",
+    "paperEngineToggleBtn",
+    "paperEngineStatus",
+    "paperOpenTrades",
+    "paperStats",
+    "paperPairStats",
+    "paperRecentTrades"
   ].forEach((id) => {
     els[id] = document.getElementById(id) || null;
   });
@@ -92,6 +111,23 @@ function bindEvents() {
 
   document.getElementById("exportBtn")?.addEventListener("click", () => {
     exportTradesJson();
+  });
+
+  document.getElementById("tabDashboardBtn")?.addEventListener("click", () => {
+    setActiveTab("dashboard");
+    renderTabs();
+  });
+
+  document.getElementById("tabPaperBtn")?.addEventListener("click", () => {
+    setActiveTab("paper");
+    renderTabs();
+    renderPaperLab();
+  });
+
+  document.getElementById("paperEngineToggleBtn")?.addEventListener("click", () => {
+    appState.paperEngine.enabled = !appState.paperEngine.enabled;
+    persistState();
+    renderPaperLab();
   });
 }
 
@@ -129,6 +165,8 @@ async function refreshAll(force = false) {
     await fetchCorrelationMatrix();
     await refreshAiDecision(force, renderSelectedPair);
 
+    runPaperEngine(appState.scans);
+
     renderOverview();
     renderPairList(refreshAiDecision);
     renderTopPriorityTrades();
@@ -138,11 +176,23 @@ async function refreshAll(force = false) {
     renderTrades();
     renderWatchlist();
     renderFtmoRisk();
+    renderPaperLab();
+    renderTabs();
 
     persistState();
   } catch (error) {
     console.error("refreshAll failed", error);
   }
+}
+
+function startPaperLoop() {
+  if (paperLoop) clearInterval(paperLoop);
+
+  const intervalMs = Number(appState.paperEngine?.refreshIntervalMs || 20000);
+
+  paperLoop = setInterval(() => {
+    refreshAll(false);
+  }, intervalMs);
 }
 
 window.__APP__ = {
