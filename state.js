@@ -1,5 +1,3 @@
-// state.js
-
 import { STORAGE_KEY } from "./config.js";
 
 export const els = {};
@@ -15,6 +13,8 @@ export const defaultState = {
   tradeArchive: [],
   paperTrades: [],
   paperArchive: [],
+  archiveStatsCache: {},
+  archiveStatsUpdatedAt: null,
   activeTab: "dashboard",
   watchlist: [],
   journal: null,
@@ -35,6 +35,7 @@ export const defaultState = {
     maxOpenTrades: 4,
     riskPerTrade: 0.25,
     minUltraScore: 72,
+    explorationRiskPerTrade: 0.10,
     refreshIntervalMs: 20000,
     maxBarsHold: 12
   }
@@ -54,13 +55,16 @@ export function loadState() {
         ...structuredClone(defaultState).ftmo,
         ...(saved.ftmo || {})
       },
-      tradeArchive: Array.isArray(saved.tradeArchive) ? saved.tradeArchive : [],
-      paperTrades: Array.isArray(saved.paperTrades) ? saved.paperTrades : [],
-      paperArchive: Array.isArray(saved.paperArchive) ? saved.paperArchive : [],
       paperEngine: {
         ...structuredClone(defaultState).paperEngine,
         ...(saved.paperEngine || {})
-      }
+      },
+      tradeArchive: Array.isArray(saved.tradeArchive) ? saved.tradeArchive : [],
+      paperTrades: Array.isArray(saved.paperTrades) ? saved.paperTrades : [],
+      paperArchive: Array.isArray(saved.paperArchive) ? saved.paperArchive : [],
+      archiveStatsCache: saved.archiveStatsCache && typeof saved.archiveStatsCache === "object"
+        ? saved.archiveStatsCache
+        : {}
     };
   } catch {
     return structuredClone(defaultState);
