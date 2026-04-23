@@ -1,3 +1,5 @@
+// render.fixed.js
+
 import { appState, els } from "./state.js";
 import { setText, setValue, metricCard, formatPrice } from "./utils.js";
 import { computeDynamicRiskPercent, computePositionSizing } from "./trades.js";
@@ -8,12 +10,12 @@ export function renderOverview() {
   const best = appState.scans[0];
   if (!best) return;
 
-  const allowed = appState.scans.filter((s) => Number(s.finalScore || 0) >= 70).length;
+  const allowed = appState.scans.filter((s) => s.tradeAllowed).length;
   const blocked = appState.scans.length - allowed;
 
   setText("topPairLabel", best.pair);
-  setText("topPairReason", best.reason || best.confluence?.label || "--");
-  setText("bestScore", String(Math.round(best.finalScore || 0)));
+  setText("topPairReason", best.tradeReason || best.reason || best.confluence?.label || "--");
+  setText("bestScore", String(Math.round(best.ultraScore || best.finalScore || 0)));
   setText("allowedCount", String(allowed));
   setText("blockedCount", String(blocked));
   setText("globalExposure", `${appState.trades.length}`);
@@ -32,7 +34,7 @@ export function renderPairList(refreshAiDecision) {
 
     row.innerHTML = `
       <div><strong>${scan.pair}</strong></div>
-      <div>${Math.round(scan.finalScore || 0)}</div>
+      <div>${Math.round(scan.ultraScore || scan.finalScore || 0)}</div>
       <div>${Math.round(scan.mlScore || 0)}</div>
       <div>${Math.round(scan.vectorbtScore || 0)}</div>
       <div class="${scan.tradeAllowed ? "ok" : "bad"}">${scan.tradeStatus || "WAIT"}</div>
@@ -122,10 +124,9 @@ export function renderCorrelationMatrix() {
           ${data.pairs.map((rowPair, i) => `
             <tr>
               <td style="padding:8px; font-weight:700;">${rowPair}</td>
-              ${data.matrix[i].map((value, j) => {
+              ${data.matrix[i].map((value) => {
                 const corr = Number(value || 0);
                 const bg =
-                  i === j ? "rgba(255,255,255,0.08)" :
                   Math.abs(corr) >= 0.8 ? "rgba(255,102,127,0.18)" :
                   Math.abs(corr) >= 0.6 ? "rgba(255,193,77,0.14)" :
                   "rgba(255,255,255,0.03)";
@@ -154,16 +155,16 @@ export function renderSelectedPair() {
 
   setText("selectedPairName", scan.pair);
   setText("trendMini", Math.round(scan.trendScore || 0));
-  setText("confidenceMini", `${Math.round(scan.finalScore || 0)}%`);
+  setText("confidenceMini", `${Math.round(scan.ultraScore || scan.finalScore || 0)}%`);
   setText("rrMini", scan.rr || "-");
   setText("aiMini", ai.decision || "-");
 
-  setText("decisionBadge", ai.decision || "WAIT");
+  setText("decisionBadge", scan.tradeStatus || ai.decision || "WAIT");
   setText("decisionText", ai.title || "Décision IA");
-  setText("decisionReason", ai.reason || "-");
+  setText("decisionReason", scan.tradeReason || ai.reason || "-");
   setText("decisionAsset", scan.pair);
-  setText("decisionConfidence", `${Math.round(ai.confidence || scan.finalScore || 0)}%`);
-  setText("decisionAction", ai.action || (scan.finalScore >= 70 ? "EXECUTE" : "WAIT"));
+  setText("decisionConfidence", `${Math.round(ai.confidence || scan.ultraScore || scan.finalScore || 0)}%`);
+  setText("decisionAction", ai.action || (scan.tradeAllowed ? "EXECUTE" : "WAIT"));
   setText("decisionWindow", ai.window || "Intraday");
 
   if (els.summaryMetrics) {
@@ -194,11 +195,7 @@ export function renderSelectedPair() {
   const riskPct = computeDynamicRiskPercent(scan);
   const sizing = computePositionSizing(
     scan,
-    Number(
-      document.getElementById("tradeCapital")?.value ||
-      appState.ftmo.accountSize ||
-      10000
-    )
+    Number(document.getElementById("tradeCapital")?.value || appState.ftmo.accountSize || 10000)
   );
 
   if (els.tradeSuggestionBox) {
@@ -257,9 +254,7 @@ export function renderTrades() {
     tradeList.appendChild(row);
   });
 
-  if (tradeStats) {
-    tradeStats.textContent = String(appState.trades.length);
-  }
+  if (tradeStats) tradeStats.textContent = String(appState.trades.length);
 }
 
 export function renderWatchlist() {
@@ -276,9 +271,7 @@ export function renderWatchlist() {
     watch.appendChild(div);
   });
 
-  if (count) {
-    count.textContent = String(appState.watchlist.length);
-  }
+  if (count) count.textContent = String(appState.watchlist.length);
 }
 
 export function renderFtmoRisk() {
@@ -310,4 +303,4 @@ export function renderFtmoRisk() {
   if (badge) {
     badge.textContent = maxRisk >= requested ? "OK" : "BLOCK";
   }
-}
+      }
