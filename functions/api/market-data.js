@@ -1,8 +1,26 @@
 export async function onRequestGet(context) {
+  return handleRequest(context);
+}
+
+export async function onRequestPost(context) {
+  return handleRequest(context);
+}
+
+async function handleRequest(context) {
   try {
     const url = new URL(context.request.url);
-    const pair = cleanPair(url.searchParams.get("pair"));
-    const timeframe = normalizeTimeframe(url.searchParams.get("timeframe"));
+
+    let pair = cleanPair(url.searchParams.get("pair"));
+    let timeframe = normalizeTimeframe(url.searchParams.get("timeframe"));
+
+    if (context.request.method.toUpperCase() === "POST") {
+      try {
+        const body = await context.request.clone().json();
+        pair = cleanPair(body?.pair || body?.data?.pair || pair);
+        timeframe = normalizeTimeframe(body?.timeframe || body?.data?.timeframe || timeframe);
+      } catch {}
+    }
+
     const env = context.env || {};
     const apiKey = env.TWELVEDATA_API_KEY || "";
 
@@ -473,4 +491,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-      }
+                }
