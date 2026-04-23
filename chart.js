@@ -1,5 +1,3 @@
-// chart.js
-
 import { setChartInstance, chart, candleSeries } from "./state.js";
 
 export function setupChart() {
@@ -19,13 +17,33 @@ export function setupChart() {
     }
   });
 
-  const nextCandleSeries = nextChart.addCandlestickSeries({
-    upColor: "#22c55e",
-    downColor: "#ef4444",
-    wickUpColor: "#22c55e",
-    wickDownColor: "#ef4444",
-    borderVisible: false
-  });
+  let nextCandleSeries = null;
+
+  if (
+    typeof nextChart.addSeries === "function" &&
+    LightweightCharts.CandlestickSeries
+  ) {
+    nextCandleSeries = nextChart.addSeries(
+      LightweightCharts.CandlestickSeries,
+      {
+        upColor: "#22c55e",
+        downColor: "#ef4444",
+        wickUpColor: "#22c55e",
+        wickDownColor: "#ef4444",
+        borderVisible: false
+      }
+    );
+  } else if (typeof nextChart.addCandlestickSeries === "function") {
+    nextCandleSeries = nextChart.addCandlestickSeries({
+      upColor: "#22c55e",
+      downColor: "#ef4444",
+      wickUpColor: "#22c55e",
+      wickDownColor: "#ef4444",
+      borderVisible: false
+    });
+  } else {
+    throw new Error("No compatible candlestick series API found");
+  }
 
   setChartInstance(nextChart, nextCandleSeries);
 }
