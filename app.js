@@ -1,4 +1,6 @@
 import { PAIRS } from "./config.js";
+import { runPaperEngine } from "./paper-engine.js";
+import { renderPaperLab, renderTabs, setActiveTab } from "./render.js";
 import { appState, persistState, els } from "./state.js";
 import { setupChart } from "./chart.js";
 import { fetchCorrelationMatrix, refreshAiDecision } from "./api.js";
