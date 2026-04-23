@@ -1,5 +1,3 @@
-// render.js
-
 import { appState, els } from "./state.js";
 import { setText, setValue, metricCard, formatPrice } from "./utils.js";
 import { computeDynamicRiskPercent, computePositionSizing } from "./trades.js";
@@ -139,7 +137,7 @@ export function renderCorrelationMatrix() {
       </table>
     </div>
   `;
-}
+                           }
 
 export function renderSelectedPair() {
   const pair = appState.selectedPair;
@@ -164,8 +162,14 @@ export function renderSelectedPair() {
   setText("decisionText", ai.title || "Décision IA");
   setText("decisionReason", ai.reason || "-");
   setText("decisionAsset", scan.pair);
-  setText("decisionConfidence", `${Math.round(ai.confidence || scan.finalScore || 0)}%`);
-  setText("decisionAction", ai.action || (scan.finalScore >= 70 ? "EXECUTE" : "WAIT"));
+  setText(
+    "decisionConfidence",
+    `${Math.round(ai.confidence || scan.finalScore || 0)}%`
+  );
+  setText(
+    "decisionAction",
+    ai.action || (scan.finalScore >= 70 ? "EXECUTE" : "WAIT")
+  );
   setText("decisionWindow", ai.window || "Intraday");
 
   if (els.summaryMetrics) {
@@ -176,8 +180,16 @@ export function renderSelectedPair() {
       metricCard("Timing", Math.round(scan.timingScore || 0), "timing"),
       metricCard("Risk", Math.round(scan.riskScore || 0), "risk"),
       metricCard("Context", Math.round(scan.contextScore || 0), "context"),
-      metricCard("ML", Math.round(scan.mlScore || 0), scan.mlConfidenceBand || "model"),
-      metricCard("VBT", Math.round(scan.vectorbtScore || 0), scan.vectorbtConfidenceBand || "backtest")
+      metricCard(
+        "ML",
+        Math.round(scan.mlScore || 0),
+        scan.mlConfidenceBand || "model"
+      ),
+      metricCard(
+        "VBT",
+        Math.round(scan.vectorbtScore || 0),
+        scan.vectorbtConfidenceBand || "backtest"
+      )
     ].join("");
   }
 
@@ -194,7 +206,11 @@ export function renderSelectedPair() {
   const riskPct = computeDynamicRiskPercent(scan);
   const sizing = computePositionSizing(
     scan,
-    Number(document.getElementById("tradeCapital")?.value || appState.ftmo.accountSize || 10000)
+    Number(
+      document.getElementById("tradeCapital")?.value ||
+      appState.ftmo.accountSize ||
+      10000
+    )
   );
 
   if (els.tradeSuggestionBox) {
@@ -249,7 +265,9 @@ export function renderTrades() {
     tradeList.appendChild(row);
   });
 
-  if (tradeStats) tradeStats.textContent = String(appState.trades.length);
+  if (tradeStats) {
+    tradeStats.textContent = String(appState.trades.length);
+  }
 }
 
 export function renderWatchlist() {
@@ -258,6 +276,7 @@ export function renderWatchlist() {
   if (!watch) return;
 
   watch.innerHTML = "";
+
   appState.watchlist.forEach((pair) => {
     const div = document.createElement("div");
     div.className = "watch-item";
@@ -265,8 +284,10 @@ export function renderWatchlist() {
     watch.appendChild(div);
   });
 
-  if (count) count.textContent = String(appState.watchlist.length);
-}
+  if (count) {
+    count.textContent = String(appState.watchlist.length);
+  }
+                                    }
 
 export function renderFtmoRisk() {
   const ftmo = appState.ftmo || {};
@@ -294,5 +315,7 @@ export function renderFtmoRisk() {
   );
 
   const badge = document.getElementById("ftmoDecisionBadge");
-  if (badge) badge.textContent = maxRisk >= requested ? "OK" : "BLOCK";
+  if (badge) {
+    badge.textContent = maxRisk >= requested ? "OK" : "BLOCK";
+  }
 }
