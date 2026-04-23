@@ -7,24 +7,36 @@ import { fetchMlScore, fetchVectorbtScore } from "./api.js";
 import { computeUltraScore, getTradeFilterDecision } from "./advanced-engine.js";
 import { buildArchiveStats } from "./archive-engine.js";
 
-export async function scanPair(pair) {
-  let candles = [];
+async function fetchMarketCandles(pairSymbol, timeframe) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
 
   try {
     const url = new URL(API.market, window.location.origin);
-    url.searchParams.set("pair", pair.symbol);
-    url.searchParams.set("timeframe", appState.timeframe);
+    url.searchParams.set("pair", pairSymbol);
+    url.searchParams.set("timeframe", timeframe);
 
     const response = await fetch(url.toString(), {
       method: "GET",
       headers: {
         Accept: "application/json"
-      }
+      },
+      signal: controller.signal
     });
 
     if (!response.ok) throw new Error(`market ${response.status}`);
 
-    const data = await response.json();
+    return await response.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function scanPair(pair) {
+  let candles = [];
+
+  try {
+    const data = await fetchMarketCandles(pair.symbol, appState.timeframe);
 
     candles = Array.isArray(data.candles) && data.candles.length
       ? normalizeCandles(data.candles)
@@ -256,4 +268,4 @@ export function computeConfluenceScore(scan) {
               : "weak",
     blocked: score < 55
   };
-                          }
+}
