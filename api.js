@@ -1,53 +1,70 @@
-// api.fixed.js
-
 import { API } from "./config.js";
 import { appState, persistState } from "./state.js";
 import { clamp, sanitizeDecision } from "./utils.js";
+
+async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 6500) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      throw new Error(`${url} ${response.status}`);
+    }
+
+    return await response.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 export async function fetchMlScore(scan) {
   try {
     const journalContext = buildJournalContextForPair(scan) || {};
 
-    const response = await fetch(API.ml, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
+    const data = await fetchJsonWithTimeout(
+      API.ml,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify({
+          data: {
+            pair: scan.pair,
+            timeframe: appState.timeframe,
+            trendScore: scan.trendScore,
+            timingScore: scan.timingScore,
+            riskScore: scan.riskScore,
+            contextScore: scan.contextScore,
+            entryTriggerScore: scan.entryTriggerScore || 0,
+            entrySniperScore: scan.entrySniper?.score || 0,
+            exitSniperScore: scan.exitSniper?.score || 0,
+            rsi14: scan.rsi14 || 50,
+            macdLine: scan.macdLine || 0,
+            atr14: scan.atr14 || 0,
+            momentum: scan.momentum || 0,
+            rr: scan.rr || 1.5,
+            macroPenalty: scan.macroPenalty || 0,
+            spreadPenalty: scan.spreadPenalty || 0,
+            offSessionPenalty: scan.offSessionPenalty || 0,
+            pairExpectancy: journalContext.pairExpectancy || 0,
+            hourExpectancy: journalContext.hourExpectancy || 0,
+            sessionExpectancy: journalContext.sessionExpectancy || 0,
+            pairWinRate: journalContext.pairWinRate || 0,
+            hourWinRate: journalContext.hourWinRate || 0,
+            sessionWinRate: journalContext.sessionWinRate || 0
+          }
+        })
       },
-      body: JSON.stringify({
-        data: {
-          pair: scan.pair,
-          timeframe: appState.timeframe,
-          trendScore: scan.trendScore,
-          timingScore: scan.timingScore,
-          riskScore: scan.riskScore,
-          contextScore: scan.contextScore,
-          entryTriggerScore: scan.entryTriggerScore || 0,
-          entrySniperScore: scan.entrySniper?.score || 0,
-          exitSniperScore: scan.exitSniper?.score || 0,
-          rsi14: scan.rsi14 || 50,
-          macdLine: scan.macdLine || 0,
-          atr14: scan.atr14 || 0,
-          momentum: scan.momentum || 0,
-          rr: scan.rr || 1.5,
-          macroPenalty: scan.macroPenalty || 0,
-          spreadPenalty: scan.spreadPenalty || 0,
-          offSessionPenalty: scan.offSessionPenalty || 0,
-          pairExpectancy: journalContext.pairExpectancy || 0,
-          hourExpectancy: journalContext.hourExpectancy || 0,
-          sessionExpectancy: journalContext.sessionExpectancy || 0,
-          pairWinRate: journalContext.pairWinRate || 0,
-          hourWinRate: journalContext.hourWinRate || 0,
-          sessionWinRate: journalContext.sessionWinRate || 0
-        }
-      })
-    });
+      5000
+    );
 
-    if (!response.ok) {
-      throw new Error(`ml-score ${response.status}`);
-    }
-
-    const data = await response.json();
     appState.mlScoreCache[scan.pair] = data;
     return data;
   } catch {
@@ -76,41 +93,40 @@ export async function fetchMlScore(scan) {
 
 export async function fetchVectorbtScore(scan) {
   try {
-    const response = await fetch(API.vectorbt, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
+    const data = await fetchJsonWithTimeout(
+      API.vectorbt,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify({
+          data: {
+            pair: scan.pair,
+            timeframe: appState.timeframe,
+            candles: scan.candles,
+            fee: 0.0002,
+            slippage: 0.0001,
+            fast_ema: 20,
+            slow_ema: 50,
+            rsi_period: 14,
+            atr_period: 14,
+            macd_fast: 12,
+            macd_slow: 26,
+            macd_signal: 9,
+            rsi_buy_min: 45,
+            rsi_buy_max: 65,
+            rsi_sell_min: 35,
+            rsi_sell_max: 55,
+            stop_atr_mult: 1.4,
+            take_atr_mult: 2.6
+          }
+        })
       },
-      body: JSON.stringify({
-        data: {
-          pair: scan.pair,
-          timeframe: appState.timeframe,
-          candles: scan.candles,
-          fee: 0.0002,
-          slippage: 0.0001,
-          fast_ema: 20,
-          slow_ema: 50,
-          rsi_period: 14,
-          atr_period: 14,
-          macd_fast: 12,
-          macd_slow: 26,
-          macd_signal: 9,
-          rsi_buy_min: 45,
-          rsi_buy_max: 65,
-          rsi_sell_min: 35,
-          rsi_sell_max: 55,
-          stop_atr_mult: 1.4,
-          take_atr_mult: 2.6
-        }
-      })
-    });
+      3500
+    );
 
-    if (!response.ok) {
-      throw new Error(`vectorbt-score ${response.status}`);
-    }
-
-    const data = await response.json();
     appState.vectorbtCache[scan.pair] = data;
     return data;
   } catch {
@@ -143,20 +159,19 @@ export async function fetchCorrelationMatrix() {
       closes: scan.candles.map((c) => c.close).slice(-120)
     }));
 
-    const response = await fetch(API.correlation, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
+    const data = await fetchJsonWithTimeout(
+      API.correlation,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify({ rows })
       },
-      body: JSON.stringify({ rows })
-    });
+      4000
+    );
 
-    if (!response.ok) {
-      throw new Error(`correlation-matrix ${response.status}`);
-    }
-
-    const data = await response.json();
     appState.correlationMatrix = data;
     persistState();
     return data;
@@ -175,20 +190,19 @@ export async function fetchPortfolioRisk() {
         riskPercent: Number(t.riskPercent || 0)
       }));
 
-    const response = await fetch(API.portfolio, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
+    const data = await fetchJsonWithTimeout(
+      API.portfolio,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify({ positions })
       },
-      body: JSON.stringify({ positions })
-    });
+      4000
+    );
 
-    if (!response.ok) {
-      throw new Error(`portfolio-risk ${response.status}`);
-    }
-
-    const data = await response.json();
     appState.portfolioRiskData = data;
     persistState();
     return data;
@@ -212,33 +226,31 @@ export async function refreshAiDecision(force = false, renderSelectedPair) {
   }
 
   try {
-    const response = await fetch(API.ai, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
+    const data = await fetchJsonWithTimeout(
+      API.ai,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify({
+          data: {
+            pair: scan.pair,
+            timeframe: appState.timeframe,
+            finalScore: scan.finalScore,
+            trendScore: scan.trendScore,
+            timingScore: scan.timingScore,
+            riskScore: scan.riskScore,
+            contextScore: scan.contextScore,
+            mlScore: scan.mlScore,
+            vectorbtScore: scan.vectorbtScore,
+            signal: scan.finalScore >= 70 ? "BUY" : scan.finalScore <= 35 ? "SELL" : "WAIT"
+          }
+        })
       },
-      body: JSON.stringify({
-        data: {
-          pair: scan.pair,
-          timeframe: appState.timeframe,
-          finalScore: scan.finalScore,
-          trendScore: scan.trendScore,
-          timingScore: scan.timingScore,
-          riskScore: scan.riskScore,
-          contextScore: scan.contextScore,
-          mlScore: scan.mlScore,
-          vectorbtScore: scan.vectorbtScore,
-          signal: scan.finalScore >= 70 ? "BUY" : scan.finalScore <= 35 ? "SELL" : "WAIT"
-        }
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`ai ${response.status}`);
-    }
-
-    const data = await response.json();
+      4000
+    );
 
     appState.aiDecisionCache[scan.pair] = {
       decision: sanitizeDecision(data.decision),
@@ -267,33 +279,31 @@ export async function fetchExitSuggestion(scan, ai, targetEl) {
   if (!targetEl) return;
 
   try {
-    const response = await fetch(API.exit, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
+    const data = await fetchJsonWithTimeout(
+      API.exit,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify({
+          data: {
+            pair: scan.pair,
+            direction: scan.direction,
+            entry: Number(document.getElementById("tradeEntry")?.value || scan.current),
+            currentPrice: scan.current,
+            stopLoss: scan.stopLoss,
+            takeProfit: scan.takeProfit,
+            atr14: scan.atr14,
+            macroDanger: ai?.decision === "NO TRADE",
+            momentum: scan.momentum,
+            confidence: ai?.confidence || scan.finalScore
+          }
+        })
       },
-      body: JSON.stringify({
-        data: {
-          pair: scan.pair,
-          direction: scan.direction,
-          entry: Number(document.getElementById("tradeEntry")?.value || scan.current),
-          currentPrice: scan.current,
-          stopLoss: scan.stopLoss,
-          takeProfit: scan.takeProfit,
-          atr14: scan.atr14,
-          macroDanger: ai?.decision === "NO TRADE",
-          momentum: scan.momentum,
-          confidence: ai?.confidence || scan.finalScore
-        }
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`exit ${response.status}`);
-    }
-
-    const data = await response.json();
+      3500
+    );
 
     targetEl.innerHTML = `
       <strong>${data.decision}</strong><br>
@@ -320,4 +330,4 @@ export function buildJournalContextForPair() {
     hourWinRate: 0,
     sessionWinRate: 0
   };
-          }
+        }
