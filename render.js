@@ -1,10 +1,30 @@
-// render.fixed.js
+// render.js
 
 import { appState, els } from "./state.js";
 import { setText, setValue, metricCard, formatPrice } from "./utils.js";
 import { computeDynamicRiskPercent, computePositionSizing } from "./trades.js";
 import { updateChart } from "./chart.js";
 import { fetchExitSuggestion } from "./api.js";
+import { computePaperAnalytics } from "./paper-engine.js";
+
+export function setActiveTab(tabName) {
+  appState.activeTab = tabName;
+}
+
+export function renderTabs() {
+  const dashboard = document.getElementById("dashboardTab");
+  const paper = document.getElementById("paperTab");
+  const btnDashboard = document.getElementById("tabDashboardBtn");
+  const btnPaper = document.getElementById("tabPaperBtn");
+
+  const active = appState.activeTab || "dashboard";
+
+  if (dashboard) dashboard.style.display = active === "dashboard" ? "" : "none";
+  if (paper) paper.style.display = active === "paper" ? "" : "none";
+
+  if (btnDashboard) btnDashboard.classList.toggle("active-tab", active === "dashboard");
+  if (btnPaper) btnPaper.classList.toggle("active-tab", active === "paper");
+}
 
 export function renderOverview() {
   const best = appState.scans[0];
@@ -177,6 +197,7 @@ export function renderSelectedPair() {
       metricCard("Risk", Math.round(scan.riskScore || 0), "risk"),
       metricCard("Smart", Math.round(scan.smartMoneyScore || 0), "flow"),
       metricCard("Exec", Math.round(scan.executionScore || 0), "execution"),
+      metricCard("Archive", Math.round(scan.archiveEdgeScore || 0), "archive"),
       metricCard("ML", Math.round(scan.mlScore || 0), scan.mlConfidenceBand || "model"),
       metricCard("VBT", Math.round(scan.vectorbtScore || 0), scan.vectorbtConfidenceBand || "backtest")
     ].join("");
@@ -210,6 +231,7 @@ export function renderSelectedPair() {
       Smart Money: ${Math.round(scan.smartMoneyScore || 0)}<br>
       Session: ${Math.round(scan.sessionScore || 0)}<br>
       Execution: ${Math.round(scan.executionScore || 0)}<br>
+      Archive Edge: ${Math.round(scan.archiveEdgeScore || 0)}<br>
       Risk conseillé: ${riskPct}%<br>
       Position size: ${sizing.quantity}<br>
       Profile: ${sizing.leverageLabel}<br>
@@ -300,7 +322,91 @@ export function renderFtmoRisk() {
   );
 
   const badge = document.getElementById("ftmoDecisionBadge");
-  if (badge) {
-    badge.textContent = maxRisk >= requested ? "OK" : "BLOCK";
+  if (badge) badge.textContent = maxRisk >= requested ? "OK" : "BLOCK";
+}
+
+export function renderPaperLab() {
+  const analytics = computePaperAnalytics();
+
+  const status = document.getElementById("paperEngineStatus");
+  const openBox = document.getElementById("paperOpenTrades");
+  const statsBox = document.getElementById("paperStats");
+  const pairBox = document.getElementById("paperPairStats");
+  const recentBox = document.getElementById("paperRecentTrades");
+  const toggleBtn = document.getElementById("paperEngineToggleBtn");
+
+  if (toggleBtn) {
+    toggleBtn.textContent = appState.paperEngine?.enabled ? "Paper Engine ON" : "Paper Engine OFF";
   }
-      }
+
+  if (status) {
+    status.innerHTML = `
+      <strong>Status:</strong> ${appState.paperEngine?.enabled ? "Running" : "Stopped"}<br>
+      Open trades: ${analytics.openTradesCount}<br>
+      Closed trades: ${analytics.totalClosedTrades}<br>
+      Win rate: ${analytics.winRate}%<br>
+      Expectancy: ${analytics.expectancy}R<br>
+      Net PnL: ${analytics.netPnl}$
+    `;
+  }
+
+  if (openBox) {
+    openBox.innerHTML = (appState.paperTrades || []).length
+      ? appState.paperTrades.map((trade) => `
+        <div class="top-row">
+          <strong>${trade.pair}</strong>
+          <span>${trade.direction}</span>
+          <span>${Number(trade.entryUltraScore || 0)}</span>
+          <span>${trade.barsHeld} bars</span>
+        </div>
+      `).join("")
+      : `<div class="muted">No open paper trades.</div>`;
+  }
+
+  if (statsBox) {
+    statsBox.innerHTML = `
+      <div class="metric-card">
+        <div class="metric-label">Closed</div>
+        <div class="metric-value">${analytics.totalClosedTrades}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Win rate</div>
+        <div class="metric-value">${analytics.winRate}%</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Expectancy</div>
+        <div class="metric-value">${analytics.expectancy}R</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Net PnL</div>
+        <div class="metric-value">${analytics.netPnl}$</div>
+      </div>
+    `;
+  }
+
+  if (pairBox) {
+    pairBox.innerHTML = analytics.pairStats.length
+      ? analytics.pairStats.map((row) => `
+        <div class="top-row">
+          <strong>${row.pair}</strong>
+          <span>${row.trades} trades</span>
+          <span>${row.winRate.toFixed(1)}%</span>
+          <span>${row.expectancy.toFixed(2)}R</span>
+        </div>
+      `).join("")
+      : `<div class="muted">No archived pair stats yet.</div>`;
+  }
+
+  if (recentBox) {
+    recentBox.innerHTML = analytics.recentTrades.length
+      ? analytics.recentTrades.map((trade) => `
+        <div class="top-row ${trade.win ? "ok" : "blocked"}">
+          <strong>${trade.pair}</strong>
+          <span>${trade.direction}</span>
+          <span>${Number(trade.pnlR || 0).toFixed(2)}R</span>
+          <span>${trade.closeReason || "-"}</span>
+        </div>
+      `).join("")
+      : `<div class="muted">No recent paper trades.</div>`;
+  }
+                 }
