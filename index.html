@@ -1,166 +1,332 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FTMO EDGE AI</title>
 
+  <meta name="description" content="FTMO EDGE AI - dashboard de scoring, corrélation, risque FTMO et sélection de setups premium." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+    rel="stylesheet"
+  />
+
+  <link rel="stylesheet" href="./styles.css" />
+
   <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
-
-  <style>
-    body {
-      background: #0b0b0b;
-      color: white;
-      font-family: Inter, sans-serif;
-      margin: 0;
-      padding: 20px;
-    }
-
-    h1 {
-      margin-bottom: 10px;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: 300px 1fr;
-      gap: 20px;
-    }
-
-    .panel {
-      background: rgba(255,255,255,0.05);
-      border-radius: 10px;
-      padding: 15px;
-    }
-
-    .pair-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 10px;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-      cursor: pointer;
-    }
-
-    .pair-row:hover {
-      background: rgba(255,255,255,0.05);
-    }
-
-    .ok { color: #22c55e; }
-    .bad { color: #ef4444; }
-
-    .metric-card {
-      display: inline-block;
-      margin: 5px;
-      padding: 10px;
-      background: rgba(255,255,255,0.05);
-      border-radius: 6px;
-      min-width: 80px;
-    }
-
-    #chart {
-      height: 300px;
-    }
-
-    .top-row {
-      padding: 8px;
-    }
-
-    .blocked {
-      opacity: 0.6;
-    }
-  </style>
 </head>
-
 <body>
-
-<h1>FTMO EDGE AI</h1>
-<button id="refreshBtn">Refresh</button>
-
-<div class="grid">
-
-  <!-- LEFT -->
-  <div class="panel">
-    <h3>Pairs</h3>
-    <div id="pairList"></div>
-  </div>
-
-  <!-- RIGHT -->
-  <div>
-
-    <!-- TOP TRADE -->
-    <div class="panel">
-      <h2 id="selectedPairName">-</h2>
-
-      <div id="summaryMetrics"></div>
-
-      <div>
-        Trend: <span id="trendMini"></span> |
-        Confidence: <span id="confidenceMini"></span> |
-        RR: <span id="rrMini"></span> |
-        AI: <span id="aiMini"></span>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="title-block">
+          <h1>FTMO EDGE AI</h1>
+          <div class="subtitle">Scoring multi-facteurs • Corrélation • FTMO Risk • Premium Setup Filter</div>
+        </div>
       </div>
 
-      <h3 id="decisionBadge"></h3>
-      <div id="decisionText"></div>
-      <div id="decisionReason"></div>
+      <div class="topbar-right">
+        <button id="refreshBtn" type="button">Refresh</button>
+        <button id="watchlistBtn" type="button">Watchlist</button>
+        <button id="exportBtn" type="button">Export Trades</button>
+        <button id="clearTradesBtn" type="button">Clear Trades</button>
+      </div>
+    </header>
 
-      <br>
+    <section class="best-trade-banner glow-blue">
+      <div>
+        <div class="best-trade-title">Best Trade Now</div>
+        <div class="best-trade-pair" id="topPairLabel">-</div>
+        <div class="subtitle" id="topPairReason">Aucune analyse disponible.</div>
+      </div>
 
-      <div id="tradeSuggestionBox"></div>
-      <div id="exitSuggestionBox"></div>
+      <div>
+        <div class="best-trade-title">Best Score</div>
+        <div class="best-trade-score" id="bestScore">-</div>
+      </div>
+    </section>
 
-      <ul id="reasonList"></ul>
+    <div class="kpi-grid" style="margin: 18px 0;">
+      <div class="kpi-card">
+        <div class="metric-label">Allowed Trades</div>
+        <div class="metric-value" id="allowedCount">0</div>
+        <div class="metric-hint">Setups autorisés</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="metric-label">Blocked Trades</div>
+        <div class="metric-value" id="blockedCount">0</div>
+        <div class="metric-hint">Setups filtrés</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="metric-label">Open Exposure</div>
+        <div class="metric-value" id="globalExposure">0</div>
+        <div class="metric-hint">Trades actuellement ouverts</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="metric-label">FTMO Status</div>
+        <div class="metric-value" id="ftmoDecisionText">-</div>
+        <div class="metric-hint" id="ftmoDecisionReason">-</div>
+      </div>
     </div>
 
-    <!-- CHART -->
-    <div class="panel">
-      <div id="chart"></div>
+    <main class="layout">
+      <!-- LEFT SIDEBAR -->
+      <aside class="sidebar">
+        <section class="panel">
+          <div class="panel-header">
+            <h3>Market Scanner</h3>
+            <span class="tag">Live List</span>
+          </div>
+          <div id="pairList" class="section-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h3>Top Priority Trades</h3>
+            <span class="signal-badge signal-buy">Premium</span>
+          </div>
+          <div id="topPriorityTrades" class="section-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h3>Blocked Trades</h3>
+            <span class="signal-badge signal-sell">Filtered</span>
+          </div>
+          <div id="topBlockedTrades" class="section-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h3>Watchlist</h3>
+            <span class="tag">Count: <span id="watchlistCount">0</span></span>
+          </div>
+          <div id="watchlist" class="section-list"></div>
+        </section>
+      </aside>
+
+      <!-- MAIN CONTENT -->
+      <section class="content">
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="metric-label">Selected Pair</div>
+              <h2 id="selectedPairName">-</h2>
+            </div>
+            <div id="decisionBadge">WAIT</div>
+          </div>
+
+          <div class="hero-stats" style="margin-bottom: 14px;">
+            <div class="stat-card">
+              <div class="metric-label">Trend</div>
+              <div class="metric-value" id="trendMini">-</div>
+            </div>
+            <div class="stat-card">
+              <div class="metric-label">Confidence</div>
+              <div class="metric-value" id="confidenceMini">-</div>
+            </div>
+            <div class="stat-card">
+              <div class="metric-label">RR</div>
+              <div class="metric-value" id="rrMini">-</div>
+            </div>
+            <div class="stat-card">
+              <div class="metric-label">AI</div>
+              <div class="metric-value" id="aiMini">-</div>
+            </div>
+          </div>
+
+          <div id="summaryMetrics"></div>
+
+          <div class="hero" style="margin-top: 12px;">
+            <div class="hero-main">
+              <div class="panel-plain">
+                <div class="metric-label">Decision Title</div>
+                <div id="decisionText" class="big-number" style="font-size: 22px; margin-top: 4px;">-</div>
+                <p id="decisionReason" style="margin-top: 8px;">-</p>
+              </div>
+
+              <div class="section-list" style="margin-top: 14px;">
+                <div class="card">
+                  <div class="panel-header">
+                    <h3>Trade Suggestion</h3>
+                    <span class="tag" id="decisionWindow">Intraday</span>
+                  </div>
+                  <div id="tradeSuggestionBox">Aucune suggestion.</div>
+                </div>
+
+                <div class="card">
+                  <div class="panel-header">
+                    <h3>Exit Suggestion</h3>
+                    <span class="tag" id="decisionAction">WAIT</span>
+                  </div>
+                  <div id="exitSuggestionBox">Aucune suggestion de sortie.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="hero-side">
+              <div class="card">
+                <div class="panel-header">
+                  <h3>Decision Meta</h3>
+                </div>
+
+                <div class="section-list">
+                  <div class="watch-item">
+                    <span class="muted">Asset</span>
+                    <strong id="decisionAsset">-</strong>
+                  </div>
+                  <div class="watch-item">
+                    <span class="muted">Confidence</span>
+                    <strong id="decisionConfidence">-</strong>
+                  </div>
+                  <div class="watch-item">
+                    <span class="muted">Action</span>
+                    <strong id="decisionActionMirror">-</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card" style="margin-top: 14px;">
+                <div class="panel-header">
+                  <h3>Reasons</h3>
+                </div>
+                <ul id="reasonList"></ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h3>Chart</h3>
+            <span class="tag">Candlesticks</span>
+          </div>
+          <div id="chart"></div>
+        </section>
+
+        <section class="grid" style="grid-template-columns: 1fr 1fr;">
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Trade Form</h3>
+              <span class="tag">Manual Execution</span>
+            </div>
+
+            <form id="tradeForm" class="trade-form-grid">
+              <div>
+                <label for="tradePair">Pair</label>
+                <input id="tradePair" name="tradePair" type="text" placeholder="EURUSD" />
+              </div>
+
+              <div>
+                <label for="tradeDirection">Direction</label>
+                <select id="tradeDirection" name="tradeDirection">
+                  <option value="buy">Buy</option>
+                  <option value="sell">Sell</option>
+                </select>
+              </div>
+
+              <div>
+                <label for="tradeCapital">Capital</label>
+                <input id="tradeCapital" name="tradeCapital" type="number" step="0.01" value="10000" />
+              </div>
+
+              <div>
+                <label for="riskPercent">Risk %</label>
+                <input id="riskPercent" name="riskPercent" type="number" step="0.01" value="1" />
+              </div>
+
+              <div>
+                <label for="tradeEntry">Entry</label>
+                <input id="tradeEntry" name="tradeEntry" type="number" step="0.00001" />
+              </div>
+
+              <div>
+                <label for="tradeNotes">Notes</label>
+                <input id="tradeNotes" name="tradeNotes" type="text" placeholder="Optional note" />
+              </div>
+
+              <div style="grid-column: 1 / -1;">
+                <button class="primary-btn" type="submit" style="width: 100%;">Add Trade</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Trades</h3>
+              <span class="tag">Total: <span id="tradeStats">0</span></span>
+            </div>
+            <div id="tradeList" class="section-list"></div>
+          </section>
+        </section>
+
+        <section class="grid" style="grid-template-columns: 1.2fr 0.8fr;">
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Correlation Matrix</h3>
+              <span class="tag">Risk Concentration</span>
+            </div>
+            <p id="correlationSummary">Aucune donnée.</p>
+            <div id="correlationMatrixBox" style="margin-top: 12px;"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h3>FTMO Risk</h3>
+              <span id="ftmoDecisionBadge">-</span>
+            </div>
+
+            <div class="section-list">
+              <div class="watch-item">
+                <span class="muted">Remaining Daily Loss</span>
+                <strong id="ftmoDailyRemaining">-</strong>
+              </div>
+
+              <div class="watch-item">
+                <span class="muted">Max Additional Risk</span>
+                <strong id="ftmoMaxAdditionalRisk">-</strong>
+              </div>
+
+              <div class="watch-item">
+                <span class="muted">Decision</span>
+                <strong id="ftmoDecisionText">-</strong>
+              </div>
+            </div>
+
+            <div style="margin-top: 14px;">
+              <p id="ftmoDecisionReason">-</p>
+            </div>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <div class="footer-note">
+      FTMO EDGE AI • Dashboard modulaire • Front premium
     </div>
-
-    <!-- PRIORITY -->
-    <div class="panel">
-      <h3>Top Trades</h3>
-      <div id="topPriorityTrades"></div>
-
-      <h3>Blocked Trades</h3>
-      <div id="topBlockedTrades"></div>
-    </div>
-
-    <!-- CORRELATION -->
-    <div class="panel">
-      <h3>Correlation</h3>
-      <div id="correlationSummary"></div>
-      <div id="correlationMatrixBox"></div>
-    </div>
-
-    <!-- TRADES -->
-    <div class="panel">
-      <h3>Trades</h3>
-      <div id="tradeList"></div>
-      <div>Total: <span id="tradeStats"></span></div>
-    </div>
-
-    <!-- WATCHLIST -->
-    <div class="panel">
-      <h3>Watchlist</h3>
-      <div id="watchlist"></div>
-      <div>Total: <span id="watchlistCount"></span></div>
-    </div>
-
-    <!-- FTMO -->
-    <div class="panel">
-      <h3>FTMO Risk</h3>
-      <div>Remaining: <span id="ftmoDailyRemaining"></span></div>
-      <div>Max Risk: <span id="ftmoMaxAdditionalRisk"></span></div>
-      <div id="ftmoDecisionText"></div>
-      <div id="ftmoDecisionReason"></div>
-      <div id="ftmoDecisionBadge"></div>
-    </div>
-
   </div>
 
-</div>
+  <script type="module" src="./app.js"></script>
 
-<script type="module" src="./app.js"></script>
+  <script>
+    const mirrorDecision = () => {
+      const src = document.getElementById("decisionAction");
+      const dst = document.getElementById("decisionActionMirror");
+      if (src && dst) dst.textContent = src.textContent || "-";
+    };
 
+    const observer = new MutationObserver(mirrorDecision);
+    window.addEventListener("DOMContentLoaded", () => {
+      const src = document.getElementById("decisionAction");
+      if (src) observer.observe(src, { childList: true, subtree: true, characterData: true });
+      mirrorDecision();
+    });
+  </script>
 </body>
-  </html>
+          </html>
