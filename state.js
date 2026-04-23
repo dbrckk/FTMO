@@ -1,3 +1,5 @@
+// state.js
+
 import { STORAGE_KEY } from "./config.js";
 
 export const els = {};
@@ -11,6 +13,9 @@ export const defaultState = {
   scans: [],
   trades: [],
   tradeArchive: [],
+  paperTrades: [],
+  paperArchive: [],
+  activeTab: "dashboard",
   watchlist: [],
   journal: null,
   mlScoreCache: {},
@@ -23,6 +28,15 @@ export const defaultState = {
     requestedRiskPercent: 1,
     dailyLossLimitPercent: 5,
     closedTodayPnl: 0
+  },
+  paperEngine: {
+    enabled: true,
+    autoRun: true,
+    maxOpenTrades: 4,
+    riskPerTrade: 0.25,
+    minUltraScore: 72,
+    refreshIntervalMs: 20000,
+    maxBarsHold: 12
   }
 };
 
@@ -40,7 +54,13 @@ export function loadState() {
         ...structuredClone(defaultState).ftmo,
         ...(saved.ftmo || {})
       },
-      tradeArchive: Array.isArray(saved.tradeArchive) ? saved.tradeArchive : []
+      tradeArchive: Array.isArray(saved.tradeArchive) ? saved.tradeArchive : [],
+      paperTrades: Array.isArray(saved.paperTrades) ? saved.paperTrades : [],
+      paperArchive: Array.isArray(saved.paperArchive) ? saved.paperArchive : [],
+      paperEngine: {
+        ...structuredClone(defaultState).paperEngine,
+        ...(saved.paperEngine || {})
+      }
     };
   } catch {
     return structuredClone(defaultState);
@@ -54,4 +74,4 @@ export function persistState() {
 export function setChartInstance(nextChart, nextCandleSeries) {
   chart = nextChart;
   candleSeries = nextCandleSeries;
-}
+    }
