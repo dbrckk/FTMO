@@ -22,6 +22,51 @@ async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 6500) {
   }
 }
 
+export async function fetchArchiveStatsBatch() {
+  try {
+    const url = new URL(API.archiveStats, window.location.origin);
+    url.searchParams.set("timeframe", appState.timeframe);
+
+    const data = await fetchJsonWithTimeout(
+      url.toString(),
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json"
+        }
+      },
+      4000
+    );
+
+    appState.archiveStatsCache = data.stats || {};
+    appState.archiveStatsUpdatedAt = new Date().toISOString();
+    persistState();
+    return appState.archiveStatsCache;
+  } catch {
+    appState.archiveStatsCache = appState.archiveStatsCache || {};
+    return appState.archiveStatsCache;
+  }
+}
+
+export async function saveClosedPaperTrade(trade) {
+  try {
+    return await fetchJsonWithTimeout(
+      API.paperTrades,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json"
+        },
+        body: JSON.stringify(trade)
+      },
+      4000
+    );
+  } catch {
+    return { ok: false };
+  }
+}
+
 export async function fetchMlScore(scan) {
   try {
     const journalContext = buildJournalContextForPair(scan) || {};
@@ -32,7 +77,7 @@ export async function fetchMlScore(scan) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json"
+          Accept: "application/json"
         },
         body: JSON.stringify({
           data: {
@@ -50,9 +95,6 @@ export async function fetchMlScore(scan) {
             atr14: scan.atr14 || 0,
             momentum: scan.momentum || 0,
             rr: scan.rr || 1.5,
-            macroPenalty: scan.macroPenalty || 0,
-            spreadPenalty: scan.spreadPenalty || 0,
-            offSessionPenalty: scan.offSessionPenalty || 0,
             pairExpectancy: journalContext.pairExpectancy || 0,
             hourExpectancy: journalContext.hourExpectancy || 0,
             sessionExpectancy: journalContext.sessionExpectancy || 0,
@@ -62,7 +104,7 @@ export async function fetchMlScore(scan) {
           }
         })
       },
-      5000
+      4500
     );
 
     appState.mlScoreCache[scan.pair] = data;
@@ -99,7 +141,7 @@ export async function fetchVectorbtScore(scan) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json"
+          Accept: "application/json"
         },
         body: JSON.stringify({
           data: {
@@ -154,7 +196,7 @@ export async function fetchVectorbtScore(scan) {
 
 export async function fetchCorrelationMatrix() {
   try {
-    const rows = appState.scans.slice(0, 10).map((scan) => ({
+    const rows = appState.scans.slice(0, 25).map((scan) => ({
       pair: scan.pair,
       closes: scan.candles.map((c) => c.close).slice(-120)
     }));
@@ -165,7 +207,7 @@ export async function fetchCorrelationMatrix() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json"
+          Accept: "application/json"
         },
         body: JSON.stringify({ rows })
       },
@@ -196,7 +238,7 @@ export async function fetchPortfolioRisk() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json"
+          Accept: "application/json"
         },
         body: JSON.stringify({ positions })
       },
@@ -232,7 +274,7 @@ export async function refreshAiDecision(force = false, renderSelectedPair) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json"
+          Accept: "application/json"
         },
         body: JSON.stringify({
           data: {
@@ -285,7 +327,7 @@ export async function fetchExitSuggestion(scan, ai, targetEl) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json"
+          Accept: "application/json"
         },
         body: JSON.stringify({
           data: {
@@ -330,4 +372,4 @@ export function buildJournalContextForPair() {
     hourWinRate: 0,
     sessionWinRate: 0
   };
-        }
+      }
