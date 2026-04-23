@@ -1,3 +1,5 @@
+<!-- index.html -->
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -41,6 +43,14 @@
       </div>
     </header>
 
+    <section class="panel" style="margin-bottom: 18px;">
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button id="tabDashboardBtn" type="button" class="primary-btn">Dashboard</button>
+        <button id="tabPaperBtn" type="button" class="secondary-btn">Paper Lab</button>
+        <button id="paperEngineToggleBtn" type="button" class="secondary-btn">Paper Engine ON</button>
+      </div>
+    </section>
+
     <section class="best-trade-banner glow-blue">
       <div>
         <div class="best-trade-title">Best Trade Now</div>
@@ -80,7 +90,7 @@
       </div>
     </div>
 
-    <main class="layout">
+    <main id="dashboardTab" class="layout">
       <aside class="sidebar">
         <section class="panel">
           <div class="panel-header">
@@ -150,13 +160,7 @@
             <div class="hero-main">
               <div class="panel-plain">
                 <div class="metric-label">Decision Title</div>
-                <div
-                  id="decisionText"
-                  class="big-number"
-                  style="font-size: 22px; margin-top: 4px;"
-                >
-                  -
-                </div>
+                <div id="decisionText" class="big-number" style="font-size: 22px; margin-top: 4px;">-</div>
                 <p id="decisionReason" style="margin-top: 8px;">-</p>
               </div>
 
@@ -231,12 +235,7 @@
             <form id="tradeForm" class="trade-form-grid">
               <div>
                 <label for="tradePair">Pair</label>
-                <input
-                  id="tradePair"
-                  name="tradePair"
-                  type="text"
-                  placeholder="EURUSD"
-                />
+                <input id="tradePair" name="tradePair" type="text" placeholder="EURUSD" />
               </div>
 
               <div>
@@ -249,54 +248,26 @@
 
               <div>
                 <label for="tradeCapital">Capital</label>
-                <input
-                  id="tradeCapital"
-                  name="tradeCapital"
-                  type="number"
-                  step="0.01"
-                  value="10000"
-                />
+                <input id="tradeCapital" name="tradeCapital" type="number" step="0.01" value="10000" />
               </div>
 
               <div>
                 <label for="riskPercent">Risk %</label>
-                <input
-                  id="riskPercent"
-                  name="riskPercent"
-                  type="number"
-                  step="0.01"
-                  value="1"
-                />
+                <input id="riskPercent" name="riskPercent" type="number" step="0.01" value="1" />
               </div>
 
               <div>
                 <label for="tradeEntry">Entry</label>
-                <input
-                  id="tradeEntry"
-                  name="tradeEntry"
-                  type="number"
-                  step="0.00001"
-                />
+                <input id="tradeEntry" name="tradeEntry" type="number" step="0.00001" />
               </div>
 
               <div>
                 <label for="tradeNotes">Notes</label>
-                <input
-                  id="tradeNotes"
-                  name="tradeNotes"
-                  type="text"
-                  placeholder="Optional note"
-                />
+                <input id="tradeNotes" name="tradeNotes" type="text" placeholder="Optional note" />
               </div>
 
               <div style="grid-column: 1 / -1;">
-                <button
-                  class="primary-btn"
-                  type="submit"
-                  style="width: 100%;"
-                >
-                  Add Trade
-                </button>
+                <button class="primary-btn" type="submit" style="width: 100%;">Add Trade</button>
               </div>
             </form>
           </section>
@@ -351,6 +322,48 @@
       </section>
     </main>
 
+    <section id="paperTab" class="content" style="display:none; margin-top:18px;">
+      <section class="panel">
+        <div class="panel-header">
+          <h3>Paper Engine Status</h3>
+          <span class="tag">Auto Test Mode</span>
+        </div>
+        <div id="paperEngineStatus"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h3>Paper Stats</h3>
+          <span class="tag">Self-learning</span>
+        </div>
+        <div id="paperStats" style="display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px;"></div>
+      </section>
+
+      <section class="grid" style="grid-template-columns:1fr 1fr;">
+        <section class="panel">
+          <div class="panel-header">
+            <h3>Open Paper Trades</h3>
+          </div>
+          <div id="paperOpenTrades" class="section-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h3>Recent Paper Trades</h3>
+          </div>
+          <div id="paperRecentTrades" class="section-list"></div>
+        </section>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h3>Pair Analytics</h3>
+          <span class="tag">Archive based</span>
+        </div>
+        <div id="paperPairStats" class="section-list"></div>
+      </section>
+    </section>
+
     <div class="footer-note">
       FTMO EDGE AI • Dashboard modulaire • Front premium
     </div>
@@ -367,17 +380,9 @@
       const ftmoReasonSrc = document.getElementById("ftmoDecisionReason");
       const ftmoReasonDst = document.getElementById("ftmoDecisionReasonSecondary");
 
-      if (actionSrc && actionDst) {
-        actionDst.textContent = actionSrc.textContent || "-";
-      }
-
-      if (ftmoSrc && ftmoDst) {
-        ftmoDst.textContent = ftmoSrc.textContent || "-";
-      }
-
-      if (ftmoReasonSrc && ftmoReasonDst) {
-        ftmoReasonDst.textContent = ftmoReasonSrc.textContent || "-";
-      }
+      if (actionSrc && actionDst) actionDst.textContent = actionSrc.textContent || "-";
+      if (ftmoSrc && ftmoDst) ftmoDst.textContent = ftmoSrc.textContent || "-";
+      if (ftmoReasonSrc && ftmoReasonDst) ftmoReasonDst.textContent = ftmoReasonSrc.textContent || "-";
     };
 
     const observer = new MutationObserver(mirrorDecisionFields);
@@ -398,4 +403,4 @@
     });
   </script>
 </body>
-          </html>
+        </html>
