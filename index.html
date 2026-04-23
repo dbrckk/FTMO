@@ -1,5 +1,3 @@
-<!-- index.fixed.html -->
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -152,7 +150,13 @@
             <div class="hero-main">
               <div class="panel-plain">
                 <div class="metric-label">Decision Title</div>
-                <div id="decisionText" class="big-number" style="font-size: 22px; margin-top: 4px;">-</div>
+                <div
+                  id="decisionText"
+                  class="big-number"
+                  style="font-size: 22px; margin-top: 4px;"
+                >
+                  -
+                </div>
                 <p id="decisionReason" style="margin-top: 8px;">-</p>
               </div>
 
@@ -186,10 +190,12 @@
                     <span class="muted">Asset</span>
                     <strong id="decisionAsset">-</strong>
                   </div>
+
                   <div class="watch-item">
                     <span class="muted">Confidence</span>
                     <strong id="decisionConfidence">-</strong>
                   </div>
+
                   <div class="watch-item">
                     <span class="muted">Action</span>
                     <strong id="decisionActionMirror">-</strong>
@@ -225,7 +231,12 @@
             <form id="tradeForm" class="trade-form-grid">
               <div>
                 <label for="tradePair">Pair</label>
-                <input id="tradePair" name="tradePair" type="text" placeholder="EURUSD" />
+                <input
+                  id="tradePair"
+                  name="tradePair"
+                  type="text"
+                  placeholder="EURUSD"
+                />
               </div>
 
               <div>
@@ -238,26 +249,54 @@
 
               <div>
                 <label for="tradeCapital">Capital</label>
-                <input id="tradeCapital" name="tradeCapital" type="number" step="0.01" value="10000" />
+                <input
+                  id="tradeCapital"
+                  name="tradeCapital"
+                  type="number"
+                  step="0.01"
+                  value="10000"
+                />
               </div>
 
               <div>
                 <label for="riskPercent">Risk %</label>
-                <input id="riskPercent" name="riskPercent" type="number" step="0.01" value="1" />
+                <input
+                  id="riskPercent"
+                  name="riskPercent"
+                  type="number"
+                  step="0.01"
+                  value="1"
+                />
               </div>
 
               <div>
                 <label for="tradeEntry">Entry</label>
-                <input id="tradeEntry" name="tradeEntry" type="number" step="0.00001" />
+                <input
+                  id="tradeEntry"
+                  name="tradeEntry"
+                  type="number"
+                  step="0.00001"
+                />
               </div>
 
               <div>
                 <label for="tradeNotes">Notes</label>
-                <input id="tradeNotes" name="tradeNotes" type="text" placeholder="Optional note" />
+                <input
+                  id="tradeNotes"
+                  name="tradeNotes"
+                  type="text"
+                  placeholder="Optional note"
+                />
               </div>
 
               <div style="grid-column: 1 / -1;">
-                <button class="primary-btn" type="submit" style="width: 100%;">Add Trade</button>
+                <button
+                  class="primary-btn"
+                  type="submit"
+                  style="width: 100%;"
+                >
+                  Add Trade
+                </button>
               </div>
             </form>
           </section>
@@ -328,19 +367,23 @@
       const ftmoReasonSrc = document.getElementById("ftmoDecisionReason");
       const ftmoReasonDst = document.getElementById("ftmoDecisionReasonSecondary");
 
-      if (actionSrc && actionDst) actionDst.textContent = actionSrc.textContent || "-";
-      if (ftmoSrc && ftmoDst) ftmoDst.textContent = ftmoSrc.textContent || "-";
-      if (ftmoReasonSrc && ftmoReasonDst) ftmoReasonDst.textContent = ftmoReasonSrc.textContent || "-";
+      if (actionSrc && actionDst) {
+        actionDst.textContent = actionSrc.textContent || "-";
+      }
+
+      if (ftmoSrc && ftmoDst) {
+        ftmoDst.textContent = ftmoSrc.textContent || "-";
+      }
+
+      if (ftmoReasonSrc && ftmoReasonDst) {
+        ftmoReasonDst.textContent = ftmoReasonSrc.textContent || "-";
+      }
     };
 
     const observer = new MutationObserver(mirrorDecisionFields);
 
     window.addEventListener("DOMContentLoaded", () => {
-      [
-        "decisionAction",
-        "ftmoDecisionText",
-        "ftmoDecisionReason"
-      ].forEach((id) => {
+      ["decisionAction", "ftmoDecisionText", "ftmoDecisionReason"].forEach((id) => {
         const node = document.getElementById(id);
         if (node) {
           observer.observe(node, {
@@ -355,4 +398,4 @@
     });
   </script>
 </body>
-            </html>
+          </html>
