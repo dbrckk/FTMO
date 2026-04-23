@@ -74,4 +74,4 @@ export function persistState() {
 export function setChartInstance(nextChart, nextCandleSeries) {
   chart = nextChart;
   candleSeries = nextCandleSeries;
-    }
+}
