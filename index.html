@@ -1,20 +1,35 @@
-// index.html (IMPORTANT pour faire fonctionner tout le système modulaire)
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FTMO EDGE AI</title>
 
-  <!-- Lightweight Charts -->
   <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 
   <style>
     body {
       background: #0b0b0b;
       color: white;
-      font-family: Arial;
+      font-family: Inter, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 20px;
+    }
+
+    .panel {
+      background: rgba(255,255,255,0.05);
+      border-radius: 10px;
+      padding: 15px;
     }
 
     .pair-row {
@@ -25,39 +40,127 @@
       cursor: pointer;
     }
 
+    .pair-row:hover {
+      background: rgba(255,255,255,0.05);
+    }
+
     .ok { color: #22c55e; }
     .bad { color: #ef4444; }
 
     .metric-card {
       display: inline-block;
+      margin: 5px;
       padding: 10px;
       background: rgba(255,255,255,0.05);
-      margin: 5px;
       border-radius: 6px;
+      min-width: 80px;
+    }
+
+    #chart {
+      height: 300px;
+    }
+
+    .top-row {
+      padding: 8px;
+    }
+
+    .blocked {
+      opacity: 0.6;
     }
   </style>
 </head>
 
 <body>
 
-  <h1>FTMO EDGE AI</h1>
+<h1>FTMO EDGE AI</h1>
+<button id="refreshBtn">Refresh</button>
 
-  <button id="refreshBtn">Refresh</button>
+<div class="grid">
 
-  <div id="pairList"></div>
+  <!-- LEFT -->
+  <div class="panel">
+    <h3>Pairs</h3>
+    <div id="pairList"></div>
+  </div>
 
-  <h2>Selected</h2>
-  <div id="selectedPairName"></div>
+  <!-- RIGHT -->
+  <div>
 
-  <div id="summaryMetrics"></div>
+    <!-- TOP TRADE -->
+    <div class="panel">
+      <h2 id="selectedPairName">-</h2>
 
-  <div id="tradeSuggestionBox"></div>
-  <div id="exitSuggestionBox"></div>
+      <div id="summaryMetrics"></div>
 
-  <div id="chart" style="height:300px;"></div>
+      <div>
+        Trend: <span id="trendMini"></span> |
+        Confidence: <span id="confidenceMini"></span> |
+        RR: <span id="rrMini"></span> |
+        AI: <span id="aiMini"></span>
+      </div>
 
-  <!-- CRUCIAL -->
-  <script type="module" src="./app.js"></script>
+      <h3 id="decisionBadge"></h3>
+      <div id="decisionText"></div>
+      <div id="decisionReason"></div>
+
+      <br>
+
+      <div id="tradeSuggestionBox"></div>
+      <div id="exitSuggestionBox"></div>
+
+      <ul id="reasonList"></ul>
+    </div>
+
+    <!-- CHART -->
+    <div class="panel">
+      <div id="chart"></div>
+    </div>
+
+    <!-- PRIORITY -->
+    <div class="panel">
+      <h3>Top Trades</h3>
+      <div id="topPriorityTrades"></div>
+
+      <h3>Blocked Trades</h3>
+      <div id="topBlockedTrades"></div>
+    </div>
+
+    <!-- CORRELATION -->
+    <div class="panel">
+      <h3>Correlation</h3>
+      <div id="correlationSummary"></div>
+      <div id="correlationMatrixBox"></div>
+    </div>
+
+    <!-- TRADES -->
+    <div class="panel">
+      <h3>Trades</h3>
+      <div id="tradeList"></div>
+      <div>Total: <span id="tradeStats"></span></div>
+    </div>
+
+    <!-- WATCHLIST -->
+    <div class="panel">
+      <h3>Watchlist</h3>
+      <div id="watchlist"></div>
+      <div>Total: <span id="watchlistCount"></span></div>
+    </div>
+
+    <!-- FTMO -->
+    <div class="panel">
+      <h3>FTMO Risk</h3>
+      <div>Remaining: <span id="ftmoDailyRemaining"></span></div>
+      <div>Max Risk: <span id="ftmoMaxAdditionalRisk"></span></div>
+      <div id="ftmoDecisionText"></div>
+      <div id="ftmoDecisionReason"></div>
+      <div id="ftmoDecisionBadge"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<script type="module" src="./app.js"></script>
 
 </body>
-</html>
+  </html>
