@@ -38,7 +38,34 @@ function cacheEls() {
     "chart",
     "summaryMetrics",
     "topPriorityTrades",
-    "topBlockedTrades"
+    "topBlockedTrades",
+    "watchlist",
+    "watchlistCount",
+    "tradeList",
+    "tradeStats",
+    "selectedPairName",
+    "trendMini",
+    "confidenceMini",
+    "rrMini",
+    "aiMini",
+    "decisionBadge",
+    "decisionText",
+    "decisionReason",
+    "decisionAsset",
+    "decisionConfidence",
+    "decisionAction",
+    "decisionWindow",
+    "topPairLabel",
+    "topPairReason",
+    "bestScore",
+    "allowedCount",
+    "blockedCount",
+    "globalExposure",
+    "ftmoDailyRemaining",
+    "ftmoMaxAdditionalRisk",
+    "ftmoDecisionText",
+    "ftmoDecisionReason",
+    "ftmoDecisionBadge"
   ].forEach((id) => {
     els[id] = document.getElementById(id) || null;
   });
@@ -80,13 +107,20 @@ async function refreshAll(force = false) {
         return scan;
       })
       .sort((a, b) => {
+        const aScore = Number(a.ultraScore || a.finalScore || 0);
+        const bScore = Number(b.ultraScore || b.finalScore || 0);
+
+        if (bScore !== aScore) return bScore - aScore;
         if ((b.confluence?.score || 0) !== (a.confluence?.score || 0)) {
           return (b.confluence?.score || 0) - (a.confluence?.score || 0);
         }
-        return (b.ultraScore || b.finalScore || 0) - (a.ultraScore || a.finalScore || 0);
+        return (b.finalScore || 0) - (a.finalScore || 0);
       });
 
-    if (!appState.selectedPair || !appState.scans.find((s) => s.pair === appState.selectedPair)) {
+    if (
+      !appState.selectedPair ||
+      !appState.scans.find((s) => s.pair === appState.selectedPair)
+    ) {
       appState.selectedPair = appState.scans[0]?.pair || "EURUSD";
     }
 
