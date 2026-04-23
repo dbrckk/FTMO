@@ -1,5 +1,3 @@
-// scan.fixed.js
-
 import { API } from "./config.js";
 import { appState } from "./state.js";
 import { normalizeCandles, clamp } from "./utils.js";
@@ -7,6 +5,7 @@ import { emaSeries, computeMomentum, rsi, atr } from "./indicators.js";
 import { generateFakeCandles } from "./mock.js";
 import { fetchMlScore, fetchVectorbtScore } from "./api.js";
 import { computeUltraScore, getTradeFilterDecision } from "./advanced-engine.js";
+import { buildArchiveStats } from "./archive-engine.js";
 
 export async function scanPair(pair) {
   let candles = [];
@@ -18,7 +17,9 @@ export async function scanPair(pair) {
 
     const response = await fetch(url.toString(), {
       method: "GET",
-      headers: { Accept: "application/json" }
+      headers: {
+        Accept: "application/json"
+      }
     });
 
     if (!response.ok) throw new Error(`market ${response.status}`);
@@ -164,6 +165,14 @@ export async function scanPair(pair) {
         : "WAIT";
 
   scan.direction = scan.signal === "SELL" ? "sell" : "buy";
+
+  scan.archiveStats = buildArchiveStats({
+    pair: scan.pair,
+    direction: scan.direction,
+    archiveTrades: appState.tradeArchive || [],
+    now: new Date()
+  });
+
   scan.reason =
     scan.mlExplanation || scan.vectorbtExplanation || "Analyse consolidée";
 
@@ -173,7 +182,9 @@ export async function scanPair(pair) {
     `Risk ${scan.riskScore}`,
     `Context ${scan.contextScore}`,
     `ML ${scan.mlScore}`,
-    `VectorBT ${scan.vectorbtScore}`
+    `VectorBT ${scan.vectorbtScore}`,
+    `Archive pair WR ${Math.round(scan.archiveStats.pairWinRate || 50)}%`,
+    `Archive expectancy ${Number(scan.archiveStats.pairExpectancy || 0).toFixed(2)}R`
   ];
 
   const ultra = computeUltraScore(scan);
@@ -184,6 +195,12 @@ export async function scanPair(pair) {
   scan.smartMoneyScore = ultra.smartMoney;
   scan.sessionScore = ultra.session;
   scan.executionScore = ultra.execution;
+  scan.entryPrecisionScore = ultra.entryPrecision;
+  scan.momentumQuality = ultra.momentumQuality;
+  scan.spreadScore = ultra.spreadScore;
+  scan.archiveEdgeScore = ultra.archiveEdge;
+  scan.goldStructureScore = ultra.goldStructure;
+  scan.goldDangerScore = ultra.goldDanger;
 
   scan.tradeAllowed = filterDecision.allowed;
   scan.tradeStatus = filterDecision.status;
@@ -199,9 +216,9 @@ export async function scanPair(pair) {
 export function computeHedgeScore(scan) {
   return Math.round(
     Number(scan.trendScore || 0) * 0.25 +
-      Number(scan.timingScore || 0) * 0.2 +
+      Number(scan.timingScore || 0) * 0.20 +
       Number(scan.contextScore || 0) * 0.15 +
-      Number(scan.riskScore || 0) * 0.1 +
+      Number(scan.riskScore || 0) * 0.10 +
       Number(scan.mlScore || 0) * 0.15 +
       Number(scan.vectorbtScore || 0) * 0.15
   );
@@ -218,10 +235,10 @@ export function isEliteTrade(scan) {
 export function computeConfluenceScore(scan) {
   const score = Math.round(
     Number(scan.finalScore || 0) * 0.35 +
-      Number(scan.mlScore || 0) * 0.2 +
-      Number(scan.vectorbtScore || 0) * 0.2 +
-      Number(scan.trendScore || 0) * 0.1 +
-      Number(scan.timingScore || 0) * 0.1 +
+      Number(scan.mlScore || 0) * 0.20 +
+      Number(scan.vectorbtScore || 0) * 0.20 +
+      Number(scan.trendScore || 0) * 0.10 +
+      Number(scan.timingScore || 0) * 0.10 +
       Number(scan.contextScore || 0) * 0.05
   );
 
@@ -239,4 +256,4 @@ export function computeConfluenceScore(scan) {
               : "weak",
     blocked: score < 55
   };
-      }
+                          }
