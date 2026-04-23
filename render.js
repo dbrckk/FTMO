@@ -35,7 +35,7 @@ export function renderPairList(refreshAiDecision) {
       <div>${Math.round(scan.finalScore || 0)}</div>
       <div>${Math.round(scan.mlScore || 0)}</div>
       <div>${Math.round(scan.vectorbtScore || 0)}</div>
-      <div class="${(scan.finalScore || 0) >= 70 ? "ok" : "bad"}">${(scan.finalScore || 0) >= 70 ? "GO" : "WAIT"}</div>
+      <div class="${scan.tradeAllowed ? "ok" : "bad"}">${scan.tradeStatus || "WAIT"}</div>
     `;
 
     row.addEventListener("click", () => {
@@ -54,17 +54,17 @@ export function renderTopPriorityTrades() {
   if (!wrap) return;
 
   const top = [...appState.scans]
-    .filter((scan) => Number(scan.finalScore || 0) >= 70)
-    .sort((a, b) => Number(b.finalScore || 0) - Number(a.finalScore || 0))
+    .filter((scan) => scan.tradeAllowed && Number(scan.ultraScore || 0) >= 68)
+    .sort((a, b) => Number(b.ultraScore || 0) - Number(a.ultraScore || 0))
     .slice(0, 5);
 
   wrap.innerHTML = top.length
     ? top.map((scan) => `
       <div class="top-row">
-        <strong>${scan.pair}</strong> - ${Math.round(scan.finalScore || 0)} - ${scan.signal}
+        <strong>${scan.pair}</strong> - ULTRA ${Math.round(scan.ultraScore || 0)} - ${scan.tradeStatus}
       </div>
     `).join("")
-    : `<div class="muted">Aucun trade prioritaire.</div>`;
+    : `<div class="muted">Aucun trade premium.</div>`;
 }
 
 export function renderTopBlockedTrades() {
@@ -72,14 +72,14 @@ export function renderTopBlockedTrades() {
   if (!wrap) return;
 
   const blocked = [...appState.scans]
-    .filter((scan) => Number(scan.finalScore || 0) < 55)
-    .sort((a, b) => Number(a.finalScore || 0) - Number(b.finalScore || 0))
+    .filter((scan) => !scan.tradeAllowed)
+    .sort((a, b) => Number(a.ultraScore || 0) - Number(b.ultraScore || 0))
     .slice(0, 5);
 
   wrap.innerHTML = blocked.length
     ? blocked.map((scan) => `
       <div class="top-row blocked">
-        <strong>${scan.pair}</strong> - ${Math.round(scan.finalScore || 0)}
+        <strong>${scan.pair}</strong> - ULTRA ${Math.round(scan.ultraScore || 0)} - ${scan.tradeReason || "Blocked"}
       </div>
     `).join("")
     : `<div class="muted">Aucun trade bloqué majeur.</div>`;
@@ -137,7 +137,7 @@ export function renderCorrelationMatrix() {
       </table>
     </div>
   `;
-                           }
+}
 
 export function renderSelectedPair() {
   const pair = appState.selectedPair;
@@ -162,34 +162,22 @@ export function renderSelectedPair() {
   setText("decisionText", ai.title || "Décision IA");
   setText("decisionReason", ai.reason || "-");
   setText("decisionAsset", scan.pair);
-  setText(
-    "decisionConfidence",
-    `${Math.round(ai.confidence || scan.finalScore || 0)}%`
-  );
-  setText(
-    "decisionAction",
-    ai.action || (scan.finalScore >= 70 ? "EXECUTE" : "WAIT")
-  );
+  setText("decisionConfidence", `${Math.round(ai.confidence || scan.finalScore || 0)}%`);
+  setText("decisionAction", ai.action || (scan.finalScore >= 70 ? "EXECUTE" : "WAIT"));
   setText("decisionWindow", ai.window || "Intraday");
 
   if (els.summaryMetrics) {
     els.summaryMetrics.innerHTML = [
       metricCard("Prix", formatPrice(scan.current), "marché"),
       metricCard("Final", Math.round(scan.finalScore || 0), "global"),
+      metricCard("ULTRA", Math.round(scan.ultraScore || 0), scan.ultraGrade || "-"),
       metricCard("Trend", Math.round(scan.trendScore || 0), "direction"),
       metricCard("Timing", Math.round(scan.timingScore || 0), "timing"),
       metricCard("Risk", Math.round(scan.riskScore || 0), "risk"),
-      metricCard("Context", Math.round(scan.contextScore || 0), "context"),
-      metricCard(
-        "ML",
-        Math.round(scan.mlScore || 0),
-        scan.mlConfidenceBand || "model"
-      ),
-      metricCard(
-        "VBT",
-        Math.round(scan.vectorbtScore || 0),
-        scan.vectorbtConfidenceBand || "backtest"
-      )
+      metricCard("Smart", Math.round(scan.smartMoneyScore || 0), "flow"),
+      metricCard("Exec", Math.round(scan.executionScore || 0), "execution"),
+      metricCard("ML", Math.round(scan.mlScore || 0), scan.mlConfidenceBand || "model"),
+      metricCard("VBT", Math.round(scan.vectorbtScore || 0), scan.vectorbtConfidenceBand || "backtest")
     ].join("");
   }
 
@@ -215,16 +203,20 @@ export function renderSelectedPair() {
 
   if (els.tradeSuggestionBox) {
     els.tradeSuggestionBox.innerHTML = `
-      <strong>${ai.decision || scan.signal || "WAIT"}</strong><br>
+      <strong>${scan.tradeStatus || ai.decision || scan.signal || "WAIT"}</strong><br>
+      Ultra Score: ${Math.round(scan.ultraScore || 0)} (${scan.ultraGrade || "-"})<br>
       Entry: ${formatPrice(scan.current)}<br>
       Stop: ${formatPrice(scan.stopLoss || scan.current * 0.995)}<br>
       Target: ${formatPrice(scan.takeProfit || scan.current * 1.01)}<br>
       ML: ${Math.round(scan.mlScore || 0)}<br>
       VectorBT: ${Math.round(scan.vectorbtScore || 0)}<br>
+      Smart Money: ${Math.round(scan.smartMoneyScore || 0)}<br>
+      Session: ${Math.round(scan.sessionScore || 0)}<br>
+      Execution: ${Math.round(scan.executionScore || 0)}<br>
       Risk conseillé: ${riskPct}%<br>
       Position size: ${sizing.quantity}<br>
       Profile: ${sizing.leverageLabel}<br>
-      Motif: ${ai.reason || scan.reason || "-"}
+      Motif: ${scan.tradeReason || ai.reason || scan.reason || "-"}
     `;
   }
 
@@ -287,7 +279,7 @@ export function renderWatchlist() {
   if (count) {
     count.textContent = String(appState.watchlist.length);
   }
-                                    }
+}
 
 export function renderFtmoRisk() {
   const ftmo = appState.ftmo || {};
