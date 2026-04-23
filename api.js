@@ -1,4 +1,4 @@
-// api.js
+// api.fixed.js
 
 import { API } from "./config.js";
 import { appState, persistState } from "./state.js";
@@ -11,7 +11,8 @@ export async function fetchMlScore(scan) {
     const response = await fetch(API.ml, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Accept": "application/json"
       },
       body: JSON.stringify({
         data: {
@@ -78,7 +79,8 @@ export async function fetchVectorbtScore(scan) {
     const response = await fetch(API.vectorbt, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Accept": "application/json"
       },
       body: JSON.stringify({
         data: {
@@ -144,7 +146,8 @@ export async function fetchCorrelationMatrix() {
     const response = await fetch(API.correlation, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Accept": "application/json"
       },
       body: JSON.stringify({ rows })
     });
@@ -175,7 +178,8 @@ export async function fetchPortfolioRisk() {
     const response = await fetch(API.portfolio, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Accept": "application/json"
       },
       body: JSON.stringify({ positions })
     });
@@ -211,19 +215,22 @@ export async function refreshAiDecision(force = false, renderSelectedPair) {
     const response = await fetch(API.ai, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Accept": "application/json"
       },
       body: JSON.stringify({
-        pair: scan.pair,
-        timeframe: appState.timeframe,
-        finalScore: scan.finalScore,
-        trendScore: scan.trendScore,
-        timingScore: scan.timingScore,
-        riskScore: scan.riskScore,
-        contextScore: scan.contextScore,
-        mlScore: scan.mlScore,
-        vectorbtScore: scan.vectorbtScore,
-        signal: scan.finalScore >= 70 ? "BUY" : scan.finalScore <= 35 ? "SELL" : "WAIT"
+        data: {
+          pair: scan.pair,
+          timeframe: appState.timeframe,
+          finalScore: scan.finalScore,
+          trendScore: scan.trendScore,
+          timingScore: scan.timingScore,
+          riskScore: scan.riskScore,
+          contextScore: scan.contextScore,
+          mlScore: scan.mlScore,
+          vectorbtScore: scan.vectorbtScore,
+          signal: scan.finalScore >= 70 ? "BUY" : scan.finalScore <= 35 ? "SELL" : "WAIT"
+        }
       })
     });
 
@@ -263,19 +270,22 @@ export async function fetchExitSuggestion(scan, ai, targetEl) {
     const response = await fetch(API.exit, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Accept": "application/json"
       },
       body: JSON.stringify({
-        pair: scan.pair,
-        direction: scan.direction,
-        entry: Number(document.getElementById("tradeEntry")?.value || scan.current),
-        currentPrice: scan.current,
-        stopLoss: scan.stopLoss,
-        takeProfit: scan.takeProfit,
-        atr14: scan.atr14,
-        macroDanger: ai?.decision === "NO TRADE",
-        momentum: scan.momentum,
-        confidence: ai?.confidence || scan.finalScore
+        data: {
+          pair: scan.pair,
+          direction: scan.direction,
+          entry: Number(document.getElementById("tradeEntry")?.value || scan.current),
+          currentPrice: scan.current,
+          stopLoss: scan.stopLoss,
+          takeProfit: scan.takeProfit,
+          atr14: scan.atr14,
+          macroDanger: ai?.decision === "NO TRADE",
+          momentum: scan.momentum,
+          confidence: ai?.confidence || scan.finalScore
+        }
       })
     });
 
