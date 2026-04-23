@@ -1,5 +1,6 @@
 // scan.js
 
+import { computeUltraScore, getTradeFilterDecision } from "./advanced-engine.js";
 import { API } from "./config.js";
 import { appState } from "./state.js";
 import { normalizeCandles, clamp } from "./utils.js";
