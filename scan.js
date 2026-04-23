@@ -1,12 +1,10 @@
-// scan.js
-
-import { computeUltraScore, getTradeFilterDecision } from "./advanced-engine.js";
 import { API } from "./config.js";
 import { appState } from "./state.js";
 import { normalizeCandles, clamp } from "./utils.js";
 import { emaSeries, computeMomentum, rsi, atr } from "./indicators.js";
 import { generateFakeCandles } from "./mock.js";
 import { fetchMlScore, fetchVectorbtScore } from "./api.js";
+import { computeUltraScore, getTradeFilterDecision } from "./advanced-engine.js";
 
 export async function scanPair(pair) {
   let candles = [];
@@ -148,11 +146,11 @@ export async function scanPair(pair) {
   scan.finalScore = clamp(
     Math.round(
       scan.trendScore * 0.25 +
-        scan.timingScore * 0.2 +
-        scan.contextScore * 0.15 +
-        scan.riskScore * 0.1 +
-        scan.mlScore * 0.15 +
-        scan.vectorbtScore * 0.15
+      scan.timingScore * 0.20 +
+      scan.contextScore * 0.15 +
+      scan.riskScore * 0.10 +
+      scan.mlScore * 0.15 +
+      scan.vectorbtScore * 0.15
     ),
     1,
     99
@@ -177,6 +175,23 @@ export async function scanPair(pair) {
     `ML ${scan.mlScore}`,
     `VectorBT ${scan.vectorbtScore}`
   ];
+
+  const ultra = computeUltraScore(scan);
+  const filterDecision = getTradeFilterDecision(scan);
+
+  scan.ultraScore = ultra.ultraScore;
+  scan.ultraGrade = ultra.grade;
+  scan.smartMoneyScore = ultra.smartMoney;
+  scan.sessionScore = ultra.session;
+  scan.executionScore = ultra.execution;
+
+  scan.tradeAllowed = filterDecision.allowed;
+  scan.tradeStatus = filterDecision.status;
+  scan.tradeReason = filterDecision.reason;
+
+  if (!scan.tradeAllowed) {
+    scan.signal = "WAIT";
+  }
 
   return scan;
 }
@@ -224,4 +239,4 @@ export function computeConfluenceScore(scan) {
               : "weak",
     blocked: score < 55
   };
-      }
+}
