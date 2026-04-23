@@ -1,3 +1,5 @@
+<!-- index.fixed.html -->
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -5,7 +7,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FTMO EDGE AI</title>
 
-  <meta name="description" content="FTMO EDGE AI - dashboard de scoring, corrélation, risque FTMO et sélection de setups premium." />
+  <meta
+    name="description"
+    content="FTMO EDGE AI - dashboard de scoring, corrélation, risque FTMO et sélection de setups premium."
+  />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -24,7 +29,9 @@
       <div class="topbar-left">
         <div class="title-block">
           <h1>FTMO EDGE AI</h1>
-          <div class="subtitle">Scoring multi-facteurs • Corrélation • FTMO Risk • Premium Setup Filter</div>
+          <div class="subtitle">
+            Scoring multi-facteurs • Corrélation • FTMO Risk • Premium Setup Filter
+          </div>
         </div>
       </div>
 
@@ -76,7 +83,6 @@
     </div>
 
     <main class="layout">
-      <!-- LEFT SIDEBAR -->
       <aside class="sidebar">
         <section class="panel">
           <div class="panel-header">
@@ -111,7 +117,6 @@
         </section>
       </aside>
 
-      <!-- MAIN CONTENT -->
       <section class="content">
         <section class="panel">
           <div class="panel-header">
@@ -295,12 +300,12 @@
 
               <div class="watch-item">
                 <span class="muted">Decision</span>
-                <strong id="ftmoDecisionText">-</strong>
+                <strong id="ftmoDecisionTextSecondary">-</strong>
               </div>
             </div>
 
             <div style="margin-top: 14px;">
-              <p id="ftmoDecisionReason">-</p>
+              <p id="ftmoDecisionReasonSecondary">-</p>
             </div>
           </section>
         </section>
@@ -315,18 +320,39 @@
   <script type="module" src="./app.js"></script>
 
   <script>
-    const mirrorDecision = () => {
-      const src = document.getElementById("decisionAction");
-      const dst = document.getElementById("decisionActionMirror");
-      if (src && dst) dst.textContent = src.textContent || "-";
+    const mirrorDecisionFields = () => {
+      const actionSrc = document.getElementById("decisionAction");
+      const actionDst = document.getElementById("decisionActionMirror");
+      const ftmoSrc = document.getElementById("ftmoDecisionText");
+      const ftmoDst = document.getElementById("ftmoDecisionTextSecondary");
+      const ftmoReasonSrc = document.getElementById("ftmoDecisionReason");
+      const ftmoReasonDst = document.getElementById("ftmoDecisionReasonSecondary");
+
+      if (actionSrc && actionDst) actionDst.textContent = actionSrc.textContent || "-";
+      if (ftmoSrc && ftmoDst) ftmoDst.textContent = ftmoSrc.textContent || "-";
+      if (ftmoReasonSrc && ftmoReasonDst) ftmoReasonDst.textContent = ftmoReasonSrc.textContent || "-";
     };
 
-    const observer = new MutationObserver(mirrorDecision);
+    const observer = new MutationObserver(mirrorDecisionFields);
+
     window.addEventListener("DOMContentLoaded", () => {
-      const src = document.getElementById("decisionAction");
-      if (src) observer.observe(src, { childList: true, subtree: true, characterData: true });
-      mirrorDecision();
+      [
+        "decisionAction",
+        "ftmoDecisionText",
+        "ftmoDecisionReason"
+      ].forEach((id) => {
+        const node = document.getElementById(id);
+        if (node) {
+          observer.observe(node, {
+            childList: true,
+            subtree: true,
+            characterData: true
+          });
+        }
+      });
+
+      mirrorDecisionFields();
     });
   </script>
 </body>
-          </html>
+            </html>
