@@ -5,7 +5,6 @@ import { emaSeries, computeMomentum, rsi, atr } from "./indicators.js";
 import { generateFakeCandles } from "./mock.js";
 import { fetchMlScore, fetchVectorbtScore } from "./api.js";
 import { computeUltraScore, getTradeFilterDecision } from "./advanced-engine.js";
-import { buildArchiveStats } from "./archive-engine.js";
 
 async function fetchMarketCandles(pairSymbol, timeframe) {
   const controller = new AbortController();
@@ -18,18 +17,67 @@ async function fetchMarketCandles(pairSymbol, timeframe) {
 
     const response = await fetch(url.toString(), {
       method: "GET",
-      headers: {
-        Accept: "application/json"
-      },
+      headers: { Accept: "application/json" },
       signal: controller.signal
     });
 
     if (!response.ok) throw new Error(`market ${response.status}`);
-
     return await response.json();
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function getArchiveStatsForScan(pair, direction) {
+  const pairStats = appState.archiveStatsCache?.[pair];
+  if (!pairStats) {
+    return {
+      pairWinRate: 50,
+      pairExpectancy: 0,
+      hourWinRate: 50,
+      hourExpectancy: 0,
+      sessionWinRate: 50,
+      sessionExpectancy: 0,
+      last20WinRate: 50,
+      sameDirectionWinRate: 50,
+      sameDirectionExpectancy: 0,
+      archiveConfidence: 0
+    };
+  }
+
+  const now = new Date();
+  const hour = Number(
+    now.toLocaleString("en-GB", {
+      hour: "2-digit",
+      hour12: false,
+      timeZone: "Europe/Paris"
+    })
+  );
+
+  const london = hour >= 9 && hour < 18;
+  const newYork = hour >= 14 && hour < 23;
+  const overlap = london && newYork;
+  const asia = hour >= 1 && hour < 10;
+
+  const session = overlap ? "London+NewYork" : london ? "London" : newYork ? "NewYork" : asia ? "Tokyo" : "OffSession";
+
+  const dir = String(direction || "buy").toLowerCase();
+  const dirStats = pairStats.directions?.[dir] || {};
+  const sessionStats = pairStats.sessions?.[session] || {};
+  const hourStats = pairStats.hours?.[String(hour)] || {};
+
+  return {
+    pairWinRate: Number(pairStats.pairWinRate ?? 50),
+    pairExpectancy: Number(pairStats.pairExpectancy ?? 0),
+    hourWinRate: Number(hourStats.winRate ?? 50),
+    hourExpectancy: Number(hourStats.expectancy ?? 0),
+    sessionWinRate: Number(sessionStats.winRate ?? 50),
+    sessionExpectancy: Number(sessionStats.expectancy ?? 0),
+    last20WinRate: Number(pairStats.last20WinRate ?? 50),
+    sameDirectionWinRate: Number(dirStats.winRate ?? 50),
+    sameDirectionExpectancy: Number(dirStats.expectancy ?? 0),
+    archiveConfidence: Number(pairStats.archiveConfidence ?? 0)
+  };
 }
 
 export async function scanPair(pair) {
@@ -37,7 +85,6 @@ export async function scanPair(pair) {
 
   try {
     const data = await fetchMarketCandles(pair.symbol, appState.timeframe);
-
     candles = Array.isArray(data.candles) && data.candles.length
       ? normalizeCandles(data.candles)
       : generateFakeCandles(pair.symbol);
@@ -79,7 +126,7 @@ export async function scanPair(pair) {
   const riskScore = clamp(
     70 -
       (pair.symbol === "XAUUSD" ? 8 : 0) -
-      (pair.symbol === "NAS100" ? 10 : 0),
+      (pair.symbol.includes("JPY") ? 2 : 0),
     1,
     99
   );
@@ -92,9 +139,7 @@ export async function scanPair(pair) {
 
   const stopLoss = current - (atr14 || current * 0.002) * 1.4;
   const takeProfit = current + (atr14 || current * 0.002) * 2.6;
-  const rr = Math.abs(
-    (takeProfit - current) / ((current - stopLoss) || 0.00001)
-  );
+  const rr = Math.abs((takeProfit - current) / ((current - stopLoss) || 0.00001));
 
   const scan = {
     pair: pair.symbol,
@@ -177,13 +222,7 @@ export async function scanPair(pair) {
         : "WAIT";
 
   scan.direction = scan.signal === "SELL" ? "sell" : "buy";
-
-  scan.archiveStats = buildArchiveStats({
-    pair: scan.pair,
-    direction: scan.direction,
-    archiveTrades: appState.tradeArchive || [],
-    now: new Date()
-  });
+  scan.archiveStats = getArchiveStatsForScan(scan.pair, scan.direction);
 
   scan.reason =
     scan.mlExplanation || scan.vectorbtExplanation || "Analyse consolidée";
@@ -268,4 +307,4 @@ export function computeConfluenceScore(scan) {
               : "weak",
     blocked: score < 55
   };
-}
+    }
