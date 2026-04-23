@@ -1,6 +1,6 @@
 import { PAIRS } from "./config.js";
 import { appState, persistState, els } from "./state.js";
-import { setupChart } from "./chart.js";
+import { setupChart } from "./chart.js?v=2";
 import { fetchCorrelationMatrix, refreshAiDecision } from "./api.js";
 import { scanPair, computeHedgeScore, isEliteTrade, computeConfluenceScore } from "./scan.js";
 import {
