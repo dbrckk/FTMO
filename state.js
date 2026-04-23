@@ -1,5 +1,3 @@
-// state.js
-
 import { STORAGE_KEY } from "./config.js";
 
 export const els = {};
@@ -12,6 +10,7 @@ export const defaultState = {
   selectedPair: "EURUSD",
   scans: [],
   trades: [],
+  tradeArchive: [],
   watchlist: [],
   journal: null,
   mlScoreCache: {},
@@ -40,7 +39,8 @@ export function loadState() {
       ftmo: {
         ...structuredClone(defaultState).ftmo,
         ...(saved.ftmo || {})
-      }
+      },
+      tradeArchive: Array.isArray(saved.tradeArchive) ? saved.tradeArchive : []
     };
   } catch {
     return structuredClone(defaultState);
@@ -54,4 +54,4 @@ export function persistState() {
 export function setChartInstance(nextChart, nextCandleSeries) {
   chart = nextChart;
   candleSeries = nextCandleSeries;
-      }
+}
