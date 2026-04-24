@@ -1,20 +1,21 @@
 import { appState, persistState } from "./state.js";
-import { pushClosedTradeToArchive } from "./archive-engine.js";
+import { saveClosedPaperTrade } from "./api.js";
 
-export function runPaperEngine(scans = []) {
+export async function runPaperEngine(scans = []) {
   if (!appState.paperEngine?.enabled) return;
 
-  updateOpenPaperTrades(scans);
+  await updateOpenPaperTrades(scans);
   openNewPaperTrades(scans);
 
   persistState();
 }
 
-function updateOpenPaperTrades(scans) {
+async function updateOpenPaperTrades(scans) {
   if (!Array.isArray(appState.paperTrades)) appState.paperTrades = [];
   if (!Array.isArray(appState.paperArchive)) appState.paperArchive = [];
 
   const stillOpen = [];
+  const closedToPersist = [];
 
   for (const trade of appState.paperTrades) {
     const scan = scans.find((s) => s.pair === trade.pair);
@@ -36,8 +37,7 @@ function updateOpenPaperTrades(scans) {
     if (closeResult.close) {
       const closedTrade = finalizePaperTrade(updated, scan, closeResult);
       appState.paperArchive.push(closedTrade);
-
-      pushClosedTradeToArchive(appState, {
+      appState.tradeArchive.push({
         id: closedTrade.id,
         pair: closedTrade.pair,
         direction: closedTrade.direction,
@@ -48,16 +48,20 @@ function updateOpenPaperTrades(scans) {
         win: closedTrade.win,
         session: closedTrade.session,
         hour: closedTrade.hour,
-        strategyTag: "paper-engine",
+        strategyTag: closedTrade.modelTag || "paper-engine",
         notes: closedTrade.closeReason
       });
+      closedToPersist.push(closedTrade);
     } else {
       stillOpen.push(updated);
     }
   }
 
-  appState.paperTrades = stillOpen.slice(-100);
-  appState.paperArchive = appState.paperArchive.slice(-3000);
+  appState.paperTrades = stillOpen.slice(-200);
+  appState.paperArchive = appState.paperArchive.slice(-4000);
+  appState.tradeArchive = appState.tradeArchive.slice(-4000);
+
+  await Promise.all(closedToPersist.map((trade) => saveClosedPaperTrade(trade)));
 }
 
 function openNewPaperTrades(scans) {
@@ -69,27 +73,36 @@ function openNewPaperTrades(scans) {
 
   const openPairs = new Set(appState.paperTrades.map((t) => t.pair));
 
-  const candidates = [...scans]
+  const allowedCandidates = [...scans]
     .filter((scan) => scan.tradeAllowed)
     .filter((scan) => Number(scan.ultraScore || 0) >= minUltraScore)
     .filter((scan) => scan.signal === "BUY" || scan.signal === "SELL")
     .filter((scan) => !openPairs.has(scan.pair))
     .sort((a, b) => Number(b.ultraScore || 0) - Number(a.ultraScore || 0));
 
-  for (const scan of candidates) {
+  for (const scan of allowedCandidates) {
     if (appState.paperTrades.length >= maxOpenTrades) break;
+    appState.paperTrades.push(createPaperTradeFromScan(scan, false));
+  }
 
-    const trade = createPaperTradeFromScan(scan);
-    appState.paperTrades.push(trade);
+  if (appState.paperTrades.length === 0) {
+    const exploration = [...scans]
+      .filter((scan) => !openPairs.has(scan.pair))
+      .sort((a, b) => Number(b.ultraScore || b.finalScore || 0) - Number(a.ultraScore || a.finalScore || 0))[0];
+
+    if (exploration) {
+      appState.paperTrades.push(createPaperTradeFromScan(exploration, true));
+    }
   }
 }
 
-function createPaperTradeFromScan(scan) {
+function createPaperTradeFromScan(scan, explorationMode = false) {
   const now = new Date();
 
   return {
     id: `paper_${Date.now()}_${scan.pair}_${Math.random().toString(36).slice(2, 8)}`,
     pair: scan.pair,
+    timeframe: scan.timeframe,
     direction: scan.signal === "SELL" ? "sell" : "buy",
     entry: Number(scan.current || 0),
     stopLoss: Number(scan.stopLoss || 0),
@@ -100,13 +113,18 @@ function createPaperTradeFromScan(scan) {
     status: "open",
     entryUltraScore: Number(scan.ultraScore || 0),
     entryFinalScore: Number(scan.finalScore || 0),
+    entryMlScore: Number(scan.mlScore || 0),
+    entryVectorbtScore: Number(scan.vectorbtScore || 0),
+    entryArchiveEdgeScore: Number(scan.archiveEdgeScore || 0),
     rr: Number(scan.rr || 0),
     barsHeld: 0,
     maxBarsHold: Number(appState.paperEngine?.maxBarsHold || 12),
-    riskPercent: Number(appState.paperEngine?.riskPerTrade || 0.25),
+    riskPercent: explorationMode
+      ? Number(appState.paperEngine?.explorationRiskPerTrade || 0.10)
+      : Number(appState.paperEngine?.riskPerTrade || 0.25),
     session: inferSession(now),
     hour: inferHour(now),
-    modelTag: scan.tradeStatus || "PAPER",
+    modelTag: explorationMode ? "EXPLORATION" : (scan.tradeStatus || "PAPER"),
     closeReason: ""
   };
 }
@@ -172,7 +190,7 @@ function finalizePaperTrade(trade, scan, closeResult) {
     currentPrice: exitPrice,
     pnlR: Number(pnlR.toFixed(3)),
     pnl: Number(pnl.toFixed(2)),
-    win: pnlR > 0,
+    win: pnlR > 0 ? 1 : 0,
     closeReason: closeResult.reason,
     finalUltraScore: Number(scan.ultraScore || trade.entryUltraScore || 0),
     finalSignal: scan.signal || "WAIT"
@@ -236,7 +254,6 @@ export function computePaperAnalytics() {
 
 function inferSession(date = new Date()) {
   const hour = inferHour(date);
-
   const london = hour >= 9 && hour < 18;
   const newYork = hour >= 14 && hour < 23;
   const overlap = london && newYork;
@@ -257,4 +274,4 @@ function inferHour(date = new Date()) {
       timeZone: "Europe/Paris"
     })
   );
-        }
+  }
