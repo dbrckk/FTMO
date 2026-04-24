@@ -10,25 +10,30 @@ export const defaultState = {
   selectedPair: "EURUSD",
   scans: [],
   trades: [],
+  watchlist: [],
+  activeTab: "dashboard",
+
+  correlationMatrix: null,
+  portfolioRiskData: null,
+
+  mlScoreCache: {},
+  vectorbtCache: {},
+  aiDecisionCache: {},
+
+  archiveStatsCache: {},
+  archiveStatsUpdatedAt: null,
+
   tradeArchive: [],
   paperTrades: [],
   paperArchive: [],
-  archiveStatsCache: {},
-  archiveStatsUpdatedAt: null,
-  activeTab: "dashboard",
-  watchlist: [],
-  journal: null,
-  mlScoreCache: {},
-  aiDecisionCache: {},
-  vectorbtCache: {},
-  correlationMatrix: null,
-  portfolioRiskData: null,
+
   ftmo: {
     accountSize: 10000,
     requestedRiskPercent: 1,
     dailyLossLimitPercent: 5,
     closedTodayPnl: 0
   },
+
   paperEngine: {
     enabled: true,
     autoRun: true,
@@ -46,11 +51,23 @@ export let appState = loadState();
 export function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (!saved) return structuredClone(defaultState);
+    if (!saved) {
+      return structuredClone(defaultState);
+    }
 
     return {
       ...structuredClone(defaultState),
       ...saved,
+      scans: Array.isArray(saved.scans) ? saved.scans : [],
+      trades: Array.isArray(saved.trades) ? saved.trades : [],
+      watchlist: Array.isArray(saved.watchlist) ? saved.watchlist : [],
+      tradeArchive: Array.isArray(saved.tradeArchive) ? saved.tradeArchive : [],
+      paperTrades: Array.isArray(saved.paperTrades) ? saved.paperTrades : [],
+      paperArchive: Array.isArray(saved.paperArchive) ? saved.paperArchive : [],
+      mlScoreCache: saved.mlScoreCache && typeof saved.mlScoreCache === "object" ? saved.mlScoreCache : {},
+      vectorbtCache: saved.vectorbtCache && typeof saved.vectorbtCache === "object" ? saved.vectorbtCache : {},
+      aiDecisionCache: saved.aiDecisionCache && typeof saved.aiDecisionCache === "object" ? saved.aiDecisionCache : {},
+      archiveStatsCache: saved.archiveStatsCache && typeof saved.archiveStatsCache === "object" ? saved.archiveStatsCache : {},
       ftmo: {
         ...structuredClone(defaultState).ftmo,
         ...(saved.ftmo || {})
@@ -58,13 +75,7 @@ export function loadState() {
       paperEngine: {
         ...structuredClone(defaultState).paperEngine,
         ...(saved.paperEngine || {})
-      },
-      tradeArchive: Array.isArray(saved.tradeArchive) ? saved.tradeArchive : [],
-      paperTrades: Array.isArray(saved.paperTrades) ? saved.paperTrades : [],
-      paperArchive: Array.isArray(saved.paperArchive) ? saved.paperArchive : [],
-      archiveStatsCache: saved.archiveStatsCache && typeof saved.archiveStatsCache === "object"
-        ? saved.archiveStatsCache
-        : {}
+      }
     };
   } catch {
     return structuredClone(defaultState);
@@ -78,4 +89,4 @@ export function persistState() {
 export function setChartInstance(nextChart, nextCandleSeries) {
   chart = nextChart;
   candleSeries = nextCandleSeries;
-}
+                                  }
