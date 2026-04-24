@@ -4,7 +4,8 @@ import { setupChart } from "./chart.js";
 import {
   fetchCorrelationMatrix,
   refreshAiDecision,
-  fetchArchiveStatsBatch
+  fetchArchiveStatsBatch,
+  fetchServerPaperSnapshot
 } from "./api.js";
 import {
   scanPair,
@@ -107,7 +108,9 @@ function cacheEls() {
     "paperOpenTrades",
     "paperStats",
     "paperPairStats",
-    "paperRecentTrades"
+    "paperRecentTrades",
+    "paperOpenKpi",
+    "paperServerRuns"
   ].forEach((id) => {
     els[id] = document.getElementById(id) || null;
   });
@@ -140,9 +143,10 @@ function bindEvents() {
     renderTabs();
   });
 
-  document.getElementById("tabPaperBtn")?.addEventListener("click", () => {
+  document.getElementById("tabPaperBtn")?.addEventListener("click", async () => {
     setActiveTab("paper");
     renderTabs();
+    await fetchServerPaperSnapshot();
     renderPaperLab();
   });
 
@@ -158,7 +162,10 @@ export async function refreshAll(force = false) {
   refreshInFlight = true;
 
   try {
-    await fetchArchiveStatsBatch();
+    await Promise.allSettled([
+      fetchArchiveStatsBatch(),
+      fetchServerPaperSnapshot()
+    ]);
 
     const scans = await Promise.all(PAIRS.map((pair) => scanPair(pair)));
 
@@ -177,6 +184,7 @@ export async function refreshAll(force = false) {
 
         const bConf = Number(b.confluence?.score || 0);
         const aConf = Number(a.confluence?.score || 0);
+
         if (bConf !== aConf) return bConf - aConf;
 
         return Number(b.finalScore || 0) - Number(a.finalScore || 0);
@@ -184,7 +192,7 @@ export async function refreshAll(force = false) {
 
     if (
       !appState.selectedPair ||
-      !appState.scans.find((s) => s.pair === appState.selectedPair)
+      !appState.scans.find((scan) => scan.pair === appState.selectedPair)
     ) {
       appState.selectedPair = appState.scans[0]?.pair || "EURUSD";
     }
@@ -192,6 +200,7 @@ export async function refreshAll(force = false) {
     await fetchCorrelationMatrix();
     await refreshAiDecision(force, renderSelectedPair);
     await runPaperEngine(appState.scans);
+    await fetchServerPaperSnapshot();
 
     renderOverview();
     renderPairList(refreshAiDecision);
