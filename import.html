@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FTMO EDGE AI - Import CSV</title>
+  <style>
+    :root {
+      --bg: #071018;
+      --panel: rgba(13, 24, 36, 0.92);
+      --border: rgba(255,255,255,0.08);
+      --text: #edf4ff;
+      --muted: #92a4bb;
+      --accent: #38bdf8;
+      --green: #22c55e;
+      --red: #ef4444;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      background:
+        radial-gradient(circle at top right, rgba(56,189,248,0.08), transparent 22%),
+        linear-gradient(180deg, #071018 0%, #09131c 100%);
+      color: var(--text);
+      font-family: Inter, Arial, sans-serif;
+    }
+
+    .wrap {
+      max-width: 920px;
+      margin: 0 auto;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 18px;
+      margin-bottom: 18px;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 28px; margin-bottom: 8px; }
+    p { color: var(--muted); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    label {
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    input, select, button, textarea {
+      font: inherit;
+    }
+
+    input[type="file"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 12px 13px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+    }
+
+    button {
+      border: 0;
+      cursor: pointer;
+      padding: 12px 16px;
+      border-radius: 12px;
+      color: white;
+      background: linear-gradient(180deg, rgba(56,189,248,0.30), rgba(56,189,248,0.16));
+      border: 1px solid rgba(56,189,248,0.30);
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .muted { color: var(--muted); }
+    .good { color: var(--green); }
+    .bad { color: var(--red); }
+
+    .box {
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+      border-radius: 14px;
+      padding: 14px;
+      white-space: pre-wrap;
+      line-height: 1.55;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .stat {
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+      border-radius: 14px;
+      padding: 12px;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 6px;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 800;
+    }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 8px 0 18px;
+    }
+
+    .small {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    @media (max-width: 760px) {
+      .grid, .stats {
+        grid-template-columns: 1fr;
+      }
+
+      body {
+        padding: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel">
+      <h1>Import CSV Dukascopy → D1</h1>
+      <p>
+        Depuis ton téléphone : choisis la pair, le timeframe, puis envoie le CSV Dukascopy.
+        Le fichier sera importé directement dans <strong>market_candles</strong>.
+      </p>
+    </div>
+
+    <div class="panel">
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-label">État API</div>
+          <div id="apiStatus" class="stat-value">-</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Base</div>
+          <div id="dbStatus" class="stat-value">-</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Pairs</div>
+          <div id="pairsCount" class="stat-value">-</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Rows total</div>
+          <div id="rowsCount" class="stat-value">-</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <form id="importForm">
+        <div class="grid">
+          <div class="field">
+            <label for="pair">Pair</label>
+            <select id="pair" name="pair" required>
+              <option value="EURUSD">EURUSD</option>
+              <option value="GBPUSD">GBPUSD</option>
+              <option value="USDJPY">USDJPY</option>
+              <option value="USDCHF">USDCHF</option>
+              <option value="USDCAD">USDCAD</option>
+              <option value="AUDUSD">AUDUSD</option>
+              <option value="NZDUSD">NZDUSD</option>
+              <option value="EURGBP">EURGBP</option>
+              <option value="EURJPY">EURJPY</option>
+              <option value="EURCHF">EURCHF</option>
+              <option value="EURCAD">EURCAD</option>
+              <option value="EURAUD">EURAUD</option>
+              <option value="EURNZD">EURNZD</option>
+              <option value="GBPJPY">GBPJPY</option>
+              <option value="GBPCHF">GBPCHF</option>
+              <option value="GBPCAD">GBPCAD</option>
+              <option value="GBPAUD">GBPAUD</option>
+              <option value="GBPNZD">GBPNZD</option>
+              <option value="AUDJPY">AUDJPY</option>
+              <option value="AUDCAD">AUDCAD</option>
+              <option value="AUDCHF">AUDCHF</option>
+              <option value="AUDNZD">AUDNZD</option>
+              <option value="NZDJPY">NZDJPY</option>
+              <option value="NZDCAD">NZDCAD</option>
+              <option value="XAUUSD">XAUUSD</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="timeframe">Timeframe</label>
+            <select id="timeframe" name="timeframe" required>
+              <option value="M5">M5</option>
+              <option value="M15" selected>M15</option>
+              <option value="H1">H1</option>
+              <option value="H4">H4</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="file">Fichier CSV Dukascopy</label>
+          <input id="file" name="file" type="file" accept=".csv,.txt" required />
+        </div>
+
+        <div class="checkbox-row">
+          <input id="replaceExisting" name="replaceExisting" type="checkbox" />
+          <label for="replaceExisting" style="margin:0; text-transform:none; letter-spacing:normal; color:var(--text); font-size:14px;">
+            Supprimer les anciennes bougies de cette pair/timeframe avant import
+          </label>
+        </div>
+
+        <div class="row">
+          <button id="submitBtn" type="submit">Importer dans D1</button>
+          <button id="refreshBtn" type="button">Rafraîchir état</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h3 style="margin-bottom:10px;">Format accepté</h3>
+      <div class="small">
+        Le parser accepte en général :
+        <br>• `Date, Time, Open, High, Low, Close`
+        <br>• `Date Time, Open, High, Low, Close`
+        <br>• séparateur `,` ou `;`
+        <br>• dates du type `2024-01-31`, `31-01-2024`, `20240131`
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3 style="margin-bottom:10px;">Résultat</h3>
+      <div id="resultBox" class="box">Aucune action pour le moment.</div>
+    </div>
+
+    <div class="panel">
+      <h3 style="margin-bottom:10px;">Résumé par pair</h3>
+      <div id="summaryBox" class="box">Chargement...</div>
+    </div>
+  </div>
+
+  <script>
+    const apiStatus = document.getElementById("apiStatus");
+    const dbStatus = document.getElementById("dbStatus");
+    const pairsCount = document.getElementById("pairsCount");
+    const rowsCount = document.getElementById("rowsCount");
+    const resultBox = document.getElementById("resultBox");
+    const summaryBox = document.getElementById("summaryBox");
+    const form = document.getElementById("importForm");
+    const submitBtn = document.getElementById("submitBtn");
+    const refreshBtn = document.getElementById("refreshBtn");
+
+    refreshBtn.addEventListener("click", loadStatus);
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const file = document.getElementById("file").files[0];
+      const pair = document.getElementById("pair").value;
+      const timeframe = document.getElementById("timeframe").value;
+      const replaceExisting = document.getElementById("replaceExisting").checked;
+
+      if (!file) {
+        setResult("Choisis un fichier CSV.", true);
+        return;
+      }
+
+      submitBtn.disabled = true;
+      setResult("Import en cours...");
+
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("pair", pair);
+        fd.append("timeframe", timeframe);
+        fd.append("replaceExisting", replaceExisting ? "1" : "0");
+
+        const res = await fetch("/api/import-market-csv", {
+          method: "POST",
+          body: fd
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || `HTTP ${res.status}`);
+        }
+
+        setResult(
+`Import réussi
+Pair: ${data.pair}
+Timeframe: ${data.timeframe}
+Rows lues: ${data.rowsParsed}
+Rows importées: ${data.rowsImported}
+Rows ignorées: ${data.rowsSkipped}
+Mode remplacement: ${data.replaceExisting ? "oui" : "non"}
+Source: ${data.source || "dukascopy"}`, false
+        );
+
+        await loadStatus();
+      } catch (err) {
+        setResult(`Erreur: ${err.message || err}`, true);
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
+    function setResult(text, isError = false) {
+      resultBox.textContent = text;
+      resultBox.className = "box " + (isError ? "bad" : "good");
+    }
+
+    async function loadStatus() {
+      try {
+        const res = await fetch("/api/import-market-csv");
+        const data = await res.json();
+
+        apiStatus.textContent = data.ok ? "OK" : "ERR";
+        dbStatus.textContent = data.dbBound ? "D1 OK" : "NO DB";
+        pairsCount.textContent = String(data.totalPairs ?? 0);
+        rowsCount.textContent = String(data.totalRows ?? 0);
+
+        if (Array.isArray(data.summary) && data.summary.length) {
+          summaryBox.textContent = data.summary
+            .map((row) => `${row.pair} ${row.timeframe} → ${row.rows} rows`)
+            .join("\n");
+        } else {
+          summaryBox.textContent = "Aucune donnée importée pour le moment.";
+        }
+      } catch (err) {
+        apiStatus.textContent = "ERR";
+        dbStatus.textContent = "ERR";
+        summaryBox.textContent = `Erreur chargement état: ${err.message || err}`;
+      }
+    }
+
+    loadStatus();
+  </script>
+</body>
+  </html>
