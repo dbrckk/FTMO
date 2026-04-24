@@ -1,6 +1,6 @@
 // render.js
 
-import { appState, els } from "./state.js";
+import { appState, els, persistState } from "./state.js";
 import { setText, setValue, metricCard, formatPrice } from "./utils.js";
 import { computeDynamicRiskPercent, computePositionSizing } from "./trades.js";
 import { updateChart } from "./chart.js";
@@ -27,18 +27,25 @@ export function renderTabs() {
 }
 
 export function renderOverview() {
-  const best = appState.scans[0];
-  if (!best) return;
+  const bestAllowed = [...(appState.scans || [])]
+    .filter((scan) => scan.tradeAllowed)
+    .sort((a, b) => Number(b.ultraScore || b.finalScore || 0) - Number(a.ultraScore || a.finalScore || 0))[0];
 
-  const allowed = appState.scans.filter((s) => s.tradeAllowed).length;
-  const blocked = appState.scans.length - allowed;
+  const bestBlocked = [...(appState.scans || [])]
+    .filter((scan) => !scan.tradeAllowed)
+    .sort((a, b) => Number(b.ultraScore || b.finalScore || 0) - Number(a.ultraScore || a.finalScore || 0))[0];
 
-  setText("topPairLabel", best.pair);
-  setText("topPairReason", best.tradeReason || best.reason || best.confluence?.label || "--");
-  setText("bestScore", String(Math.round(best.ultraScore || best.finalScore || 0)));
+  const best = bestAllowed || bestBlocked;
+
+  const allowed = (appState.scans || []).filter((s) => s.tradeAllowed).length;
+  const blocked = (appState.scans || []).length - allowed;
+
+  setText("topPairLabel", best?.pair || "-");
+  setText("topPairReason", best?.tradeReason || best?.reason || best?.confluence?.label || "Aucune analyse disponible.");
+  setText("bestScore", best ? String(Math.round(best.ultraScore || best.finalScore || 0)) : "-");
   setText("allowedCount", String(allowed));
   setText("blockedCount", String(blocked));
-  setText("globalExposure", `${appState.trades.length}`);
+  setText("globalExposure", String((appState.trades || []).length));
 }
 
 export function renderPairList(refreshAiDecision) {
@@ -62,9 +69,11 @@ export function renderPairList(refreshAiDecision) {
 
     row.addEventListener("click", () => {
       appState.selectedPair = scan.pair;
-      localStorage.setItem("ftmo-edge-ai-v4", JSON.stringify(appState));
+      persistState();
       renderSelectedPair();
-      refreshAiDecision(false, renderSelectedPair);
+      if (typeof refreshAiDecision === "function") {
+        refreshAiDecision(false, renderSelectedPair);
+      }
     });
 
     els.pairList.appendChild(row);
@@ -75,15 +84,17 @@ export function renderTopPriorityTrades() {
   const wrap = document.getElementById("topPriorityTrades");
   if (!wrap) return;
 
-  const top = [...appState.scans]
+  const top = [...(appState.scans || [])]
     .filter((scan) => scan.tradeAllowed && Number(scan.ultraScore || 0) >= 68)
     .sort((a, b) => Number(b.ultraScore || 0) - Number(a.ultraScore || 0))
-    .slice(0, 5);
+    .slice(0, 6);
 
   wrap.innerHTML = top.length
     ? top.map((scan) => `
       <div class="top-row">
-        <strong>${scan.pair}</strong> - ULTRA ${Math.round(scan.ultraScore || 0)} - ${scan.tradeStatus}
+        <strong>${scan.pair}</strong>
+        <span>ULTRA ${Math.round(scan.ultraScore || 0)}</span>
+        <span>${scan.tradeStatus || "VALID"}</span>
       </div>
     `).join("")
     : `<div class="muted">Aucun trade premium.</div>`;
@@ -93,15 +104,17 @@ export function renderTopBlockedTrades() {
   const wrap = document.getElementById("topBlockedTrades");
   if (!wrap) return;
 
-  const blocked = [...appState.scans]
+  const blocked = [...(appState.scans || [])]
     .filter((scan) => !scan.tradeAllowed)
-    .sort((a, b) => Number(a.ultraScore || 0) - Number(b.ultraScore || 0))
-    .slice(0, 5);
+    .sort((a, b) => Number(b.ultraScore || b.finalScore || 0) - Number(a.ultraScore || a.finalScore || 0))
+    .slice(0, 6);
 
   wrap.innerHTML = blocked.length
     ? blocked.map((scan) => `
       <div class="top-row blocked">
-        <strong>${scan.pair}</strong> - ULTRA ${Math.round(scan.ultraScore || 0)} - ${scan.tradeReason || "Blocked"}
+        <strong>${scan.pair}</strong>
+        <span>ULTRA ${Math.round(scan.ultraScore || scan.finalScore || 0)}</span>
+        <span>${scan.tradeReason || "Blocked"}</span>
       </div>
     `).join("")
     : `<div class="muted">Aucun trade bloqué majeur.</div>`;
@@ -128,7 +141,7 @@ export function renderCorrelationMatrix() {
   }
 
   els.correlationSummary.innerHTML = alerts.length
-    ? `<strong>High correlation pairs detected:</strong><br>${alerts.slice(0, 6).join("<br>")}`
+    ? `<strong>High correlation pairs detected:</strong><br>${alerts.slice(0, 8).join("<br>")}`
     : `No major correlation concentration detected.`;
 
   els.correlationMatrixBox.innerHTML = `
@@ -144,9 +157,10 @@ export function renderCorrelationMatrix() {
           ${data.pairs.map((rowPair, i) => `
             <tr>
               <td style="padding:8px; font-weight:700;">${rowPair}</td>
-              ${data.matrix[i].map((value) => {
+              ${data.matrix[i].map((value, j) => {
                 const corr = Number(value || 0);
                 const bg =
+                  i === j ? "rgba(255,255,255,0.08)" :
                   Math.abs(corr) >= 0.8 ? "rgba(255,102,127,0.18)" :
                   Math.abs(corr) >= 0.6 ? "rgba(255,193,77,0.14)" :
                   "rgba(255,255,255,0.03)";
@@ -164,7 +178,7 @@ export function renderSelectedPair() {
   const pair = appState.selectedPair;
   if (!pair) return;
 
-  const scan = appState.scans.find((s) => s.pair === pair);
+  const scan = (appState.scans || []).find((s) => s.pair === pair);
   if (!scan) return;
 
   const ai = appState.aiDecisionCache?.[pair] || {
@@ -186,6 +200,7 @@ export function renderSelectedPair() {
   setText("decisionConfidence", `${Math.round(ai.confidence || scan.ultraScore || scan.finalScore || 0)}%`);
   setText("decisionAction", ai.action || (scan.tradeAllowed ? "EXECUTE" : "WAIT"));
   setText("decisionWindow", ai.window || "Intraday");
+  setText("decisionActionMirror", ai.action || (scan.tradeAllowed ? "EXECUTE" : "WAIT"));
 
   if (els.summaryMetrics) {
     els.summaryMetrics.innerHTML = [
@@ -216,7 +231,7 @@ export function renderSelectedPair() {
   const riskPct = computeDynamicRiskPercent(scan);
   const sizing = computePositionSizing(
     scan,
-    Number(document.getElementById("tradeCapital")?.value || appState.ftmo.accountSize || 10000)
+    Number(document.getElementById("tradeCapital")?.value || appState.ftmo?.accountSize || 10000)
   );
 
   if (els.tradeSuggestionBox) {
@@ -232,6 +247,10 @@ export function renderSelectedPair() {
       Session: ${Math.round(scan.sessionScore || 0)}<br>
       Execution: ${Math.round(scan.executionScore || 0)}<br>
       Archive Edge: ${Math.round(scan.archiveEdgeScore || 0)}<br>
+      Archive WR: ${Math.round(scan.archiveStats?.pairWinRate || 50)}%<br>
+      Archive Expectancy: ${(Number(scan.archiveStats?.pairExpectancy || 0)).toFixed(2)}R<br>
+      Same Direction WR: ${Math.round(scan.archiveStats?.sameDirectionWinRate || 50)}%<br>
+      Same Direction Exp: ${(Number(scan.archiveStats?.sameDirectionExpectancy || 0)).toFixed(2)}R<br>
       Risk conseillé: ${riskPct}%<br>
       Position size: ${sizing.quantity}<br>
       Profile: ${sizing.leverageLabel}<br>
@@ -263,7 +282,7 @@ export function renderTrades() {
 
   tradeList.innerHTML = "";
 
-  appState.trades.forEach((trade) => {
+  (appState.trades || []).forEach((trade) => {
     const row = document.createElement("div");
     row.className = "trade-row";
     row.innerHTML = `
@@ -276,7 +295,7 @@ export function renderTrades() {
     tradeList.appendChild(row);
   });
 
-  if (tradeStats) tradeStats.textContent = String(appState.trades.length);
+  if (tradeStats) tradeStats.textContent = String((appState.trades || []).length);
 }
 
 export function renderWatchlist() {
@@ -286,14 +305,14 @@ export function renderWatchlist() {
 
   watch.innerHTML = "";
 
-  appState.watchlist.forEach((pair) => {
+  (appState.watchlist || []).forEach((pair) => {
     const div = document.createElement("div");
     div.className = "watch-item";
     div.textContent = pair;
     watch.appendChild(div);
   });
 
-  if (count) count.textContent = String(appState.watchlist.length);
+  if (count) count.textContent = String((appState.watchlist || []).length);
 }
 
 export function renderFtmoRisk() {
@@ -311,15 +330,17 @@ export function renderFtmoRisk() {
     ? (remainingDaily / accountSize) * 100
     : 0;
 
+  const text = maxRisk >= requested ? "ALLOWED" : "BLOCKED";
+  const reason = maxRisk >= requested
+    ? "Risque encore autorisé."
+    : "Le risque demandé dépasse la marge disponible.";
+
   setText("ftmoDailyRemaining", `${remainingDaily.toFixed(2)}$`);
   setText("ftmoMaxAdditionalRisk", `${maxRisk.toFixed(2)}%`);
-  setText("ftmoDecisionText", maxRisk >= requested ? "ALLOWED" : "BLOCKED");
-  setText(
-    "ftmoDecisionReason",
-    maxRisk >= requested
-      ? "Risque encore autorisé."
-      : "Le risque demandé dépasse la marge disponible."
-  );
+  setText("ftmoDecisionText", text);
+  setText("ftmoDecisionReason", reason);
+  setText("ftmoDecisionTextSecondary", text);
+  setText("ftmoDecisionReasonSecondary", reason);
 
   const badge = document.getElementById("ftmoDecisionBadge");
   if (badge) badge.textContent = maxRisk >= requested ? "OK" : "BLOCK";
@@ -352,7 +373,7 @@ export function renderPaperLab() {
 
   if (openBox) {
     openBox.innerHTML = (appState.paperTrades || []).length
-      ? appState.paperTrades.map((trade) => `
+      ? (appState.paperTrades || []).map((trade) => `
         <div class="top-row">
           <strong>${trade.pair}</strong>
           <span>${trade.direction}</span>
@@ -385,7 +406,7 @@ export function renderPaperLab() {
   }
 
   if (pairBox) {
-    pairBox.innerHTML = analytics.pairStats.length
+    pairBox.innerHTML = (analytics.pairStats || []).length
       ? analytics.pairStats.map((row) => `
         <div class="top-row">
           <strong>${row.pair}</strong>
@@ -398,7 +419,7 @@ export function renderPaperLab() {
   }
 
   if (recentBox) {
-    recentBox.innerHTML = analytics.recentTrades.length
+    recentBox.innerHTML = (analytics.recentTrades || []).length
       ? analytics.recentTrades.map((trade) => `
         <div class="top-row ${trade.win ? "ok" : "blocked"}">
           <strong>${trade.pair}</strong>
@@ -409,4 +430,4 @@ export function renderPaperLab() {
       `).join("")
       : `<div class="muted">No recent paper trades.</div>`;
   }
-                 }
+    }
