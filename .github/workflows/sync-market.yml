@@ -1,0 +1,16 @@
+name: Sync market candles to D1
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+
+jobs:
+  sync-market:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Cloudflare sync endpoint
+        run: |
+          curl -sS -X POST "${{ secrets.SITE_URL }}/api/sync-market" \
+            -H "Authorization: Bearer ${{ secrets.SYNC_SECRET }}" \
+            -H "Accept: application/json"
