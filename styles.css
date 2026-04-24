@@ -266,7 +266,7 @@ button:hover {
 }
 
 .top-row {
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr auto auto auto auto;
   margin-bottom: 8px;
 }
 
@@ -404,7 +404,8 @@ button:hover {
 #paperEngineStatus,
 #paperOpenTrades,
 #paperPairStats,
-#paperRecentTrades {
+#paperRecentTrades,
+#paperServerRuns {
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid var(--border);
   border-radius: 18px;
@@ -514,6 +515,10 @@ textarea {
   #paperStats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .top-row {
+    grid-template-columns: 1fr auto auto;
+  }
 }
 
 @media (max-width: 720px) {
@@ -597,4 +602,4 @@ textarea {
   .pair-row > div:nth-child(5) {
     font-size: 12px;
   }
-  }
+}
