@@ -12,7 +12,7 @@
     <header class="header">
       <div class="brand">
         <h1>FTMO Edge AI</h1>
-        <p>D1 archive-first scanner · Gold optimized · Paper learning engine</p>
+        <p>D1 archive-first scanner · Gold optimized · Server paper engine</p>
       </div>
 
       <div class="header-actions">
@@ -277,14 +277,14 @@
       <section class="kpi-grid">
         <div class="kpi-card">
           <div class="kpi-label">Paper engine</div>
-          <div class="kpi-value">ON</div>
-          <div class="kpi-hint">Auto learning mode</div>
+          <div class="kpi-value">AUTO</div>
+          <div class="kpi-hint">Server + browser</div>
         </div>
 
         <div class="kpi-card">
           <div class="kpi-label">Open</div>
           <div id="paperOpenKpi" class="kpi-value">-</div>
-          <div class="kpi-hint">Paper positions</div>
+          <div class="kpi-hint">Server paper positions</div>
         </div>
 
         <div class="kpi-card">
@@ -295,7 +295,7 @@
 
         <div class="kpi-card">
           <div class="kpi-label">Learning</div>
-          <div class="kpi-value">AUTO</div>
+          <div class="kpi-value">LIVE</div>
           <div class="kpi-hint">Archive stats feedback</div>
         </div>
       </section>
@@ -303,7 +303,7 @@
       <section class="panel">
         <div class="panel-title">
           <h2>Paper Lab</h2>
-          <button id="paperEngineToggleBtn" type="button">Paper Engine ON</button>
+          <button id="paperEngineToggleBtn" type="button">Browser Paper ON</button>
         </div>
         <div id="paperEngineStatus"></div>
       </section>
@@ -311,7 +311,7 @@
       <div class="paper-grid">
         <section class="panel">
           <div class="panel-title">
-            <h3>Open paper trades</h3>
+            <h3>Server open trades</h3>
           </div>
           <div id="paperOpenTrades"></div>
         </section>
@@ -332,9 +332,16 @@
 
         <section class="panel">
           <div class="panel-title">
-            <h3>Recent trades</h3>
+            <h3>Recent closed trades</h3>
           </div>
           <div id="paperRecentTrades"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-title">
+            <h3>Server runs</h3>
+          </div>
+          <div id="paperServerRuns"></div>
         </section>
       </div>
     </main>
@@ -342,4 +349,4 @@
 
   <script type="module" src="./app.js"></script>
 </body>
-  </html>
+            </html>
