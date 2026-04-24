@@ -407,7 +407,7 @@ Source: ${data.source || "dukascopy"}`, false
 
         await loadStatus();
       } catch (err) {
-        setResult(\`Erreur: \${err.message || err}\`, true);
+        setResult(`Erreur: ${err.message || err}`, true);
       } finally {
         submitBtn.disabled = false;
       }
@@ -440,19 +440,19 @@ Source: ${data.source || "dukascopy"}`, false
 
         if (Array.isArray(data.summary) && data.summary.length) {
           summaryBox.textContent = data.summary
-            .map((row) => \`\${row.pair} \${row.timeframe} → \${row.rows} rows\`)
-            .join("\\n");
+            .map((row) => `${row.pair} ${row.timeframe} → ${row.rows} rows`)
+            .join("\n");
         } else {
           summaryBox.textContent = "Aucune donnée importée pour le moment.";
         }
       } catch (err) {
         apiStatus.textContent = "ERR";
         dbStatus.textContent = "ERR";
-        summaryBox.textContent = \`Erreur chargement état: \${err.message || err}\`;
+        summaryBox.textContent = `Erreur chargement état: ${err.message || err}`;
       }
     }
 
     loadStatus();
   </script>
 </body>
-            </html>
+  </html>
