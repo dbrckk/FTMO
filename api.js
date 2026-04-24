@@ -25,7 +25,7 @@ async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 6500) {
 export async function fetchArchiveStatsBatch() {
   try {
     const url = new URL(API.archiveStats, window.location.origin);
-    url.searchParams.set("timeframe", appState.timeframe);
+    url.searchParams.set("timeframe", appState.timeframe || "M15");
 
     const data = await fetchJsonWithTimeout(
       url.toString(),
@@ -281,13 +281,18 @@ export async function refreshAiDecision(force = false, renderSelectedPair) {
             pair: scan.pair,
             timeframe: appState.timeframe,
             finalScore: scan.finalScore,
+            ultraScore: scan.ultraScore,
             trendScore: scan.trendScore,
             timingScore: scan.timingScore,
             riskScore: scan.riskScore,
             contextScore: scan.contextScore,
             mlScore: scan.mlScore,
             vectorbtScore: scan.vectorbtScore,
-            signal: scan.finalScore >= 70 ? "BUY" : scan.finalScore <= 35 ? "SELL" : "WAIT"
+            archiveEdgeScore: scan.archiveEdgeScore,
+            sessionScore: scan.sessionScore,
+            executionScore: scan.executionScore,
+            tradeStatus: scan.tradeStatus,
+            signal: scan.signal
           }
         })
       },
@@ -298,17 +303,17 @@ export async function refreshAiDecision(force = false, renderSelectedPair) {
       decision: sanitizeDecision(data.decision),
       title: data.title || "Décision IA",
       reason: data.reason || "Décision générée.",
-      confidence: Number(data.confidence || scan.finalScore || 0),
-      action: data.action || "WAIT",
+      confidence: Number(data.confidence || scan.ultraScore || scan.finalScore || 0),
+      action: data.action || (scan.tradeAllowed ? "EXECUTE" : "WAIT"),
       window: data.window || "intraday"
     };
   } catch {
     appState.aiDecisionCache[scan.pair] = {
-      decision: scan.finalScore >= 70 ? "TRADE" : "WAIT",
-      title: "Fallback IA",
-      reason: "Décision locale utilisée.",
-      confidence: Number(scan.finalScore || 0),
-      action: scan.finalScore >= 70 ? "EXECUTE" : "WAIT",
+      decision: scan.tradeAllowed ? "TRADE" : "WAIT",
+      title: scan.tradeStatus || "Fallback IA",
+      reason: scan.tradeReason || "Décision locale utilisée.",
+      confidence: Number(scan.ultraScore || scan.finalScore || 0),
+      action: scan.tradeAllowed ? "EXECUTE" : "WAIT",
       window: "intraday"
     };
   }
@@ -340,7 +345,7 @@ export async function fetchExitSuggestion(scan, ai, targetEl) {
             atr14: scan.atr14,
             macroDanger: ai?.decision === "NO TRADE",
             momentum: scan.momentum,
-            confidence: ai?.confidence || scan.finalScore
+            confidence: ai?.confidence || scan.ultraScore || scan.finalScore
           }
         })
       },
@@ -363,13 +368,52 @@ export async function fetchExitSuggestion(scan, ai, targetEl) {
   }
 }
 
-export function buildJournalContextForPair() {
+export function buildJournalContextForPair(scan) {
+  const pair = scan?.pair || "";
+  const stats = appState.archiveStatsCache?.[pair];
+  if (!stats) {
+    return {
+      pairExpectancy: 0,
+      hourExpectancy: 0,
+      sessionExpectancy: 0,
+      pairWinRate: 0,
+      hourWinRate: 0,
+      sessionWinRate: 0
+    };
+  }
+
+  const now = new Date();
+  const hour = Number(
+    now.toLocaleString("en-GB", {
+      hour: "2-digit",
+      hour12: false,
+      timeZone: "Europe/Paris"
+    })
+  );
+
+  const session = getCurrentSession(hour);
+  const hourStats = stats.hours?.[String(hour)] || {};
+  const sessionStats = stats.sessions?.[session] || {};
+
   return {
-    pairExpectancy: 0,
-    hourExpectancy: 0,
-    sessionExpectancy: 0,
-    pairWinRate: 0,
-    hourWinRate: 0,
-    sessionWinRate: 0
+    pairExpectancy: Number(stats.pairExpectancy ?? 0),
+    hourExpectancy: Number(hourStats.expectancy ?? 0),
+    sessionExpectancy: Number(sessionStats.expectancy ?? 0),
+    pairWinRate: Number(stats.pairWinRate ?? 0),
+    hourWinRate: Number(hourStats.winRate ?? 0),
+    sessionWinRate: Number(sessionStats.winRate ?? 0)
   };
-      }
+}
+
+function getCurrentSession(hour) {
+  const tokyo = hour >= 1 && hour < 10;
+  const london = hour >= 9 && hour < 18;
+  const newYork = hour >= 14 && hour < 23;
+  const overlap = london && newYork;
+
+  if (overlap) return "London+NewYork";
+  if (london) return "London";
+  if (newYork) return "NewYork";
+  if (tokyo) return "Tokyo";
+  return "OffSession";
+}
