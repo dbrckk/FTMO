@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       group:
-        description: "Rotation group number (1-11). Leave empty for auto."
+        description: "Rotation group number 1-11. Leave empty for auto rotation."
         required: false
         default: ""
   schedule:
@@ -13,6 +13,7 @@ on:
 jobs:
   sync-market:
     runs-on: ubuntu-latest
+
     steps:
       - name: Check secrets presence
         run: |
@@ -29,7 +30,7 @@ jobs:
           echo "SITE_URL present"
           echo "SYNC_SECRET present"
 
-      - name: Compute group
+      - name: Compute rotation group
         id: group
         shell: bash
         run: |
@@ -45,7 +46,16 @@ jobs:
           echo "group=$GROUP" >> "$GITHUB_OUTPUT"
           echo "Using group $GROUP"
 
-      - name: Call sync endpoint
+      - name: Call Cloudflare sync endpoint
         run: |
           HTTP_CODE=$(curl -sS \
-            -o
+            -o response.json \
+            -w "%{http_code}" \
+            "${{ secrets.SITE_URL }}/api/sync-market?token=${{ secrets.SYNC_SECRET }}&group=${{ steps.group.outputs.group }}")
+
+          echo "HTTP_CODE=$HTTP_CODE"
+          cat response.json || true
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            exit 1
+          fi
