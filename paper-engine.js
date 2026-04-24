@@ -1,12 +1,18 @@
+import { appState, persistState } from "./state.js";
+import { saveClosedPaperTrade } from "./api.js";
+
 export async function runPaperEngine(scans = []) {
   if (!Array.isArray(scans)) return;
-  if (!appState.paperEngine?.enabled) return;
 
   ensurePaperState();
 
+  if (!appState.paperEngine?.enabled) {
+    persistState();
+    return;
+  }
+
   await updateOpenPaperTrades(scans);
   openNewPaperTrades(scans);
-
   trimPaperState();
   persistState();
 }
@@ -54,7 +60,12 @@ export function computePaperAnalytics() {
       winRate: row.trades ? (row.wins / row.trades) * 100 : 0,
       expectancy: row.trades ? row.pnlR / row.trades : 0
     }))
-    .sort((a, b) => Number(b.expectancy || 0) - Number(a.expectancy || 0));
+    .sort((a, b) => {
+      const bExp = Number(b.expectancy || 0);
+      const aExp = Number(a.expectancy || 0);
+      if (bExp !== aExp) return bExp - aExp;
+      return Number(b.trades || 0) - Number(a.trades || 0);
+    });
 
   return {
     openTradesCount: openTrades.length,
@@ -71,13 +82,11 @@ export function computePaperAnalytics() {
   };
 }
 
-import { appState, persistState } from "./state.js";
-import { saveClosedPaperTrade } from "./api.js";
-
 function ensurePaperState() {
   if (!Array.isArray(appState.paperTrades)) appState.paperTrades = [];
   if (!Array.isArray(appState.paperArchive)) appState.paperArchive = [];
   if (!Array.isArray(appState.tradeArchive)) appState.tradeArchive = [];
+
   if (!appState.paperEngine) {
     appState.paperEngine = {
       enabled: true,
@@ -127,6 +136,7 @@ async function updateOpenPaperTrades(scans) {
 
     if (closeResult.close) {
       const closedTrade = finalizePaperTrade(updated, scan, closeResult);
+
       appState.paperArchive.push(closedTrade);
       appState.tradeArchive.push({
         id: closedTrade.id,
@@ -142,6 +152,7 @@ async function updateOpenPaperTrades(scans) {
         strategyTag: closedTrade.modelTag || "paper-engine",
         notes: closedTrade.closeReason
       });
+
       closedToPersist.push(closedTrade);
     } else {
       stillOpen.push(updated);
@@ -151,7 +162,9 @@ async function updateOpenPaperTrades(scans) {
   appState.paperTrades = stillOpen;
 
   if (closedToPersist.length) {
-    await Promise.allSettled(closedToPersist.map((trade) => saveClosedPaperTrade(trade)));
+    await Promise.allSettled(
+      closedToPersist.map((trade) => saveClosedPaperTrade(trade))
+    );
   }
 }
 
@@ -169,8 +182,8 @@ function openNewPaperTrades(scans) {
     .filter((scan) => scan.signal === "BUY" || scan.signal === "SELL")
     .filter((scan) => !openPairs.has(scan.pair))
     .sort((a, b) => {
-      const aScore = Number(a.ultraScore || a.finalScore || 0);
       const bScore = Number(b.ultraScore || b.finalScore || 0);
+      const aScore = Number(a.ultraScore || a.finalScore || 0);
       if (bScore !== aScore) return bScore - aScore;
       return Number(b.archiveEdgeScore || 0) - Number(a.archiveEdgeScore || 0);
     });
@@ -185,7 +198,11 @@ function openNewPaperTrades(scans) {
     const exploration = [...scans]
       .filter((scan) => !openPairs.has(scan.pair))
       .filter((scan) => Number(scan.ultraScore || scan.finalScore || 0) >= 55)
-      .sort((a, b) => Number(b.ultraScore || b.finalScore || 0) - Number(a.ultraScore || a.finalScore || 0))[0];
+      .sort(
+        (a, b) =>
+          Number(b.ultraScore || b.finalScore || 0) -
+          Number(a.ultraScore || a.finalScore || 0)
+      )[0];
 
     if (exploration) {
       appState.paperTrades.push(createPaperTradeFromScan(exploration, true));
@@ -221,10 +238,10 @@ function createPaperTradeFromScan(scan, explorationMode = false) {
     pair: scan.pair,
     timeframe: scan.timeframe,
     direction,
-    entry,
+    entry: roundByPair(entry, scan.pair),
     stopLoss: roundByPair(stopLoss, scan.pair),
     takeProfit: roundByPair(takeProfit, scan.pair),
-    currentPrice: entry,
+    currentPrice: roundByPair(entry, scan.pair),
     openedAt: now.toISOString(),
     updatedAt: now.toISOString(),
     status: "open",
@@ -294,9 +311,18 @@ function shouldClosePaperTrade(trade, scan) {
 
 function finalizePaperTrade(trade, scan, closeResult) {
   const closedAt = new Date().toISOString();
-  const exitPrice = Number(closeResult.exitPrice || scan.current || trade.currentPrice || trade.entry || 0);
+  const exitPrice = Number(
+    closeResult.exitPrice ||
+      scan.current ||
+      trade.currentPrice ||
+      trade.entry ||
+      0
+  );
 
-  const riskDistance = Math.abs(Number(trade.entry || 0) - Number(trade.stopLoss || 0));
+  const riskDistance = Math.abs(
+    Number(trade.entry || 0) - Number(trade.stopLoss || 0)
+  );
+
   let pnlR = 0;
 
   if (riskDistance > 0) {
