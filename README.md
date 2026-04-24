@@ -1,5 +1,5 @@
 # FTMO EDGE AI
-
+ 
 Application de scan trading mobile-first avec :
 
 - Cloudflare Pages pour le front
