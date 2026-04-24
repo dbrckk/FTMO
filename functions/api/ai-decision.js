@@ -1,152 +1,181 @@
-// ai-decision.fixed.js
-
 export async function onRequestPost(context) {
-  return handleAiDecision(context);
-}
-
-export async function onRequestOptions() {
-  return new Response(null, {
-    status: 204,
-    headers: corsHeaders()
-  });
-}
-
-async function handleAiDecision(context) {
   try {
     const body = await safeJson(context.request);
-    const payload = normalizePayload(body?.data ?? body ?? {});
+    const data = body?.data || body || {};
 
-    const decision = buildDecision(payload);
+    const decision = buildDecision(data);
 
     return json({
       ok: true,
-      source: "ai-decision-v2",
+      source: "local-ai-decision-engine",
       ...decision
     });
   } catch (error) {
     return json({
       ok: true,
-      source: "ai-decision-fallback",
+      source: "ai-safe-fallback",
       decision: "WAIT",
-      title: "Décision indisponible",
-      reason: "AI decision fallback activé.",
+      title: "Décision locale",
+      reason: String(error?.message || "Fallback IA utilisé."),
       confidence: 50,
       action: "WAIT",
-      window: "intraday",
-      error: String(error?.message || error || "unknown")
+      window: "intraday"
     });
   }
 }
 
-function normalizePayload(input) {
-  return {
-    pair: cleanPair(input.pair),
-    timeframe: normalizeTimeframe(input.timeframe),
-    finalScore: safeNum(input.finalScore),
-    trendScore: safeNum(input.trendScore),
-    timingScore: safeNum(input.timingScore),
-    riskScore: safeNum(input.riskScore),
-    contextScore: safeNum(input.contextScore),
-    mlScore: safeNum(input.mlScore),
-    vectorbtScore: safeNum(input.vectorbtScore),
-    signal: normalizeSignal(input.signal)
-  };
+export async function onRequestGet() {
+  return json({
+    ok: true,
+    message: "POST scan data to compute AI decision."
+  });
 }
 
-function buildDecision(payload) {
-  const confidence = Math.round(
-    payload.finalScore * 0.45 +
-    payload.mlScore * 0.20 +
-    payload.vectorbtScore * 0.20 +
-    payload.riskScore * 0.05 +
-    payload.contextScore * 0.10
+function buildDecision(data) {
+  const pair = String(data.pair || "").toUpperCase();
+  const isGold = pair === "XAUUSD";
+
+  const ultra = num(data.ultraScore, data.finalScore || 50);
+  const finalScore = num(data.finalScore, 50);
+  const ml = num(data.mlScore, 50);
+  const vectorbt = num(data.vectorbtScore, 50);
+  const archive = num(data.archiveEdgeScore, 50);
+  const session = num(data.sessionScore, 50);
+  const execution = num(data.executionScore, 50);
+  const risk = num(data.riskScore, 50);
+  const tradeStatus = String(data.tradeStatus || "").toUpperCase();
+  const signal = String(data.signal || "WAIT").toUpperCase();
+
+  const confidence = clamp(
+    ultra * 0.38 +
+      finalScore * 0.18 +
+      archive * 0.16 +
+      session * 0.10 +
+      execution * 0.10 +
+      ml * 0.04 +
+      vectorbt * 0.04,
+    1,
+    99
   );
 
-  const blockerReasons = [];
-
-  if (payload.mlScore < 45) blockerReasons.push("ML score too low");
-  if (payload.vectorbtScore < 45) blockerReasons.push("VectorBT score too low");
-  if (payload.riskScore < 40) blockerReasons.push("Risk score too low");
-  if (payload.finalScore < 55) blockerReasons.push("Final score too low");
-
-  if (blockerReasons.length) {
-    return {
-      decision: "NO TRADE",
-      title: `${payload.pair || "Asset"} blocked`,
-      reason: blockerReasons.join(" • "),
-      confidence: clamp(confidence, 1, 99),
-      action: "WAIT",
-      window: inferWindow(payload.timeframe)
-    };
-  }
-
-  if (payload.finalScore >= 80 && payload.mlScore >= 70 && payload.vectorbtScore >= 70) {
-    return {
-      decision: payload.signal === "SELL" ? "TRADE" : "TRADE",
-      title: `${payload.pair || "Asset"} premium setup`,
-      reason: "High confluence between scoring, ML and VectorBT.",
-      confidence: clamp(confidence + 8, 1, 99),
-      action: payload.signal === "SELL" ? "EXECUTE SELL" : "EXECUTE BUY",
-      window: inferWindow(payload.timeframe)
-    };
-  }
-
-  if (payload.finalScore >= 68) {
+  if (tradeStatus.includes("SNIPER GOLD")) {
     return {
       decision: "TRADE",
-      title: `${payload.pair || "Asset"} valid setup`,
-      reason: "Acceptable setup with controlled quality and risk.",
-      confidence: clamp(confidence, 1, 99),
-      action: payload.signal === "SELL" ? "EXECUTE SELL" : "EXECUTE BUY",
-      window: inferWindow(payload.timeframe)
+      title: "SNIPER GOLD",
+      reason: "Structure gold, archive et session alignées. Setup prioritaire.",
+      confidence: Math.round(confidence),
+      action: signal === "SELL" ? "SELL" : "BUY",
+      window: "M15 intraday"
+    };
+  }
+
+  if (tradeStatus.includes("VALID GOLD")) {
+    return {
+      decision: "TRADE",
+      title: "VALID GOLD",
+      reason: "Gold validé par confluence archive/session. Risque à garder réduit.",
+      confidence: Math.round(confidence),
+      action: signal === "SELL" ? "SELL" : "BUY",
+      window: "M15 intraday"
+    };
+  }
+
+  if (tradeStatus.includes("WATCH GOLD")) {
+    return {
+      decision: "WAIT",
+      title: "WATCH GOLD",
+      reason: "Gold prometteur mais pas encore assez propre pour exécuter.",
+      confidence: Math.round(confidence),
+      action: "WAIT",
+      window: "attendre confirmation"
+    };
+  }
+
+  if (tradeStatus.includes("BLOCKED GOLD")) {
+    return {
+      decision: "NO TRADE",
+      title: "BLOCKED GOLD",
+      reason: "Setup gold insuffisamment confirmé ou danger trop élevé.",
+      confidence: Math.round(confidence),
+      action: "WAIT",
+      window: "no trade"
+    };
+  }
+
+  if (tradeStatus.includes("SNIPER")) {
+    return {
+      decision: "TRADE",
+      title: "SNIPER SETUP",
+      reason: "Confluence forte entre score ultra, archive et exécution.",
+      confidence: Math.round(confidence),
+      action: signal === "SELL" ? "SELL" : "BUY",
+      window: "M15 intraday"
+    };
+  }
+
+  if (tradeStatus.includes("VALID")) {
+    return {
+      decision: "TRADE",
+      title: "VALID SETUP",
+      reason: "Setup exploitable avec risque contrôlé.",
+      confidence: Math.round(confidence),
+      action: signal === "SELL" ? "SELL" : "BUY",
+      window: "M15 intraday"
+    };
+  }
+
+  if (tradeStatus.includes("WATCH")) {
+    return {
+      decision: "WAIT",
+      title: "WATCHLIST",
+      reason: "Setup intéressant mais confirmation encore insuffisante.",
+      confidence: Math.round(confidence),
+      action: "WAIT",
+      window: "surveillance"
+    };
+  }
+
+  if (risk < 30) {
+    return {
+      decision: "NO TRADE",
+      title: "RISK BLOCK",
+      reason: "Risque trop élevé pour FTMO.",
+      confidence: Math.round(confidence),
+      action: "WAIT",
+      window: "no trade"
+    };
+  }
+
+  if (isGold && ultra >= 64 && archive >= 58 && session >= 58) {
+    return {
+      decision: "WAIT",
+      title: "GOLD NEAR VALID",
+      reason: "Gold proche d’un setup valide, mais le filtre final attend une confirmation.",
+      confidence: Math.round(confidence),
+      action: "WAIT",
+      window: "attendre prochaine bougie"
+    };
+  }
+
+  if (ultra >= 68 && archive >= 58 && execution >= 54) {
+    return {
+      decision: "TRADE",
+      title: "VALID LOCAL",
+      reason: "Le moteur local autorise une entrée prudente.",
+      confidence: Math.round(confidence),
+      action: signal === "SELL" ? "SELL" : "BUY",
+      window: "M15 intraday"
     };
   }
 
   return {
     decision: "WAIT",
-    title: `${payload.pair || "Asset"} needs patience`,
-    reason: "Setup quality is not high enough yet.",
-    confidence: clamp(confidence - 6, 1, 99),
+    title: "NO CLEAN ENTRY",
+    reason: "Pas assez de confluence pour exécuter maintenant.",
+    confidence: Math.round(confidence),
     action: "WAIT",
-    window: inferWindow(payload.timeframe)
+    window: "attendre"
   };
-}
-
-function inferWindow(timeframe) {
-  if (timeframe === "M5") return "scalp";
-  if (timeframe === "M15") return "intraday";
-  if (timeframe === "H1") return "intra-swing";
-  return "swing";
-}
-
-function normalizeSignal(value) {
-  const v = String(value || "").toUpperCase().trim();
-  if (v.includes("SELL")) return "SELL";
-  if (v.includes("BUY")) return "BUY";
-  return "WAIT";
-}
-
-function normalizeTimeframe(value) {
-  const tf = String(value || "").toUpperCase().trim();
-  if (["M5", "M15", "H1", "H4"].includes(tf)) return tf;
-  return "M15";
-}
-
-function cleanPair(value) {
-  return String(value || "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "")
-    .slice(0, 12);
-}
-
-function clamp(v, min = 1, max = 99) {
-  const n = Number(v || 0);
-  return Math.max(min, Math.min(max, n));
-}
-
-function safeNum(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
 }
 
 async function safeJson(request) {
@@ -157,21 +186,23 @@ async function safeJson(request) {
   }
 }
 
-function corsHeaders() {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Accept"
-  };
+function num(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function clamp(value, min = 1, max = 99) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return min;
+  return Math.max(min, Math.min(max, n));
 }
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
-      ...corsHeaders(),
       "Content-Type": "application/json; charset=UTF-8",
       "Cache-Control": "no-store"
     }
   });
-    }
+}
