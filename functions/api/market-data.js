@@ -29,43 +29,58 @@ async function handleRequest(context) {
       return json({ ok: false, error: "Missing pair" }, 400);
     }
 
-    if (!timeframe) {
-      timeframe = "M15";
-    }
-
     const env = context.env || {};
     const db = env.DB || null;
     const apiKey = env.TWELVEDATA_API_KEY || "";
 
     const symbolMeta = mapSymbolForProvider(pair);
+
     if (!symbolMeta) {
       return json(buildSyntheticFallback(pair, timeframe, "unsupported-symbol"));
     }
 
-    // 1) D1 FIRST
     if (!forceLive && db) {
       const d1Payload = await tryD1History(db, pair, timeframe);
-      if (d1Payload?.ok && Array.isArray(d1Payload.candles) && d1Payload.candles.length >= MIN_ROWS_FOR_PRIMARY) {
+
+      if (
+        d1Payload?.ok &&
+        Array.isArray(d1Payload.candles) &&
+        d1Payload.candles.length >= MIN_ROWS_FOR_PRIMARY
+      ) {
         return json(d1Payload);
       }
     }
 
-    // 2) LIVE FALLBACK + OPTIONAL WRITEBACK TO D1
     if (apiKey) {
       const livePayload = await tryTwelveDataLive(symbolMeta, timeframe, apiKey);
-      if (livePayload?.ok && Array.isArray(livePayload.candles) && livePayload.candles.length) {
+
+      if (
+        livePayload?.ok &&
+        Array.isArray(livePayload.candles) &&
+        livePayload.candles.length
+      ) {
         if (db) {
-          await upsertCandlesToD1(db, livePayload.candles, pair, timeframe, "twelvedata-live");
+          await upsertCandlesToD1(
+            db,
+            livePayload.candles,
+            pair,
+            timeframe,
+            "twelvedata-live"
+          );
         }
 
         return json(livePayload);
       }
     }
 
-    // 3) D1 SECOND CHANCE (if few rows but not enough before)
     if (db) {
       const d1Payload = await tryD1History(db, pair, timeframe);
-      if (d1Payload?.ok && Array.isArray(d1Payload.candles) && d1Payload.candles.length) {
+
+      if (
+        d1Payload?.ok &&
+        Array.isArray(d1Payload.candles) &&
+        d1Payload.candles.length
+      ) {
         return json({
           ...d1Payload,
           source: "d1-partial-fallback"
@@ -73,7 +88,6 @@ async function handleRequest(context) {
       }
     }
 
-    // 4) SYNTHETIC LAST RESORT
     return json(buildSyntheticFallback(pair, timeframe, "synthetic-fallback"));
   } catch (error) {
     return json({
@@ -110,6 +124,7 @@ async function tryD1History(db, pair, timeframe) {
       .all();
 
     const rows = Array.isArray(result?.results) ? result.results : [];
+
     if (!rows.length) return null;
 
     const candles = rows
@@ -148,6 +163,7 @@ async function tryD1History(db, pair, timeframe) {
       price: candles.at(-1)?.close ?? null,
       candles,
       freshnessSec,
+      rowCount: candles.length,
       indicators: {
         atr14: safeNum(atr(highs, lows, closes, 14)),
         rsi14: safeNum(rsi(closes, 14)),
@@ -181,6 +197,7 @@ async function tryTwelveDataLive(symbolMeta, timeframe, apiKey) {
     if (!candleRes.ok) return null;
 
     const candleData = await candleRes.json();
+
     if (candleData?.status === "error") return null;
     if (!Array.isArray(candleData.values)) return null;
 
@@ -216,6 +233,7 @@ async function tryTwelveDataLive(symbolMeta, timeframe, apiKey) {
       timeframe,
       price: candles.at(-1)?.close ?? null,
       candles,
+      rowCount: candles.length,
       indicators: {
         atr14: safeNum(atr(highs, lows, closes, 14)),
         rsi14: safeNum(rsi(closes, 14)),
@@ -256,9 +274,7 @@ async function upsertCandlesToD1(db, candles, pair, timeframe, source) {
 
       await db.batch(statements);
     }
-  } catch {
-    // silent writeback failure
-  }
+  } catch {}
 }
 
 function mapSymbolForProvider(pair) {
@@ -306,7 +322,9 @@ function mapSymbolForProvider(pair) {
 
 function normalizeTimeframe(value) {
   const tf = String(value || "").toUpperCase().trim();
+
   if (["M5", "M15", "H1", "H4"].includes(tf)) return tf;
+
   return "M15";
 }
 
@@ -314,7 +332,9 @@ function mapTimeframeToProvider(tf) {
   if (tf === "M5") return "5min";
   if (tf === "M15") return "15min";
   if (tf === "H1") return "1h";
-  return "4h";
+  if (tf === "H4") return "4h";
+
+  return "15min";
 }
 
 function buildSyntheticFallback(pair, timeframe, source) {
@@ -330,6 +350,7 @@ function buildSyntheticFallback(pair, timeframe, source) {
     timeframe,
     price: candles.at(-1)?.close ?? null,
     candles,
+    rowCount: candles.length,
     indicators: {
       atr14: safeNum(atr(highs, lows, closes, 14)),
       rsi14: safeNum(rsi(closes, 14)),
@@ -347,9 +368,11 @@ function generateSyntheticCandles(pair, timeframe) {
   const rawStep = stepMap[timeframe] || 0.0014;
 
   const step =
-    pair === "XAUUSD" ? 4.5 :
-    pair.includes("JPY") ? rawStep * 100 :
-    rawStep;
+    pair === "XAUUSD"
+      ? 4.5
+      : pair.includes("JPY")
+        ? rawStep * 100
+        : rawStep;
 
   const candles = [];
   let price = base;
@@ -421,14 +444,19 @@ function timeframeToSeconds(tf) {
   if (tf === "M5") return 300;
   if (tf === "M15") return 900;
   if (tf === "H1") return 3600;
-  return 14400;
+  if (tf === "H4") return 14400;
+
+  return 900;
 }
 
 function computeMomentum(closes, lookback = 12) {
   if (closes.length <= lookback) return 0;
+
   const current = closes.at(-1);
   const past = closes.at(-1 - lookback);
+
   if (!past) return 0;
+
   return ((current - past) / past) * 100;
 }
 
@@ -458,14 +486,19 @@ function rsi(values, period = 14) {
 
   let gains = 0;
   let losses = 0;
+
   for (let i = values.length - period; i < values.length; i += 1) {
     const diff = values[i] - values[i - 1];
+
     if (diff >= 0) gains += diff;
     else losses += Math.abs(diff);
   }
 
+  if (losses === 0 && gains === 0) return 50;
   if (losses === 0) return 100;
+
   const rs = gains / losses;
+
   return 100 - (100 / (1 + rs));
 }
 
@@ -473,17 +506,21 @@ function atr(highs, lows, closes, period = 14) {
   if (highs.length < 2) return 0;
 
   const trs = [];
+
   for (let i = 1; i < highs.length; i += 1) {
     const tr = Math.max(
       highs[i] - lows[i],
       Math.abs(highs[i] - closes[i - 1]),
       Math.abs(lows[i] - closes[i - 1])
     );
+
     trs.push(tr);
   }
 
   const recent = trs.slice(-period);
+
   if (!recent.length) return 0;
+
   return recent.reduce((a, b) => a + b, 0) / recent.length;
 }
 
@@ -512,10 +549,12 @@ function safeNum(value) {
 
 function hashCode(str) {
   let hash = 0;
+
   for (let i = 0; i < str.length; i += 1) {
     hash = ((hash << 5) - hash) + str.charCodeAt(i);
     hash |= 0;
   }
+
   return Math.abs(hash);
 }
 
@@ -527,4 +566,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-  }
+}
