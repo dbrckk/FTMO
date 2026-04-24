@@ -21,30 +21,39 @@ async function handleRequest(context) {
       } catch {}
     }
 
-    const env = context.env || {};
-    const apiKey = env.TWELVEDATA_API_KEY || "";
-
     if (!pair) {
       return json({ ok: false, error: "Missing pair" }, 400);
     }
 
+    const env = context.env || {};
+    const apiKey = env.TWELVEDATA_API_KEY || "";
+    const db = env.DB || null;
+
     const symbolMeta = mapSymbolForProvider(pair);
     if (!symbolMeta) {
-      return json(buildFallbackPayload(pair, timeframe, "unsupported-symbol"));
+      return json(buildSyntheticFallback(pair, timeframe, "unsupported-symbol"));
     }
 
-    let payload;
     if (apiKey) {
-      payload = await fetchTwelveDataBundle(symbolMeta, timeframe, apiKey);
-    } else {
-      payload = buildFallbackPayload(pair, timeframe, "missing-twelvedata-key");
+      const livePayload = await tryTwelveDataLive(symbolMeta, timeframe, apiKey);
+      if (livePayload?.ok && Array.isArray(livePayload.candles) && livePayload.candles.length) {
+        return json(livePayload);
+      }
     }
 
-    return json(payload);
-  } catch {
+    if (db) {
+      const d1Payload = await tryD1History(db, pair, timeframe);
+      if (d1Payload?.ok && Array.isArray(d1Payload.candles) && d1Payload.candles.length) {
+        return json(d1Payload);
+      }
+    }
+
+    return json(buildSyntheticFallback(pair, timeframe, "synthetic-fallback"));
+  } catch (error) {
     return json({
       ok: true,
       source: "server-catch-fallback",
+      error: String(error?.message || error || "unknown"),
       pair: "",
       timeframe: "M15",
       price: null,
@@ -61,7 +70,7 @@ async function handleRequest(context) {
   }
 }
 
-async function fetchTwelveDataBundle(symbolMeta, timeframe, apiKey) {
+async function tryTwelveDataLive(symbolMeta, timeframe, apiKey) {
   try {
     const interval = mapTimeframeToProvider(timeframe);
 
@@ -77,15 +86,10 @@ async function fetchTwelveDataBundle(symbolMeta, timeframe, apiKey) {
       headers: { Accept: "application/json" }
     });
 
-    if (!candleRes.ok) {
-      return buildFallbackPayload(symbolMeta.localPair, timeframe, "twelvedata-http-error");
-    }
+    if (!candleRes.ok) return null;
 
     const candleData = await candleRes.json();
-
-    if (!Array.isArray(candleData.values)) {
-      return buildFallbackPayload(symbolMeta.localPair, timeframe, "twelvedata-invalid-series");
-    }
+    if (!Array.isArray(candleData.values)) return null;
 
     const candles = candleData.values
       .map((row) => ({
@@ -104,22 +108,13 @@ async function fetchTwelveDataBundle(symbolMeta, timeframe, apiKey) {
         c.time > 0
       )
       .sort((a, b) => a.time - b.time)
-      .slice(-180);
+      .slice(-220);
 
-    if (!candles.length) {
-      return buildFallbackPayload(symbolMeta.localPair, timeframe, "twelvedata-empty-candles");
-    }
+    if (!candles.length) return null;
 
     const closes = candles.map((c) => c.close);
     const highs = candles.map((c) => c.high);
     const lows = candles.map((c) => c.low);
-
-    const indicators = await fetchTwelveIndicators(
-      symbolMeta.providerSymbol,
-      interval,
-      apiKey,
-      symbolMeta.localPair
-    );
 
     return {
       ok: true,
@@ -129,90 +124,78 @@ async function fetchTwelveDataBundle(symbolMeta, timeframe, apiKey) {
       price: candles.at(-1)?.close ?? null,
       candles,
       indicators: {
-        atr14: safeNum(indicators.atr14 ?? atr(highs, lows, closes, 14)),
-        rsi14: safeNum(indicators.rsi14 ?? rsi(closes, 14)),
-        ema20: safeNum(indicators.ema20 ?? ema(closes, 20)),
-        ema50: safeNum(indicators.ema50 ?? ema(closes, 50)),
-        macd: safeNum(indicators.macd ?? computeMacdLine(closes)),
-        momentum: safeNum(indicators.momentum ?? computeMomentum(closes, 12))
+        atr14: safeNum(atr(highs, lows, closes, 14)),
+        rsi14: safeNum(rsi(closes, 14)),
+        ema20: safeNum(ema(closes, 20)),
+        ema50: safeNum(ema(closes, 50)),
+        macd: safeNum(computeMacdLine(closes)),
+        momentum: safeNum(computeMomentum(closes, 12))
       }
     };
   } catch {
-    return buildFallbackPayload(symbolMeta.localPair, timeframe, "twelvedata-catch");
+    return null;
   }
 }
 
-async function fetchTwelveIndicators(symbol, interval, apiKey, localPair) {
-  const endpoints = [
-    {
-      key: "rsi14",
-      url:
-        `https://api.twelvedata.com/rsi?symbol=${encodeURIComponent(symbol)}` +
-        `&interval=${encodeURIComponent(interval)}` +
-        `&time_period=14&outputsize=1&apikey=${encodeURIComponent(apiKey)}`
-    },
-    {
-      key: "ema20",
-      url:
-        `https://api.twelvedata.com/ema?symbol=${encodeURIComponent(symbol)}` +
-        `&interval=${encodeURIComponent(interval)}` +
-        `&time_period=20&outputsize=1&apikey=${encodeURIComponent(apiKey)}`
-    },
-    {
-      key: "ema50",
-      url:
-        `https://api.twelvedata.com/ema?symbol=${encodeURIComponent(symbol)}` +
-        `&interval=${encodeURIComponent(interval)}` +
-        `&time_period=50&outputsize=1&apikey=${encodeURIComponent(apiKey)}`
-    },
-    {
-      key: "atr14",
-      url:
-        `https://api.twelvedata.com/atr?symbol=${encodeURIComponent(symbol)}` +
-        `&interval=${encodeURIComponent(interval)}` +
-        `&time_period=14&outputsize=1&apikey=${encodeURIComponent(apiKey)}`
-    },
-    {
-      key: "macd",
-      url:
-        `https://api.twelvedata.com/macd?symbol=${encodeURIComponent(symbol)}` +
-        `&interval=${encodeURIComponent(interval)}` +
-        `&fast_period=12&slow_period=26&signal_period=9&outputsize=1&apikey=${encodeURIComponent(apiKey)}`
-    }
-  ];
+async function tryD1History(db, pair, timeframe) {
+  try {
+    const result = await db
+      .prepare(`
+        SELECT pair, timeframe, ts, open, high, low, close, source
+        FROM market_candles
+        WHERE pair = ? AND timeframe = ?
+        ORDER BY ts DESC
+        LIMIT 220
+      `)
+      .bind(pair, timeframe)
+      .all();
 
-  const results = await Promise.all(
-    endpoints.map(async (item) => {
-      try {
-        const res = await fetch(item.url, {
-          method: "GET",
-          headers: { Accept: "application/json" }
-        });
+    const rows = Array.isArray(result?.results) ? result.results : [];
+    if (!rows.length) return null;
 
-        if (!res.ok) return [item.key, null];
+    const candles = rows
+      .map((row) => ({
+        time: Number(row.ts || 0),
+        open: Number(row.open || 0),
+        high: Number(row.high || 0),
+        low: Number(row.low || 0),
+        close: Number(row.close || 0)
+      }))
+      .filter((c) =>
+        Number.isFinite(c.time) &&
+        Number.isFinite(c.open) &&
+        Number.isFinite(c.high) &&
+        Number.isFinite(c.low) &&
+        Number.isFinite(c.close) &&
+        c.time > 0
+      )
+      .sort((a, b) => a.time - b.time);
 
-        const data = await res.json();
-        const first = Array.isArray(data.values) ? data.values[0] : null;
-        if (!first) return [item.key, null];
+    if (!candles.length) return null;
 
-        if (item.key === "macd") {
-          return [item.key, roundPrice(Number(first.macd), localPair)];
-        }
+    const closes = candles.map((c) => c.close);
+    const highs = candles.map((c) => c.high);
+    const lows = candles.map((c) => c.low);
 
-        const rawValue =
-          first.rsi ??
-          first.ema ??
-          first.atr ??
-          first.value;
-
-        return [item.key, roundPrice(Number(rawValue), localPair)];
-      } catch {
-        return [item.key, null];
+    return {
+      ok: true,
+      source: "d1-history-fallback",
+      pair,
+      timeframe,
+      price: candles.at(-1)?.close ?? null,
+      candles,
+      indicators: {
+        atr14: safeNum(atr(highs, lows, closes, 14)),
+        rsi14: safeNum(rsi(closes, 14)),
+        ema20: safeNum(ema(closes, 20)),
+        ema50: safeNum(ema(closes, 50)),
+        macd: safeNum(computeMacdLine(closes)),
+        momentum: safeNum(computeMomentum(closes, 12))
       }
-    })
-  );
-
-  return Object.fromEntries(results);
+    };
+  } catch {
+    return null;
+  }
 }
 
 function mapSymbolForProvider(pair) {
@@ -224,29 +207,29 @@ function mapSymbolForProvider(pair) {
     USDCAD: "USD/CAD",
     AUDUSD: "AUD/USD",
     NZDUSD: "NZD/USD",
+
     EURGBP: "EUR/GBP",
     EURJPY: "EUR/JPY",
-    GBPJPY: "GBP/JPY",
-    AUDJPY: "AUD/JPY",
-    CADJPY: "CAD/JPY",
-    CHFJPY: "CHF/JPY",
+    EURCHF: "EUR/CHF",
+    EURCAD: "EUR/CAD",
     EURAUD: "EUR/AUD",
     EURNZD: "EUR/NZD",
-    EURCAD: "EUR/CAD",
-    EURCHF: "EUR/CHF",
+
+    GBPJPY: "GBP/JPY",
+    GBPCHF: "GBP/CHF",
+    GBPCAD: "GBP/CAD",
     GBPAUD: "GBP/AUD",
     GBPNZD: "GBP/NZD",
-    GBPCAD: "GBP/CAD",
-    GBPCHF: "GBP/CHF",
-    AUDNZD: "AUD/NZD",
+
+    AUDJPY: "AUD/JPY",
     AUDCAD: "AUD/CAD",
     AUDCHF: "AUD/CHF",
-    NZDCAD: "NZD/CAD",
-    NZDCHF: "NZD/CHF",
+    AUDNZD: "AUD/NZD",
+
     NZDJPY: "NZD/JPY",
-    XAUUSD: "XAU/USD",
-    NAS100: "NDX",
-    GER40: "DAX"
+    NZDCAD: "NZD/CAD",
+
+    XAUUSD: "XAU/USD"
   };
 
   const providerSymbol = map[pair];
@@ -259,9 +242,9 @@ function mapSymbolForProvider(pair) {
 }
 
 function normalizeTimeframe(value) {
-  const allowed = ["M5", "M15", "H1", "H4"];
-  const tf = String(value || "").toUpperCase();
-  return allowed.includes(tf) ? tf : "M15";
+  const tf = String(value || "").toUpperCase().trim();
+  if (["M5", "M15", "H1", "H4"].includes(tf)) return tf;
+  return "M15";
 }
 
 function mapTimeframeToProvider(tf) {
@@ -271,8 +254,8 @@ function mapTimeframeToProvider(tf) {
   return "4h";
 }
 
-function buildFallbackPayload(pair, timeframe, source) {
-  const candles = generateFallbackCandles(pair, timeframe);
+function buildSyntheticFallback(pair, timeframe, source) {
+  const candles = generateSyntheticCandles(pair, timeframe);
   const closes = candles.map((c) => c.close);
   const highs = candles.map((c) => c.high);
   const lows = candles.map((c) => c.low);
@@ -295,25 +278,24 @@ function buildFallbackPayload(pair, timeframe, source) {
   };
 }
 
-function generateFallbackCandles(pair, timeframe) {
+function generateSyntheticCandles(pair, timeframe) {
   const base = getSymbolBasePrice(pair);
   const stepMap = { M5: 0.0008, M15: 0.0014, H1: 0.0038, H4: 0.009 };
   const rawStep = stepMap[timeframe] || 0.0014;
+
   const step =
-    pair === "XAUUSD" ? 4.8 :
-    pair === "NAS100" ? 28 :
-    pair === "GER40" ? 18 :
+    pair === "XAUUSD" ? 4.5 :
     pair.includes("JPY") ? rawStep * 100 :
     rawStep;
 
   const candles = [];
   let price = base;
-  let time = Math.floor(Date.now() / 1000) - 180 * timeframeToSeconds(timeframe);
+  let time = Math.floor(Date.now() / 1000) - 220 * timeframeToSeconds(timeframe);
 
-  for (let i = 0; i < 180; i += 1) {
+  for (let i = 0; i < 220; i += 1) {
     const wave = Math.sin(i / 7) * step * 1.2;
     const drift = (hashCode(pair) % 2 === 0 ? 1 : -1) * step * 0.08;
-    const noise = (Math.random() - 0.5) * step * 1.7;
+    const noise = (Math.random() - 0.5) * step * 1.6;
 
     const open = price;
     const close = open + wave + drift + noise;
@@ -338,36 +320,37 @@ function generateFallbackCandles(pair, timeframe) {
 function getSymbolBasePrice(symbol) {
   const prices = {
     EURUSD: 1.0835,
-    GBPUSD: 1.271,
+    GBPUSD: 1.2710,
     USDJPY: 151.15,
-    USDCHF: 0.903,
-    USDCAD: 1.352,
-    AUDUSD: 0.661,
-    NZDUSD: 0.607,
-    EURGBP: 0.851,
-    EURJPY: 163.4,
-    GBPJPY: 192.3,
-    AUDJPY: 99.1,
-    CADJPY: 111.4,
-    CHFJPY: 167.3,
-    EURAUD: 1.639,
-    EURNZD: 1.775,
-    EURCAD: 1.465,
-    EURCHF: 0.978,
-    GBPAUD: 1.924,
-    GBPNZD: 2.083,
-    GBPCAD: 1.719,
-    GBPCHF: 1.149,
-    AUDNZD: 1.082,
-    AUDCAD: 0.894,
-    AUDCHF: 0.597,
-    NZDCAD: 0.822,
-    NZDCHF: 0.552,
-    NZDJPY: 91.7,
-    XAUUSD: 2350.5,
-    NAS100: 18240,
-    GER40: 18420
+    USDCHF: 0.9030,
+    USDCAD: 1.3520,
+    AUDUSD: 0.6610,
+    NZDUSD: 0.6070,
+
+    EURGBP: 0.8510,
+    EURJPY: 163.40,
+    EURCHF: 0.9780,
+    EURCAD: 1.4650,
+    EURAUD: 1.6390,
+    EURNZD: 1.7750,
+
+    GBPJPY: 192.30,
+    GBPCHF: 1.1490,
+    GBPCAD: 1.7190,
+    GBPAUD: 1.9240,
+    GBPNZD: 2.0830,
+
+    AUDJPY: 99.10,
+    AUDCAD: 0.8940,
+    AUDCHF: 0.5970,
+    AUDNZD: 1.0820,
+
+    NZDJPY: 91.70,
+    NZDCAD: 0.8220,
+
+    XAUUSD: 2350.50
   };
+
   return prices[symbol] || 1;
 }
 
@@ -458,7 +441,6 @@ function toUnixSeconds(datetimeValue) {
 function roundPrice(value, symbol) {
   if (!Number.isFinite(value)) return 0;
   if (symbol === "XAUUSD") return Number(value.toFixed(2));
-  if (symbol === "NAS100" || symbol === "GER40") return Number(value.toFixed(1));
   if (symbol.includes("JPY")) return Number(value.toFixed(3));
   return Number(value.toFixed(5));
 }
@@ -467,7 +449,7 @@ function cleanPair(value) {
   return String(value || "")
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "")
-    .slice(0, 10);
+    .slice(0, 12);
 }
 
 function safeNum(value) {
@@ -491,4 +473,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-                }
+          }
