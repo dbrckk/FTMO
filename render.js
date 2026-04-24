@@ -1,5 +1,3 @@
-// render.js
-
 import { appState, els, persistState } from "./state.js";
 import { setText, setValue, metricCard, formatPrice } from "./utils.js";
 import { computeDynamicRiskPercent, computePositionSizing } from "./trades.js";
@@ -9,6 +7,7 @@ import { computePaperAnalytics } from "./paper-engine.js";
 
 export function setActiveTab(tabName) {
   appState.activeTab = tabName;
+  persistState();
 }
 
 export function renderTabs() {
@@ -50,6 +49,7 @@ export function renderOverview() {
 
 export function renderPairList(refreshAiDecision) {
   if (!els.pairList) return;
+
   els.pairList.innerHTML = "";
 
   const list = appState.scans || [];
@@ -60,17 +60,18 @@ export function renderPairList(refreshAiDecision) {
     row.dataset.pair = scan.pair;
 
     row.innerHTML = `
-      <div><strong>${scan.pair}</strong></div>
+      <div><strong>${esc(scan.pair)}</strong></div>
       <div>${Math.round(scan.ultraScore || scan.finalScore || 0)}</div>
       <div>${Math.round(scan.mlScore || 0)}</div>
       <div>${Math.round(scan.vectorbtScore || 0)}</div>
-      <div class="${scan.tradeAllowed ? "ok" : "bad"}">${scan.tradeStatus || "WAIT"}</div>
+      <div class="${scan.tradeAllowed ? "ok" : "bad"}">${esc(scan.tradeStatus || "WAIT")}</div>
     `;
 
     row.addEventListener("click", () => {
       appState.selectedPair = scan.pair;
       persistState();
       renderSelectedPair();
+
       if (typeof refreshAiDecision === "function") {
         refreshAiDecision(false, renderSelectedPair);
       }
@@ -92,9 +93,9 @@ export function renderTopPriorityTrades() {
   wrap.innerHTML = top.length
     ? top.map((scan) => `
       <div class="top-row">
-        <strong>${scan.pair}</strong>
+        <strong>${esc(scan.pair)}</strong>
         <span>ULTRA ${Math.round(scan.ultraScore || 0)}</span>
-        <span>${scan.tradeStatus || "VALID"}</span>
+        <span>${esc(scan.tradeStatus || "VALID")}</span>
       </div>
     `).join("")
     : `<div class="muted">Aucun trade premium.</div>`;
@@ -112,9 +113,9 @@ export function renderTopBlockedTrades() {
   wrap.innerHTML = blocked.length
     ? blocked.map((scan) => `
       <div class="top-row blocked">
-        <strong>${scan.pair}</strong>
+        <strong>${esc(scan.pair)}</strong>
         <span>ULTRA ${Math.round(scan.ultraScore || scan.finalScore || 0)}</span>
-        <span>${scan.tradeReason || "Blocked"}</span>
+        <span>${esc(scan.tradeReason || "Blocked")}</span>
       </div>
     `).join("")
     : `<div class="muted">Aucun trade bloqué majeur.</div>`;
@@ -124,6 +125,7 @@ export function renderCorrelationMatrix() {
   if (!els.correlationSummary || !els.correlationMatrixBox) return;
 
   const data = appState.correlationMatrix;
+
   if (!data || !Array.isArray(data.pairs) || !Array.isArray(data.matrix)) {
     els.correlationSummary.innerHTML = "Correlation matrix unavailable.";
     els.correlationMatrixBox.innerHTML = `<div class="muted">Aucune donnée.</div>`;
@@ -131,9 +133,11 @@ export function renderCorrelationMatrix() {
   }
 
   const alerts = [];
+
   for (let i = 0; i < data.pairs.length; i += 1) {
     for (let j = i + 1; j < data.pairs.length; j += 1) {
       const corr = Number(data.matrix[i][j] || 0);
+
       if (Math.abs(corr) >= 0.8) {
         alerts.push(`${data.pairs[i]} / ${data.pairs[j]} : ${corr.toFixed(2)}`);
       }
@@ -141,7 +145,7 @@ export function renderCorrelationMatrix() {
   }
 
   els.correlationSummary.innerHTML = alerts.length
-    ? `<strong>High correlation pairs detected:</strong><br>${alerts.slice(0, 8).join("<br>")}`
+    ? `<strong>High correlation pairs detected:</strong><br>${alerts.slice(0, 8).map(esc).join("<br>")}`
     : `No major correlation concentration detected.`;
 
   els.correlationMatrixBox.innerHTML = `
@@ -150,13 +154,13 @@ export function renderCorrelationMatrix() {
         <thead>
           <tr>
             <th style="text-align:left; padding:8px;">Pair</th>
-            ${data.pairs.map((pair) => `<th style="padding:8px;">${pair}</th>`).join("")}
+            ${data.pairs.map((pair) => `<th style="padding:8px;">${esc(pair)}</th>`).join("")}
           </tr>
         </thead>
         <tbody>
           ${data.pairs.map((rowPair, i) => `
             <tr>
-              <td style="padding:8px; font-weight:700;">${rowPair}</td>
+              <td style="padding:8px; font-weight:700;">${esc(rowPair)}</td>
               ${data.matrix[i].map((value, j) => {
                 const corr = Number(value || 0);
                 const bg =
@@ -164,6 +168,7 @@ export function renderCorrelationMatrix() {
                   Math.abs(corr) >= 0.8 ? "rgba(255,102,127,0.18)" :
                   Math.abs(corr) >= 0.6 ? "rgba(255,193,77,0.14)" :
                   "rgba(255,255,255,0.03)";
+
                 return `<td style="padding:8px; text-align:center; background:${bg};">${corr.toFixed(2)}</td>`;
               }).join("")}
             </tr>
@@ -204,7 +209,7 @@ export function renderSelectedPair() {
 
   if (els.summaryMetrics) {
     els.summaryMetrics.innerHTML = [
-      metricCard("Prix", formatPrice(scan.current), "marché"),
+      metricCard("Prix", formatPrice(scan.current, scan.pair), "marché"),
       metricCard("Final", Math.round(scan.finalScore || 0), "global"),
       metricCard("ULTRA", Math.round(scan.ultraScore || 0), scan.ultraGrade || "-"),
       metricCard("Trend", Math.round(scan.trendScore || 0), "direction"),
@@ -219,8 +224,10 @@ export function renderSelectedPair() {
   }
 
   const reasonList = document.getElementById("reasonList");
+
   if (reasonList) {
     reasonList.innerHTML = "";
+
     (scan.reasons || []).forEach((reason) => {
       const li = document.createElement("li");
       li.textContent = reason;
@@ -236,11 +243,11 @@ export function renderSelectedPair() {
 
   if (els.tradeSuggestionBox) {
     els.tradeSuggestionBox.innerHTML = `
-      <strong>${scan.tradeStatus || ai.decision || scan.signal || "WAIT"}</strong><br>
-      Ultra Score: ${Math.round(scan.ultraScore || 0)} (${scan.ultraGrade || "-"})<br>
-      Entry: ${formatPrice(scan.current)}<br>
-      Stop: ${formatPrice(scan.stopLoss || scan.current * 0.995)}<br>
-      Target: ${formatPrice(scan.takeProfit || scan.current * 1.01)}<br>
+      <strong>${esc(scan.tradeStatus || ai.decision || scan.signal || "WAIT")}</strong><br>
+      Ultra Score: ${Math.round(scan.ultraScore || 0)} (${esc(scan.ultraGrade || "-")})<br>
+      Entry: ${formatPrice(scan.current, scan.pair)}<br>
+      Stop: ${formatPrice(scan.stopLoss || scan.current * 0.995, scan.pair)}<br>
+      Target: ${formatPrice(scan.takeProfit || scan.current * 1.01, scan.pair)}<br>
       ML: ${Math.round(scan.mlScore || 0)}<br>
       VectorBT: ${Math.round(scan.vectorbtScore || 0)}<br>
       Smart Money: ${Math.round(scan.smartMoneyScore || 0)}<br>
@@ -253,8 +260,8 @@ export function renderSelectedPair() {
       Same Direction Exp: ${(Number(scan.archiveStats?.sameDirectionExpectancy || 0)).toFixed(2)}R<br>
       Risk conseillé: ${riskPct}%<br>
       Position size: ${sizing.quantity}<br>
-      Profile: ${sizing.leverageLabel}<br>
-      Motif: ${scan.tradeReason || ai.reason || scan.reason || "-"}
+      Profile: ${esc(sizing.leverageLabel)}<br>
+      Motif: ${esc(scan.tradeReason || ai.reason || scan.reason || "-")}
     `;
   }
 
@@ -271,13 +278,14 @@ export function renderSelectedPair() {
 
   setValue("tradePair", scan.pair);
   setValue("tradeDirection", scan.signal === "SELL" ? "sell" : "buy");
-  setValue("tradeEntry", Number(scan.current || 0).toFixed(5));
+  setValue("tradeEntry", Number(scan.current || 0).toFixed(scan.pair === "XAUUSD" ? 2 : scan.pair.includes("JPY") ? 3 : 5));
   setValue("riskPercent", String(riskPct));
 }
 
 export function renderTrades() {
   const tradeList = document.getElementById("tradeList");
   const tradeStats = document.getElementById("tradeStats");
+
   if (!tradeList) return;
 
   tradeList.innerHTML = "";
@@ -286,12 +294,13 @@ export function renderTrades() {
     const row = document.createElement("div");
     row.className = "trade-row";
     row.innerHTML = `
-      <div><strong>${trade.pair}</strong></div>
-      <div>${trade.direction}</div>
-      <div>${trade.riskPercent}%</div>
-      <div>${Number(trade.entry || 0).toFixed(5)}</div>
-      <div>${trade.status}</div>
+      <div><strong>${esc(trade.pair)}</strong></div>
+      <div>${esc(trade.direction)}</div>
+      <div>${Number(trade.riskPercent || 0)}%</div>
+      <div>${formatPrice(trade.entry, trade.pair)}</div>
+      <div>${esc(trade.status)}</div>
     `;
+
     tradeList.appendChild(row);
   });
 
@@ -301,6 +310,7 @@ export function renderTrades() {
 export function renderWatchlist() {
   const watch = document.getElementById("watchlist");
   const count = document.getElementById("watchlistCount");
+
   if (!watch) return;
 
   watch.innerHTML = "";
@@ -347,7 +357,20 @@ export function renderFtmoRisk() {
 }
 
 export function renderPaperLab() {
-  const analytics = computePaperAnalytics();
+  const localAnalytics = computePaperAnalytics();
+  const server = appState.serverPaperSnapshot || null;
+
+  const serverOpen = Array.isArray(server?.open) ? server.open : [];
+  const serverRecent = Array.isArray(server?.recent) ? server.recent : [];
+  const serverPairStats = Array.isArray(server?.pairStats) ? server.pairStats : [];
+  const serverRuns = Array.isArray(server?.runs) ? server.runs : [];
+  const serverSummary = server?.summary || null;
+
+  const openCount = serverOpen.length || localAnalytics.openTradesCount || 0;
+  const closedCount = Number(serverSummary?.trades ?? localAnalytics.totalClosedTrades ?? 0);
+  const winRate = Number(serverSummary?.winRate ?? localAnalytics.winRate ?? 0);
+  const expectancy = Number(serverSummary?.expectancy ?? localAnalytics.expectancy ?? 0);
+  const netPnl = Number(serverSummary?.pnl ?? localAnalytics.netPnl ?? 0);
 
   const status = document.getElementById("paperEngineStatus");
   const openBox = document.getElementById("paperOpenTrades");
@@ -355,79 +378,147 @@ export function renderPaperLab() {
   const pairBox = document.getElementById("paperPairStats");
   const recentBox = document.getElementById("paperRecentTrades");
   const toggleBtn = document.getElementById("paperEngineToggleBtn");
+  const paperOpenKpi = document.getElementById("paperOpenKpi");
+  const runsBox = document.getElementById("paperServerRuns");
 
   if (toggleBtn) {
-    toggleBtn.textContent = appState.paperEngine?.enabled ? "Paper Engine ON" : "Paper Engine OFF";
+    toggleBtn.textContent = appState.paperEngine?.enabled ? "Browser Paper ON" : "Browser Paper OFF";
+  }
+
+  if (paperOpenKpi) {
+    paperOpenKpi.textContent = String(openCount);
   }
 
   if (status) {
+    const lastRun = serverRuns[0];
+
     status.innerHTML = `
-      <strong>Status:</strong> ${appState.paperEngine?.enabled ? "Running" : "Stopped"}<br>
-      Open trades: ${analytics.openTradesCount}<br>
-      Closed trades: ${analytics.totalClosedTrades}<br>
-      Win rate: ${analytics.winRate}%<br>
-      Expectancy: ${analytics.expectancy}R<br>
-      Net PnL: ${analytics.netPnl}$
+      <strong>Status:</strong> Server + Browser<br>
+      Server open trades: ${serverOpen.length}<br>
+      Server closed trades: ${closedCount}<br>
+      Browser open trades: ${localAnalytics.openTradesCount}<br>
+      Browser closed trades: ${localAnalytics.totalClosedTrades}<br>
+      Win rate: ${winRate.toFixed(1)}%<br>
+      Expectancy: ${expectancy.toFixed(3)}R<br>
+      Net PnL: ${netPnl.toFixed(2)}$<br>
+      Last server run: ${lastRun ? esc(formatDateShort(lastRun.ranAt)) : "-"}<br>
+      Last run opened/closed: ${lastRun ? `${Number(lastRun.opened || 0)} / ${Number(lastRun.closed || 0)}` : "-"}
     `;
   }
 
   if (openBox) {
-    openBox.innerHTML = (appState.paperTrades || []).length
-      ? (appState.paperTrades || []).map((trade) => `
+    if (serverOpen.length) {
+      openBox.innerHTML = serverOpen.map((trade) => `
         <div class="top-row">
-          <strong>${trade.pair}</strong>
-          <span>${trade.direction}</span>
-          <span>${Number(trade.entryUltraScore || 0)}</span>
-          <span>${trade.barsHeld} bars</span>
+          <strong>${esc(trade.pair)}</strong>
+          <span>${esc(trade.direction)}</span>
+          <span>ULTRA ${Math.round(trade.ultraScore || 0)}</span>
+          <span>${Number(trade.pnlRLive || 0).toFixed(2)}R live</span>
+          <span>${Number(trade.barsHeld || 0)} bars</span>
         </div>
-      `).join("")
-      : `<div class="muted">No open paper trades.</div>`;
+      `).join("");
+    } else if ((appState.paperTrades || []).length) {
+      openBox.innerHTML = (appState.paperTrades || []).map((trade) => `
+        <div class="top-row">
+          <strong>${esc(trade.pair)}</strong>
+          <span>${esc(trade.direction)}</span>
+          <span>${Number(trade.entryUltraScore || 0)}</span>
+          <span>${Number(trade.barsHeld || 0)} bars</span>
+        </div>
+      `).join("");
+    } else {
+      openBox.innerHTML = `<div class="muted">No open paper trades.</div>`;
+    }
   }
 
   if (statsBox) {
     statsBox.innerHTML = `
       <div class="metric-card">
         <div class="metric-label">Closed</div>
-        <div class="metric-value">${analytics.totalClosedTrades}</div>
+        <div class="metric-value">${closedCount}</div>
       </div>
       <div class="metric-card">
         <div class="metric-label">Win rate</div>
-        <div class="metric-value">${analytics.winRate}%</div>
+        <div class="metric-value">${winRate.toFixed(1)}%</div>
       </div>
       <div class="metric-card">
         <div class="metric-label">Expectancy</div>
-        <div class="metric-value">${analytics.expectancy}R</div>
+        <div class="metric-value">${expectancy.toFixed(3)}R</div>
       </div>
       <div class="metric-card">
         <div class="metric-label">Net PnL</div>
-        <div class="metric-value">${analytics.netPnl}$</div>
+        <div class="metric-value">${netPnl.toFixed(2)}$</div>
       </div>
     `;
   }
 
   if (pairBox) {
-    pairBox.innerHTML = (analytics.pairStats || []).length
-      ? analytics.pairStats.map((row) => `
+    const pairRows = serverPairStats.length ? serverPairStats : localAnalytics.pairStats || [];
+
+    pairBox.innerHTML = pairRows.length
+      ? pairRows.map((row) => `
         <div class="top-row">
-          <strong>${row.pair}</strong>
-          <span>${row.trades} trades</span>
-          <span>${row.winRate.toFixed(1)}%</span>
-          <span>${row.expectancy.toFixed(2)}R</span>
+          <strong>${esc(row.pair)}</strong>
+          <span>${Number(row.trades || 0)} trades</span>
+          <span>${Number(row.winRate || 0).toFixed(1)}%</span>
+          <span>${Number(row.expectancy || 0).toFixed(3)}R</span>
         </div>
       `).join("")
       : `<div class="muted">No archived pair stats yet.</div>`;
   }
 
   if (recentBox) {
-    recentBox.innerHTML = (analytics.recentTrades || []).length
-      ? analytics.recentTrades.map((trade) => `
-        <div class="top-row ${trade.win ? "ok" : "blocked"}">
-          <strong>${trade.pair}</strong>
-          <span>${trade.direction}</span>
+    const recentRows = serverRecent.length ? serverRecent : localAnalytics.recentTrades || [];
+
+    recentBox.innerHTML = recentRows.length
+      ? recentRows.map((trade) => `
+        <div class="top-row ${Number(trade.pnlR || 0) > 0 ? "ok" : "blocked"}">
+          <strong>${esc(trade.pair)}</strong>
+          <span>${esc(trade.direction)}</span>
           <span>${Number(trade.pnlR || 0).toFixed(2)}R</span>
-          <span>${trade.closeReason || "-"}</span>
+          <span>${esc(trade.closeReason || trade.close_reason || "-")}</span>
         </div>
       `).join("")
       : `<div class="muted">No recent paper trades.</div>`;
   }
+
+  if (runsBox) {
+    runsBox.innerHTML = serverRuns.length
+      ? serverRuns.map((run) => `
+        <div class="top-row">
+          <strong>${esc(formatDateShort(run.ranAt))}</strong>
+          <span>${Number(run.scannedPairs || 0)} scanned</span>
+          <span>+${Number(run.opened || 0)} / -${Number(run.closed || 0)}</span>
+        </div>
+      `).join("")
+      : `<div class="muted">No server run yet.</div>`;
+  }
+}
+
+function formatDateShort(value) {
+  if (!value) return "-";
+
+  try {
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) return String(value);
+
+    return date.toLocaleString("fr-FR", {
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  } catch {
+    return String(value);
+  }
+}
+
+function esc(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
     }
