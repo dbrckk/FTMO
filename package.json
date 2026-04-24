@@ -3,13 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "FTMO Edge AI scanner with Twelve Data, ML scoring, Groq decision layer, and VectorBT backtesting service",
+  "description": "FTMO Edge AI scanner with Twelve Data, archive analytics, D1 paper trade storage, and VectorBT backtesting service",
   "scripts": {
     "dev": "wrangler pages dev .",
     "deploy": "wrangler pages deploy .",
     "check": "node -e \"console.log('ok')\"",
     "vectorbt:dev": "python -m uvicorn backtesting.vectorbt_service:app --host 0.0.0.0 --port 8000",
-    "vectorbt:dev:reload": "python -m uvicorn backtesting.vectorbt_service:app --host 0.0.0.0 --port 8000 --reload"
+    "vectorbt:dev:reload": "python -m uvicorn backtesting.vectorbt_service:app --host 0.0.0.0 --port 8000 --reload",
+    "seed:dukascopy": "node scripts/import-dukascopy-csv-to-sql.mjs",
+    "seed:d1": "wrangler d1 execute ftmo-archive --remote --file=seed/market_candles.sql",
+    "seed:all": "npm run seed:dukascopy && npm run seed:d1"
   },
   "dependencies": {
     "@tensorflow/tfjs": "^4.22.0",
