@@ -71,13 +71,22 @@ export async function onRequestPost(context) {
       return json({ ok: false, error: "Missing CSV content" }, 400);
     }
 
-    const parsedRows = parseCsv(raw, pair, timeframe);
+    const parsed = parseCsv(raw, pair, timeframe);
 
-    if (!parsedRows.length) {
-      return json({ ok: false, error: "No valid CSV rows parsed" }, 400);
+    if (!parsed.rows.length) {
+      return json({
+        ok: false,
+        error: "No valid CSV rows parsed",
+        debug: {
+          totalLines: parsed.debug.totalLines,
+          firstNonEmptyLines: parsed.debug.firstNonEmptyLines,
+          sampleDelimiter: parsed.debug.sampleDelimiter,
+          firstParsedParts: parsed.debug.firstParsedParts
+        }
+      }, 400);
     }
 
-    const dedupedRows = dedupeRows(parsedRows);
+    const dedupedRows = dedupeRows(parsed.rows);
 
     if (replaceExisting) {
       await db
@@ -92,11 +101,15 @@ export async function onRequestPost(context) {
       ok: true,
       pair,
       timeframe,
-      rowsParsed: parsedRows.length,
+      rowsParsed: parsed.rows.length,
       rowsImported: inserted,
-      rowsSkipped: Math.max(0, parsedRows.length - dedupedRows.length),
+      rowsSkipped: Math.max(0, parsed.rows.length - dedupedRows.length),
       replaceExisting,
-      source: "dukascopy"
+      source: "dukascopy",
+      debug: {
+        totalLines: parsed.debug.totalLines,
+        sampleDelimiter: parsed.debug.sampleDelimiter
+      }
     });
   } catch (error) {
     return json({
@@ -184,12 +197,20 @@ async function insertRows(db, rows) {
 }
 
 function parseCsv(raw, pair, timeframe) {
-  const lines = String(raw || "")
+  const cleanedRaw = String(raw || "").replace(/^\uFEFF/, "");
+  const lines = cleanedRaw
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean);
 
-  if (!lines.length) return [];
+  const debug = {
+    totalLines: lines.length,
+    firstNonEmptyLines: lines.slice(0, 3),
+    sampleDelimiter: lines[0] ? detectDelimiter(lines[0]) : ",",
+    firstParsedParts: lines[0] ? splitCsvLine(lines[0], detectDelimiter(lines[0])) : []
+  };
+
+  if (!lines.length) return { rows: [], debug };
 
   const rows = [];
 
@@ -197,52 +218,20 @@ function parseCsv(raw, pair, timeframe) {
     if (looksLikeHeader(line)) continue;
 
     const delimiter = detectDelimiter(line);
-    const parts = line
-      .split(delimiter)
-      .map((p) => p.trim())
-      .filter(Boolean);
+    const parts = splitCsvLine(line, delimiter)
+      .map((p) => stripQuotes(p.trim()))
+      .filter((p) => p !== "");
 
     if (parts.length < 5) continue;
 
-    let datePart = "";
-    let timePart = "";
-    let open = "";
-    let high = "";
-    let low = "";
-    let close = "";
+    const parsed = parseRowParts(parts);
+    if (!parsed) continue;
 
-    if (parts[0].includes(" ") && isNumeric(parts[1])) {
-      const split = splitDateTime(parts[0]);
-      datePart = split.datePart;
-      timePart = split.timePart;
-      open = parts[1];
-      high = parts[2];
-      low = parts[3];
-      close = parts[4];
-    } else if (parts.length >= 6 && looksLikeDate(parts[0]) && looksLikeTime(parts[1])) {
-      datePart = parts[0];
-      timePart = parts[1];
-      open = parts[2];
-      high = parts[3];
-      low = parts[4];
-      close = parts[5];
-    } else if (parts.length === 5 && parts[0].includes(" ")) {
-      const split = splitDateTime(parts[0]);
-      datePart = split.datePart;
-      timePart = split.timePart;
-      open = parts[1];
-      high = parts[2];
-      low = parts[3];
-      close = parts[4];
-    } else {
-      continue;
-    }
-
-    const ts = toUnix(datePart, timePart);
-    const o = toNum(open);
-    const h = toNum(high);
-    const l = toNum(low);
-    const c = toNum(close);
+    const ts = toUnix(parsed.datePart, parsed.timePart);
+    const o = toNum(parsed.open);
+    const h = toNum(parsed.high);
+    const l = toNum(parsed.low);
+    const c = toNum(parsed.close);
 
     if (
       !Number.isFinite(ts) ||
@@ -266,13 +255,167 @@ function parseCsv(raw, pair, timeframe) {
     });
   }
 
-  return rows;
+  return { rows, debug };
+}
+
+function parseRowParts(parts) {
+  // Cas 1: "2026.04.23 00:00:00", open, high, low, close, volume
+  if (parts[0] && containsDateTime(parts[0]) && isNumeric(parts[1]) && isNumeric(parts[2]) && isNumeric(parts[3]) && isNumeric(parts[4])) {
+    const dt = splitDateTimeFlexible(parts[0]);
+    if (!dt) return null;
+
+    return {
+      datePart: dt.datePart,
+      timePart: dt.timePart,
+      open: parts[1],
+      high: parts[2],
+      low: parts[3],
+      close: parts[4]
+    };
+  }
+
+  // Cas 2: date, time, open, high, low, close, ...
+  if (
+    parts.length >= 6 &&
+    looksLikeDate(parts[0]) &&
+    looksLikeTime(parts[1]) &&
+    isNumeric(parts[2]) &&
+    isNumeric(parts[3]) &&
+    isNumeric(parts[4]) &&
+    isNumeric(parts[5])
+  ) {
+    return {
+      datePart: parts[0],
+      timePart: parts[1],
+      open: parts[2],
+      high: parts[3],
+      low: parts[4],
+      close: parts[5]
+    };
+  }
+
+  // Cas 3: datetime ISO avec T
+  if (parts[0] && parts[0].includes("T") && isNumeric(parts[1]) && isNumeric(parts[2]) && isNumeric(parts[3]) && isNumeric(parts[4])) {
+    const dt = splitDateTimeFlexible(parts[0]);
+    if (!dt) return null;
+
+    return {
+      datePart: dt.datePart,
+      timePart: dt.timePart,
+      open: parts[1],
+      high: parts[2],
+      low: parts[3],
+      close: parts[4]
+    };
+  }
+
+  // Cas 4: timestamp unix + OHLC
+  if (
+    /^\d{10,13}$/.test(parts[0]) &&
+    isNumeric(parts[1]) &&
+    isNumeric(parts[2]) &&
+    isNumeric(parts[3]) &&
+    isNumeric(parts[4])
+  ) {
+    const ts = normalizeUnixTs(parts[0]);
+    const d = new Date(ts * 1000);
+    const iso = d.toISOString();
+
+    return {
+      datePart: iso.slice(0, 10),
+      timePart: iso.slice(11, 19),
+      open: parts[1],
+      high: parts[2],
+      low: parts[3],
+      close: parts[4]
+    };
+  }
+
+  return null;
+}
+
+function splitCsvLine(line, delimiter) {
+  const out = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+
+    if (!inQuotes && ch === delimiter) {
+      out.push(current);
+      current = "";
+      continue;
+    }
+
+    current += ch;
+  }
+
+  out.push(current);
+  return out;
 }
 
 function detectDelimiter(line) {
-  if (line.includes("\t")) return "\t";
-  if (line.includes(";")) return ";";
+  const counts = {
+    "\t": (line.match(/\t/g) || []).length,
+    ";": (line.match(/;/g) || []).length,
+    ",": (line.match(/,/g) || []).length
+  };
+
+  if (counts["\t"] > counts[";"] && counts["\t"] > counts[","]) return "\t";
+  if (counts[";"] > counts[","]) return ";";
   return ",";
+}
+
+function stripQuotes(value) {
+  return String(value).replace(/^"+|"+$/g, "");
+}
+
+function containsDateTime(value) {
+  const v = String(value).trim();
+  return (
+    (looksLikeDate(v.split(/[ T]/)[0]) && (v.includes(" ") || v.includes("T"))) ||
+    /^\d{4}[./-]\d{2}[./-]\d{2}[ T]\d{2}:\d{2}/.test(v)
+  );
+}
+
+function splitDateTimeFlexible(value) {
+  const clean = String(value).trim();
+
+  if (clean.includes("T")) {
+    const [datePart, timePart] = clean.split("T", 2);
+    return {
+      datePart,
+      timePart: stripMilliseconds(timePart)
+    };
+  }
+
+  if (clean.includes(" ")) {
+    const [datePart, timePart] = clean.split(/\s+/, 2);
+    return {
+      datePart,
+      timePart: stripMilliseconds(timePart)
+    };
+  }
+
+  return null;
+}
+
+function stripMilliseconds(value) {
+  const v = String(value || "").trim();
+  return v.replace(/\.\d+$/, "");
+}
+
+function normalizeUnixTs(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return NaN;
+  if (String(value).length === 13) return Math.floor(n / 1000);
+  return n;
 }
 
 function isNumeric(value) {
@@ -291,7 +434,7 @@ function looksLikeDate(value) {
 
 function looksLikeTime(value) {
   const v = String(value).trim();
-  return /^\d{2}:\d{2}(:\d{2})?$/.test(v);
+  return /^\d{2}:\d{2}(:\d{2})?(\.\d+)?$/.test(v);
 }
 
 function looksLikeHeader(line) {
@@ -304,15 +447,6 @@ function looksLikeHeader(line) {
     lower.includes("low") ||
     lower.includes("close")
   );
-}
-
-function splitDateTime(value) {
-  const clean = String(value).trim();
-  if (clean.includes(" ")) {
-    const [datePart, timePart] = clean.split(/\s+/, 2);
-    return { datePart, timePart };
-  }
-  return { datePart: clean, timePart: "00:00:00" };
 }
 
 function toUnix(datePart, timePart) {
@@ -341,7 +475,7 @@ function normalizeDate(value) {
 }
 
 function normalizeTime(value) {
-  const v = String(value || "00:00:00").trim();
+  const v = String(value || "00:00:00").trim().replace(/\.\d+$/, "");
 
   if (/^\d{2}:\d{2}$/.test(v)) return `${v}:00`;
   if (/^\d{2}:\d{2}:\d{2}$/.test(v)) return v;
