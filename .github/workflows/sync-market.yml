@@ -9,28 +9,12 @@ jobs:
   sync-market:
     runs-on: ubuntu-latest
     steps:
-      - name: Check secrets presence
-        run: |
-          if [ -z "${{ secrets.SITE_URL }}" ]; then
-            echo "ERROR: SITE_URL missing"
-            exit 1
-          fi
-
-          if [ -z "${{ secrets.SYNC_SECRET }}" ]; then
-            echo "ERROR: SYNC_SECRET missing"
-            exit 1
-          fi
-
-          echo "SITE_URL present"
-          echo "SYNC_SECRET present"
-
-      - name: Call sync endpoint and print response
+      - name: Call sync endpoint
         run: |
           HTTP_CODE=$(curl -sS \
             -o response.json \
             -w "%{http_code}" \
-            -X POST "${{ secrets.SITE_URL }}/api/sync-market?token=${{ secrets.SYNC_SECRET }}" \
-            -H "Accept: application/json")
+            "${{ secrets.SITE_URL }}/api/sync-market?token=${{ secrets.SYNC_SECRET }}")
 
           echo "HTTP_CODE=$HTTP_CODE"
           cat response.json || true
