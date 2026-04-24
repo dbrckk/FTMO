@@ -2,23 +2,50 @@ name: Sync market candles to D1
 
 on:
   workflow_dispatch:
+    inputs:
+      group:
+        description: "Rotation group number (1-11). Leave empty for auto."
+        required: false
+        default: ""
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/5 * * * *"
 
 jobs:
   sync-market:
     runs-on: ubuntu-latest
     steps:
+      - name: Check secrets presence
+        run: |
+          if [ -z "${{ secrets.SITE_URL }}" ]; then
+            echo "ERROR: SITE_URL missing"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.SYNC_SECRET }}" ]; then
+            echo "ERROR: SYNC_SECRET missing"
+            exit 1
+          fi
+
+          echo "SITE_URL present"
+          echo "SYNC_SECRET present"
+
+      - name: Compute group
+        id: group
+        shell: bash
+        run: |
+          MANUAL_GROUP="${{ github.event.inputs.group }}"
+
+          if [ -n "$MANUAL_GROUP" ]; then
+            GROUP="$MANUAL_GROUP"
+          else
+            SLOT=$(( $(date -u +%s) / 300 ))
+            GROUP=$(( (SLOT % 11) + 1 ))
+          fi
+
+          echo "group=$GROUP" >> "$GITHUB_OUTPUT"
+          echo "Using group $GROUP"
+
       - name: Call sync endpoint
         run: |
           HTTP_CODE=$(curl -sS \
-            -o response.json \
-            -w "%{http_code}" \
-            "${{ secrets.SITE_URL }}/api/sync-market?token=${{ secrets.SYNC_SECRET }}")
-
-          echo "HTTP_CODE=$HTTP_CODE"
-          cat response.json || true
-
-          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
-            exit 1
-          fi
+            -o
