@@ -1,7 +1,11 @@
 import { PAIRS } from "./config.js";
 import { appState, persistState, els } from "./state.js";
 import { setupChart } from "./chart.js?v=2";
-import { fetchCorrelationMatrix, refreshAiDecision } from "./api.js";
+import {
+  fetchCorrelationMatrix,
+  refreshAiDecision,
+  fetchArchiveStatsBatch
+} from "./api.js";
 import { scanPair, computeHedgeScore, isEliteTrade, computeConfluenceScore } from "./scan.js";
 import {
   renderOverview,
@@ -27,53 +31,14 @@ import { runPaperEngine } from "./paper-engine.js";
 
 let paperLoop = null;
 
-function debugLine(text) {
-  let box = document.getElementById("debugBox");
-  if (!box) {
-    box = document.createElement("div");
-    box.id = "debugBox";
-    box.style.position = "fixed";
-    box.style.bottom = "10px";
-    box.style.left = "10px";
-    box.style.right = "10px";
-    box.style.maxHeight = "40vh";
-    box.style.overflow = "auto";
-    box.style.zIndex = "99999";
-    box.style.background = "rgba(0,0,0,0.92)";
-    box.style.color = "#00ff88";
-    box.style.padding = "10px";
-    box.style.fontSize = "12px";
-    box.style.border = "1px solid rgba(255,255,255,0.2)";
-    box.style.borderRadius = "10px";
-    document.body.appendChild(box);
-  }
-
-  const line = document.createElement("div");
-  line.textContent = text;
-  box.appendChild(line);
-}
-
 document.addEventListener("DOMContentLoaded", async () => {
-  try {
-    debugLine("1. DOMContentLoaded OK");
-    cacheEls();
-    debugLine("2. cacheEls OK");
-    bindEvents();
-    debugLine("3. bindEvents OK");
-    setupChart();
-    debugLine("4. setupChart OK");
-    setActiveTab("dashboard");
-    debugLine("5. setActiveTab OK");
-    renderTabs();
-    debugLine("6. renderTabs OK");
-    await refreshAll(true);
-    debugLine("7. refreshAll OK");
-    startPaperLoop();
-    debugLine("8. startPaperLoop OK");
-  } catch (error) {
-    debugLine("FATAL ERROR: " + (error?.message || error));
-    console.error(error);
-  }
+  cacheEls();
+  bindEvents();
+  setupChart();
+  setActiveTab("dashboard");
+  renderTabs();
+  await refreshAll(true);
+  startPaperLoop();
 });
 
 function cacheEls() {
@@ -170,10 +135,9 @@ function bindEvents() {
 
 async function refreshAll(force = false) {
   try {
-    debugLine("refreshAll: scan start");
+    await fetchArchiveStatsBatch();
 
     const scans = await Promise.all(PAIRS.map((pair) => scanPair(pair)));
-    debugLine("refreshAll: scan done -> " + scans.length);
 
     appState.scans = scans
       .map((scan) => {
@@ -193,67 +157,37 @@ async function refreshAll(force = false) {
         return (b.finalScore || 0) - (a.finalScore || 0);
       });
 
-    debugLine("refreshAll: state scans set");
-
     if (!appState.selectedPair || !appState.scans.find((s) => s.pair === appState.selectedPair)) {
       appState.selectedPair = appState.scans[0]?.pair || "EURUSD";
     }
 
-    debugLine("refreshAll: selected pair -> " + appState.selectedPair);
-
     await fetchCorrelationMatrix();
-    debugLine("refreshAll: correlation OK");
-
     await refreshAiDecision(force, renderSelectedPair);
-    debugLine("refreshAll: ai OK");
-
-    runPaperEngine(appState.scans);
-    debugLine("refreshAll: paper engine OK");
+    await runPaperEngine(appState.scans);
 
     renderOverview();
-    debugLine("refreshAll: renderOverview OK");
-
     renderPairList(refreshAiDecision);
-    debugLine("refreshAll: renderPairList OK");
-
     renderTopPriorityTrades();
-    debugLine("refreshAll: renderTopPriorityTrades OK");
-
     renderTopBlockedTrades();
-    debugLine("refreshAll: renderTopBlockedTrades OK");
-
     renderCorrelationMatrix();
-    debugLine("refreshAll: renderCorrelationMatrix OK");
-
     renderSelectedPair();
-    debugLine("refreshAll: renderSelectedPair OK");
-
     renderTrades();
-    debugLine("refreshAll: renderTrades OK");
-
     renderWatchlist();
-    debugLine("refreshAll: renderWatchlist OK");
-
     renderFtmoRisk();
-    debugLine("refreshAll: renderFtmoRisk OK");
-
     renderPaperLab();
-    debugLine("refreshAll: renderPaperLab OK");
-
     renderTabs();
-    debugLine("refreshAll: renderTabs OK");
 
     persistState();
-    debugLine("refreshAll: persist OK");
   } catch (error) {
-    debugLine("refreshAll ERROR: " + (error?.message || error));
     console.error("refreshAll failed", error);
   }
 }
 
 function startPaperLoop() {
   if (paperLoop) clearInterval(paperLoop);
+
   const intervalMs = Number(appState.paperEngine?.refreshIntervalMs || 20000);
+
   paperLoop = setInterval(() => {
     refreshAll(false);
   }, intervalMs);
