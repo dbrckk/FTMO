@@ -41,6 +41,7 @@ export async function onRequestGet(context) {
 export async function onRequestPost(context) {
   try {
     const db = context.env?.DB;
+
     if (!db) {
       return json({ ok: false, error: "D1 binding DB missing" }, 500);
     }
@@ -119,6 +120,7 @@ async function parseIncomingRequest(request) {
 
   if (contentType.includes("multipart/form-data")) {
     const form = await request.formData();
+
     return {
       pair: form.get("pair"),
       timeframe: form.get("timeframe"),
@@ -130,6 +132,7 @@ async function parseIncomingRequest(request) {
 
   if (contentType.includes("application/x-www-form-urlencoded")) {
     const form = await request.formData();
+
     return {
       pair: form.get("pair"),
       timeframe: form.get("timeframe"),
@@ -141,6 +144,7 @@ async function parseIncomingRequest(request) {
 
   if (contentType.includes("application/json")) {
     const body = await request.json();
+
     return {
       pair: body?.pair,
       timeframe: body?.timeframe,
@@ -151,6 +155,7 @@ async function parseIncomingRequest(request) {
   }
 
   const text = await request.text();
+
   return {
     pair: "",
     timeframe: "",
@@ -195,7 +200,7 @@ function parseCsv(raw, pair, timeframe) {
   const cleanedRaw = String(raw || "").replace(/^\uFEFF/, "");
   const lines = cleanedRaw
     .split(/\r?\n/)
-    .map((l) => l.trim())
+    .map((line) => line.trim())
     .filter(Boolean);
 
   const debug = {
@@ -204,7 +209,9 @@ function parseCsv(raw, pair, timeframe) {
     sampleDelimiter: lines[0] ? detectDelimiter(lines[0]) : ","
   };
 
-  if (!lines.length) return { rows: [], debug };
+  if (!lines.length) {
+    return { rows: [], debug };
+  }
 
   const rows = [];
 
@@ -213,8 +220,8 @@ function parseCsv(raw, pair, timeframe) {
 
     const delimiter = detectDelimiter(line);
     const parts = splitCsvLine(line, delimiter)
-      .map((p) => stripQuotes(p.trim()))
-      .filter((p) => p !== "");
+      .map((part) => stripQuotes(part.trim()))
+      .filter((part) => part !== "");
 
     if (parts.length < 5) continue;
 
@@ -253,8 +260,6 @@ function parseCsv(raw, pair, timeframe) {
 }
 
 function parseRowParts(parts) {
-  // ISO datetime avec timezone dans la 1re colonne
-  // 2026-04-23T12:00:00+00:00,1.16906,1.16981,1.16865,1.16957,3332550000
   if (
     parts[0] &&
     looksLikeIsoDateTime(parts[0]) &&
@@ -264,6 +269,7 @@ function parseRowParts(parts) {
     isNumeric(parts[4])
   ) {
     const ts = toUnixFromAnyDateTime(parts[0]);
+
     if (!Number.isFinite(ts)) return null;
 
     return {
@@ -275,7 +281,6 @@ function parseRowParts(parts) {
     };
   }
 
-  // datetime combiné + OHLC
   if (
     parts[0] &&
     containsDateTime(parts[0]) &&
@@ -285,6 +290,7 @@ function parseRowParts(parts) {
     isNumeric(parts[4])
   ) {
     const dt = splitDateTimeFlexible(parts[0]);
+
     if (!dt) return null;
 
     return {
@@ -297,7 +303,6 @@ function parseRowParts(parts) {
     };
   }
 
-  // date, time, open, high, low, close
   if (
     parts.length >= 6 &&
     looksLikeDate(parts[0]) &&
@@ -317,7 +322,6 @@ function parseRowParts(parts) {
     };
   }
 
-  // timestamp unix + OHLC
   if (
     /^\d{10,13}$/.test(parts[0]) &&
     isNumeric(parts[1]) &&
@@ -326,6 +330,7 @@ function parseRowParts(parts) {
     isNumeric(parts[4])
   ) {
     const ts = normalizeUnixTs(parts[0]);
+
     if (!Number.isFinite(ts)) return null;
 
     return {
@@ -375,6 +380,7 @@ function detectDelimiter(line) {
 
   if (counts["\t"] > counts[";"] && counts["\t"] > counts[","]) return "\t";
   if (counts[";"] > counts[","]) return ";";
+
   return ",";
 }
 
@@ -384,6 +390,7 @@ function stripQuotes(value) {
 
 function looksLikeIsoDateTime(value) {
   const v = String(value).trim();
+
   return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+\-]\d{2}:\d{2})?$/.test(v);
 }
 
@@ -394,6 +401,7 @@ function toUnixFromAnyDateTime(value) {
 
 function containsDateTime(value) {
   const v = String(value).trim();
+
   return (
     (looksLikeDate(v.split(/[ T]/)[0]) && (v.includes(" ") || v.includes("T"))) ||
     /^\d{4}[./-]\d{2}[./-]\d{2}[ T]\d{2}:\d{2}/.test(v)
@@ -405,6 +413,7 @@ function splitDateTimeFlexible(value) {
 
   if (clean.includes("T")) {
     const [datePart, timePart] = clean.split("T", 2);
+
     return {
       datePart,
       timePart: stripTimezone(stripMilliseconds(timePart))
@@ -413,6 +422,7 @@ function splitDateTimeFlexible(value) {
 
   if (clean.includes(" ")) {
     const [datePart, timePart] = clean.split(/\s+/, 2);
+
     return {
       datePart,
       timePart: stripTimezone(stripMilliseconds(timePart))
@@ -427,13 +437,18 @@ function stripMilliseconds(value) {
 }
 
 function stripTimezone(value) {
-  return String(value || "").trim().replace(/Z$/, "").replace(/[+\-]\d{2}:\d{2}$/, "");
+  return String(value || "")
+    .trim()
+    .replace(/Z$/, "")
+    .replace(/[+\-]\d{2}:\d{2}$/, "");
 }
 
 function normalizeUnixTs(value) {
   const n = Number(value);
+
   if (!Number.isFinite(n)) return NaN;
   if (String(value).length === 13) return Math.floor(n / 1000);
+
   return n;
 }
 
@@ -444,6 +459,7 @@ function isNumeric(value) {
 
 function looksLikeDate(value) {
   const v = String(value).trim();
+
   return (
     /^\d{4}[./-]\d{2}[./-]\d{2}$/.test(v) ||
     /^\d{2}[./-]\d{2}[./-]\d{4}$/.test(v) ||
@@ -453,11 +469,13 @@ function looksLikeDate(value) {
 
 function looksLikeTime(value) {
   const v = String(value).trim();
+
   return /^\d{2}:\d{2}(:\d{2})?(\.\d+)?(?:Z|[+\-]\d{2}:\d{2})?$/.test(v);
 }
 
 function looksLikeHeader(line) {
   const lower = line.toLowerCase();
+
   return (
     lower.includes("date") ||
     lower.includes("time") ||
@@ -474,6 +492,7 @@ function toUnix(datePart, timePart) {
   const t = normalizeTime(timePart);
   const iso = `${d}T${t}Z`;
   const ms = Date.parse(iso);
+
   return Number.isFinite(ms) ? Math.floor(ms / 1000) : NaN;
 }
 
@@ -529,6 +548,7 @@ function cleanPair(value) {
 
 function normalizeTimeframe(value) {
   const tf = String(value || "").toUpperCase().trim();
+
   return ["M5", "M15", "H1", "H4"].includes(tf) ? tf : "";
 }
 
@@ -540,4 +560,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-      }
+}
