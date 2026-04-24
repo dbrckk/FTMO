@@ -1,110 +1,184 @@
 export async function onRequestPost(context) {
   try {
     const body = await safeJson(context.request);
-    if (!body.ok) {
-      return json({ ok: false, error: "Invalid JSON body" }, 400);
-    }
+    const data = body?.data || body || {};
 
-    const p = normalizePayload(body.data);
-
-    const directionFactor = p.direction === "sell" ? -1 : 1;
-    const move = (p.currentPrice - p.entry) * directionFactor;
-    const riskDistance = Math.abs(p.entry - p.stopLoss) || 0.00001;
-    const targetDistance = Math.abs(p.takeProfit - p.entry) || 0.00001;
-
-    const rMultiple = move / riskDistance;
-    const tpProgress = (move / targetDistance) * 100;
-
-    let decision = "HOLD";
-    let partialClosePercent = 0;
-    let newStopLoss = p.stopLoss;
-    let reason = "Le trade peut rester ouvert pour le moment.";
-
-    if (p.macroDanger) {
-      decision = "EXIT_NOW";
-      partialClosePercent = 100;
-      newStopLoss = p.currentPrice;
-      reason = "Contexte macro dangereux : sortie immédiate privilégiée.";
-    } else if (rMultiple >= 1.5 && Math.abs(p.momentum) < 0.08) {
-      decision = "PARTIAL_EXIT";
-      partialClosePercent = 50;
-      newStopLoss = p.entry;
-      reason = "Le trade a bien avancé mais le momentum ralentit.";
-    } else if (rMultiple >= 1.8) {
-      decision = "TRAIL_STOP";
-      partialClosePercent = 0;
-      newStopLoss =
-        p.direction === "buy"
-          ? p.currentPrice - p.atr14 * 1.1
-          : p.currentPrice + p.atr14 * 1.1;
-      reason = "Le trade est assez mature pour un trailing stop agressif.";
-    } else if (rMultiple >= 1.0) {
-      decision = "MOVE_TO_BREAKEVEN";
-      partialClosePercent = 0;
-      newStopLoss = p.entry;
-      reason = "Le trade a atteint 1R, passage au break-even.";
-    } else if (p.confidence < 55) {
-      decision = "LIGHTEN";
-      partialClosePercent = 25;
-      newStopLoss = p.stopLoss;
-      reason = "Le maintien du trade devient moins propre.";
-    }
+    const result = computeExitDecision(data);
 
     return json({
       ok: true,
-      decision,
-      rMultiple: Number.isFinite(rMultiple) ? rMultiple.toFixed(2) : "0.00",
-      tpProgress: Number.isFinite(tpProgress) ? tpProgress.toFixed(2) : "0.00",
-      partialClosePercent,
-      newStopLoss: formatPrice(newStopLoss),
-      reason
+      source: "local-exit-engine",
+      ...result
     });
-  } catch {
+  } catch (error) {
     return json({
-      ok: false,
-      error: "Exit engine failed"
-    }, 500);
+      ok: true,
+      source: "exit-safe-fallback",
+      decision: "HOLD",
+      rMultiple: 0,
+      tpProgress: 0,
+      partialClosePercent: 0,
+      newStopLoss: null,
+      reason: String(error?.message || "Fallback exit engine.")
+    });
   }
 }
 
-function normalizePayload(data) {
+export async function onRequestGet() {
+  return json({
+    ok: true,
+    message: "POST trade data to compute exit suggestion."
+  });
+}
+
+function computeExitDecision(data) {
+  const pair = String(data.pair || "").toUpperCase();
+  const direction = String(data.direction || "buy").toLowerCase();
+
+  const entry = num(data.entry, 0);
+  const currentPrice = num(data.currentPrice, entry);
+  const stopLoss = num(data.stopLoss, 0);
+  const takeProfit = num(data.takeProfit, 0);
+  const atr14 = num(data.atr14, 0);
+  const momentum = num(data.momentum, 0);
+  const confidence = num(data.confidence, 50);
+  const macroDanger = Boolean(data.macroDanger);
+
+  if (!entry || !currentPrice || !stopLoss || !takeProfit) {
+    return {
+      decision: "HOLD",
+      rMultiple: 0,
+      tpProgress: 0,
+      partialClosePercent: 0,
+      newStopLoss: null,
+      reason: "Données insuffisantes pour calculer la sortie."
+    };
+  }
+
+  const riskDistance = Math.abs(entry - stopLoss);
+  const targetDistance = Math.abs(takeProfit - entry);
+
+  if (!Number.isFinite(riskDistance) || riskDistance <= 0) {
+    return {
+      decision: "HOLD",
+      rMultiple: 0,
+      tpProgress: 0,
+      partialClosePercent: 0,
+      newStopLoss: null,
+      reason: "Distance au stop invalide."
+    };
+  }
+
+  const profitDistance =
+    direction === "sell"
+      ? entry - currentPrice
+      : currentPrice - entry;
+
+  const rMultiple = profitDistance / riskDistance;
+  const tpProgress = targetDistance > 0
+    ? clamp((profitDistance / targetDistance) * 100, -100, 150)
+    : 0;
+
+  const atrTrail =
+    atr14 > 0
+      ? atr14 * (pair === "XAUUSD" ? 1.25 : 1.1)
+      : riskDistance * 0.55;
+
+  let decision = "HOLD";
+  let partialClosePercent = 0;
+  let newStopLoss = null;
+  let reason = "Aucune sortie nécessaire.";
+
+  if (macroDanger && rMultiple > 0.2) {
+    decision = "REDUCE";
+    partialClosePercent = 50;
+    newStopLoss = direction === "sell"
+      ? Math.min(stopLoss, entry)
+      : Math.max(stopLoss, entry);
+    reason = "Danger macro détecté, réduction du risque.";
+  } else if (rMultiple >= 2.0) {
+    decision = "PARTIAL CLOSE";
+    partialClosePercent = 60;
+    newStopLoss = computeTrailingStop(direction, currentPrice, atrTrail, entry);
+    reason = "Objectif avancé atteint, sécurisation agressive.";
+  } else if (rMultiple >= 1.2) {
+    decision = "PARTIAL CLOSE";
+    partialClosePercent = 35;
+    newStopLoss = computeBreakEvenPlus(direction, entry, riskDistance);
+    reason = "Trade en gain, sécurisation partielle.";
+  } else if (rMultiple >= 0.75 && confidence < 58) {
+    decision = "REDUCE";
+    partialClosePercent = 25;
+    newStopLoss = computeBreakEvenPlus(direction, entry, riskDistance * 0.35);
+    reason = "Gain correct mais confiance moyenne.";
+  } else if (rMultiple <= -0.75) {
+    decision = "HOLD / RESPECT STOP";
+    partialClosePercent = 0;
+    newStopLoss = stopLoss;
+    reason = "Trade proche du stop, ne pas élargir le risque.";
+  } else if (momentum < -0.15 && direction === "buy" && rMultiple > 0.3) {
+    decision = "REDUCE";
+    partialClosePercent = 25;
+    newStopLoss = Math.max(stopLoss, entry);
+    reason = "Momentum défavorable au buy, réduction prudente.";
+  } else if (momentum > 0.15 && direction === "sell" && rMultiple > 0.3) {
+    decision = "REDUCE";
+    partialClosePercent = 25;
+    newStopLoss = Math.min(stopLoss, entry);
+    reason = "Momentum défavorable au sell, réduction prudente.";
+  }
+
   return {
-    pair: cleanText(data.pair, "EURUSD"),
-    direction: String(data.direction || "buy").toLowerCase() === "sell" ? "sell" : "buy",
-    entry: Number(data.entry) || 0,
-    currentPrice: Number(data.currentPrice) || 0,
-    stopLoss: Number(data.stopLoss) || 0,
-    takeProfit: Number(data.takeProfit) || 0,
-    atr14: Math.max(Number(data.atr14) || 0, 0),
-    macroDanger: Boolean(data.macroDanger),
-    momentum: Number(data.momentum) || 0,
-    confidence: clampNumber(data.confidence, 1, 99, 70)
+    decision,
+    rMultiple: Number(rMultiple.toFixed(2)),
+    tpProgress: Number(tpProgress.toFixed(1)),
+    partialClosePercent,
+    newStopLoss: newStopLoss == null ? null : roundByPair(newStopLoss, pair),
+    reason
   };
+}
+
+function computeTrailingStop(direction, currentPrice, atrTrail, entry) {
+  if (direction === "sell") {
+    return Math.min(entry, currentPrice + atrTrail);
+  }
+
+  return Math.max(entry, currentPrice - atrTrail);
+}
+
+function computeBreakEvenPlus(direction, entry, distance) {
+  if (direction === "sell") {
+    return entry - Math.abs(distance) * 0.1;
+  }
+
+  return entry + Math.abs(distance) * 0.1;
 }
 
 async function safeJson(request) {
   try {
-    return { ok: true, data: await request.json() };
+    return await request.json();
   } catch {
-    return { ok: false };
+    return {};
   }
 }
 
-function formatPrice(value) {
+function num(value, fallback = 0) {
   const n = Number(value);
-  if (!Number.isFinite(n)) return "--";
-  return n.toFixed(n > 100 ? 2 : 5);
+  return Number.isFinite(n) ? n : fallback;
 }
 
-function clampNumber(value, min, max, fallback) {
+function clamp(value, min = 0, max = 100) {
   const n = Number(value);
-  if (!Number.isFinite(n)) return fallback;
+  if (!Number.isFinite(n)) return min;
   return Math.max(min, Math.min(max, n));
 }
 
-function cleanText(value, fallback) {
-  const text = String(value ?? "").trim();
-  return text ? text.slice(0, 40) : fallback;
+function roundByPair(value, pair) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  if (pair === "XAUUSD") return Number(n.toFixed(2));
+  if (String(pair).includes("JPY")) return Number(n.toFixed(3));
+  return Number(n.toFixed(5));
 }
 
 function json(data, status = 200) {
@@ -115,4 +189,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-}
+    }
