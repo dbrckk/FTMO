@@ -74,39 +74,46 @@ export async function onRequestGet(context) {
     const timeframe = String(url.searchParams.get("timeframe") || "").toUpperCase();
     const pair = String(url.searchParams.get("pair") || "").toUpperCase();
 
-    if (mode === "recent") {
-      const { query, binds } = buildRecentQuery({ timeframe, pair, limit: 50 });
-
-      const res = await context.env.DB
-        .prepare(query)
-        .bind(...binds)
-        .all();
+    if (mode === "snapshot") {
+      const open = await getOpenTrades(context.env.DB, { timeframe, pair });
+      const recent = await getRecentClosedTrades(context.env.DB, { timeframe, pair, limit: 40 });
+      const summary = await getSummary(context.env.DB, { timeframe, pair });
+      const pairStats = await getPairStats(context.env.DB, { timeframe });
+      const runs = await getRecentRuns(context.env.DB, { limit: 10 });
 
       return json({
         ok: true,
         mode,
-        results: res.results || []
+        open,
+        recent,
+        summary,
+        pairStats,
+        runs
+      });
+    }
+
+    if (mode === "open") {
+      const open = await getOpenTrades(context.env.DB, { timeframe, pair });
+
+      return json({
+        ok: true,
+        mode,
+        results: open
+      });
+    }
+
+    if (mode === "recent") {
+      const recent = await getRecentClosedTrades(context.env.DB, { timeframe, pair, limit: 50 });
+
+      return json({
+        ok: true,
+        mode,
+        results: recent
       });
     }
 
     if (mode === "summary") {
-      const { query, binds } = buildSummaryQuery({ timeframe, pair });
-
-      const res = await context.env.DB
-        .prepare(query)
-        .bind(...binds)
-        .first();
-
-      const summary = {
-        trades: Number(res?.trades || 0),
-        wins: Number(res?.wins || 0),
-        expectancy: Number(res?.expectancy || 0),
-        pnl: Number(res?.pnl || 0),
-        winRate:
-          Number(res?.trades || 0) > 0
-            ? Number((((Number(res?.wins || 0) / Number(res?.trades || 0)) * 100)).toFixed(2))
-            : 0
-      };
+      const summary = await getSummary(context.env.DB, { timeframe, pair });
 
       return json({
         ok: true,
@@ -116,26 +123,22 @@ export async function onRequestGet(context) {
     }
 
     if (mode === "pair-stats") {
-      const { query, binds } = buildPairStatsQuery({ timeframe });
-
-      const res = await context.env.DB
-        .prepare(query)
-        .bind(...binds)
-        .all();
+      const pairStats = await getPairStats(context.env.DB, { timeframe });
 
       return json({
         ok: true,
         mode,
-        results: (res.results || []).map((row) => ({
-          pair: row.pair,
-          trades: Number(row.trades || 0),
-          wins: Number(row.wins || 0),
-          winRate: Number(row.trades || 0)
-            ? Number((((Number(row.wins || 0) / Number(row.trades || 0)) * 100)).toFixed(2))
-            : 0,
-          expectancy: Number(row.expectancy || 0),
-          pnl: Number(row.pnl || 0)
-        }))
+        results: pairStats
+      });
+    }
+
+    if (mode === "runs") {
+      const runs = await getRecentRuns(context.env.DB, { limit: 25 });
+
+      return json({
+        ok: true,
+        mode,
+        results: runs
       });
     }
 
@@ -148,7 +151,7 @@ export async function onRequestGet(context) {
   }
 }
 
-function buildRecentQuery({ timeframe, pair, limit }) {
+async function getOpenTrades(db, { timeframe, pair }) {
   const where = [];
   const binds = [];
 
@@ -164,29 +167,63 @@ function buildRecentQuery({ timeframe, pair, limit }) {
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
-  const query = `
-    SELECT
-      pair,
-      timeframe,
-      direction,
-      pnl_r,
-      pnl,
-      close_reason,
-      closed_at,
-      ultra_score,
-      ml_score,
-      vectorbt_score,
-      archive_edge_score
-    FROM paper_trades
-    ${whereSql}
-    ORDER BY closed_at DESC
-    LIMIT ${Number(limit || 50)}
-  `;
+  const res = await db
+    .prepare(`
+      SELECT
+        id,
+        pair,
+        timeframe,
+        direction,
+        opened_at,
+        entry,
+        stop_loss,
+        take_profit,
+        current_price,
+        risk_percent,
+        rr,
+        bars_held,
+        max_bars_hold,
+        ultra_score,
+        ml_score,
+        archive_edge_score,
+        session,
+        hour,
+        model_tag,
+        source
+      FROM paper_open_trades
+      ${whereSql}
+      ORDER BY opened_at DESC
+      LIMIT 100
+    `)
+    .bind(...binds)
+    .all();
 
-  return { query, binds };
+  return (res.results || []).map((row) => ({
+    id: row.id,
+    pair: row.pair,
+    timeframe: row.timeframe,
+    direction: row.direction,
+    openedAt: row.opened_at,
+    entry: Number(row.entry || 0),
+    stopLoss: Number(row.stop_loss || 0),
+    takeProfit: Number(row.take_profit || 0),
+    currentPrice: Number(row.current_price || 0),
+    riskPercent: Number(row.risk_percent || 0),
+    rr: Number(row.rr || 0),
+    barsHeld: Number(row.bars_held || 0),
+    maxBarsHold: Number(row.max_bars_hold || 0),
+    ultraScore: Number(row.ultra_score || 0),
+    mlScore: Number(row.ml_score || 0),
+    archiveEdgeScore: Number(row.archive_edge_score || 0),
+    session: row.session || "OffSession",
+    hour: Number(row.hour || 0),
+    modelTag: row.model_tag || "server-paper",
+    source: row.source || "server-paper",
+    pnlRLive: computeLivePnlR(row)
+  }));
 }
 
-function buildSummaryQuery({ timeframe, pair }) {
+async function getRecentClosedTrades(db, { timeframe, pair, limit }) {
   const where = [];
   const binds = [];
 
@@ -202,20 +239,106 @@ function buildSummaryQuery({ timeframe, pair }) {
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
-  const query = `
-    SELECT
-      COUNT(*) AS trades,
-      SUM(CASE WHEN win = 1 THEN 1 ELSE 0 END) AS wins,
-      ROUND(AVG(pnl_r), 4) AS expectancy,
-      ROUND(SUM(pnl), 2) AS pnl
-    FROM paper_trades
-    ${whereSql}
-  `;
+  const res = await db
+    .prepare(`
+      SELECT
+        id,
+        pair,
+        timeframe,
+        direction,
+        pnl_r,
+        pnl,
+        win,
+        close_reason,
+        opened_at,
+        closed_at,
+        entry,
+        exit,
+        stop_loss,
+        take_profit,
+        ultra_score,
+        ml_score,
+        vectorbt_score,
+        archive_edge_score,
+        session,
+        hour,
+        source
+      FROM paper_trades
+      ${whereSql}
+      ORDER BY closed_at DESC
+      LIMIT ${Number(limit || 50)}
+    `)
+    .bind(...binds)
+    .all();
 
-  return { query, binds };
+  return (res.results || []).map((row) => ({
+    id: row.id,
+    pair: row.pair,
+    timeframe: row.timeframe,
+    direction: row.direction,
+    pnlR: Number(row.pnl_r || 0),
+    pnl: Number(row.pnl || 0),
+    win: Number(row.win || 0),
+    closeReason: row.close_reason || "",
+    openedAt: row.opened_at,
+    closedAt: row.closed_at,
+    entry: Number(row.entry || 0),
+    exitPrice: Number(row.exit || 0),
+    stopLoss: Number(row.stop_loss || 0),
+    takeProfit: Number(row.take_profit || 0),
+    ultraScore: Number(row.ultra_score || 0),
+    mlScore: Number(row.ml_score || 0),
+    vectorbtScore: Number(row.vectorbt_score || 0),
+    archiveEdgeScore: Number(row.archive_edge_score || 0),
+    session: row.session || "OffSession",
+    hour: Number(row.hour || 0),
+    source: row.source || "paper-engine"
+  }));
 }
 
-function buildPairStatsQuery({ timeframe }) {
+async function getSummary(db, { timeframe, pair }) {
+  const where = [];
+  const binds = [];
+
+  if (timeframe) {
+    where.push("timeframe = ?");
+    binds.push(timeframe);
+  }
+
+  if (pair) {
+    where.push("pair = ?");
+    binds.push(pair);
+  }
+
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+  const res = await db
+    .prepare(`
+      SELECT
+        COUNT(*) AS trades,
+        SUM(CASE WHEN win = 1 THEN 1 ELSE 0 END) AS wins,
+        ROUND(AVG(pnl_r), 4) AS expectancy,
+        ROUND(SUM(pnl), 2) AS pnl
+      FROM paper_trades
+      ${whereSql}
+    `)
+    .bind(...binds)
+    .first();
+
+  const trades = Number(res?.trades || 0);
+  const wins = Number(res?.wins || 0);
+
+  return {
+    trades,
+    wins,
+    losses: Math.max(0, trades - wins),
+    expectancy: Number(res?.expectancy || 0),
+    pnl: Number(res?.pnl || 0),
+    winRate: trades > 0 ? Number(((wins / trades) * 100).toFixed(2)) : 0
+  };
+}
+
+async function getPairStats(db, { timeframe }) {
   const where = [];
   const binds = [];
 
@@ -226,20 +349,83 @@ function buildPairStatsQuery({ timeframe }) {
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
-  const query = `
-    SELECT
-      pair,
-      COUNT(*) AS trades,
-      SUM(CASE WHEN win = 1 THEN 1 ELSE 0 END) AS wins,
-      ROUND(AVG(pnl_r), 4) AS expectancy,
-      ROUND(SUM(pnl), 2) AS pnl
-    FROM paper_trades
-    ${whereSql}
-    GROUP BY pair
-    ORDER BY expectancy DESC, trades DESC
-  `;
+  const res = await db
+    .prepare(`
+      SELECT
+        pair,
+        COUNT(*) AS trades,
+        SUM(CASE WHEN win = 1 THEN 1 ELSE 0 END) AS wins,
+        ROUND(AVG(pnl_r), 4) AS expectancy,
+        ROUND(SUM(pnl), 2) AS pnl
+      FROM paper_trades
+      ${whereSql}
+      GROUP BY pair
+      ORDER BY expectancy DESC, trades DESC
+      LIMIT 50
+    `)
+    .bind(...binds)
+    .all();
 
-  return { query, binds };
+  return (res.results || []).map((row) => ({
+    pair: row.pair,
+    trades: Number(row.trades || 0),
+    wins: Number(row.wins || 0),
+    losses: Math.max(0, Number(row.trades || 0) - Number(row.wins || 0)),
+    winRate: Number(row.trades || 0)
+      ? Number(((Number(row.wins || 0) / Number(row.trades || 0)) * 100).toFixed(2))
+      : 0,
+    expectancy: Number(row.expectancy || 0),
+    pnl: Number(row.pnl || 0)
+  }));
+}
+
+async function getRecentRuns(db, { limit }) {
+  try {
+    const res = await db
+      .prepare(`
+        SELECT
+          id,
+          ran_at,
+          timeframe,
+          scanned_pairs,
+          opened,
+          closed,
+          notes
+        FROM paper_runs
+        ORDER BY ran_at DESC
+        LIMIT ${Number(limit || 10)}
+      `)
+      .all();
+
+    return (res.results || []).map((row) => ({
+      id: row.id,
+      ranAt: row.ran_at,
+      timeframe: row.timeframe,
+      scannedPairs: Number(row.scanned_pairs || 0),
+      opened: Number(row.opened || 0),
+      closed: Number(row.closed || 0),
+      notes: row.notes || ""
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function computeLivePnlR(row) {
+  const entry = Number(row.entry || 0);
+  const current = Number(row.current_price || 0);
+  const stop = Number(row.stop_loss || 0);
+  const direction = String(row.direction || "buy").toLowerCase();
+  const riskDistance = Math.abs(entry - stop);
+
+  if (!entry || !current || !riskDistance) return 0;
+
+  const pnlR =
+    direction === "sell"
+      ? (entry - current) / riskDistance
+      : (current - entry) / riskDistance;
+
+  return Number(pnlR.toFixed(3));
 }
 
 function normalizeTrade(raw) {
@@ -284,4 +470,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-    }
+        }
