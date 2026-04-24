@@ -17,7 +17,7 @@ export async function onRequestGet(context) {
         FROM paper_trades
         WHERE timeframe = ?
         ORDER BY closed_at DESC
-        LIMIT 4000
+        LIMIT 8000
       `)
       .bind(timeframe)
       .all();
@@ -47,9 +47,7 @@ function buildStats(rows) {
     const pair = String(row.pair || "").toUpperCase();
     if (!pair) continue;
 
-    if (!grouped[pair]) {
-      grouped[pair] = [];
-    }
+    if (!grouped[pair]) grouped[pair] = [];
 
     grouped[pair].push({
       direction: String(row.direction || "buy").toLowerCase(),
@@ -130,4 +128,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-        }
+}
