@@ -41,10 +41,38 @@ export async function fetchArchiveStatsBatch() {
     appState.archiveStatsCache = data.stats || {};
     appState.archiveStatsUpdatedAt = new Date().toISOString();
     persistState();
+
     return appState.archiveStatsCache;
   } catch {
     appState.archiveStatsCache = appState.archiveStatsCache || {};
     return appState.archiveStatsCache;
+  }
+}
+
+export async function fetchServerPaperSnapshot() {
+  try {
+    const url = new URL(API.paperTrades, window.location.origin);
+    url.searchParams.set("mode", "snapshot");
+    url.searchParams.set("timeframe", appState.timeframe || "M15");
+
+    const data = await fetchJsonWithTimeout(
+      url.toString(),
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json"
+        }
+      },
+      4000
+    );
+
+    appState.serverPaperSnapshot = data || null;
+    persistState();
+
+    return data;
+  } catch {
+    appState.serverPaperSnapshot = appState.serverPaperSnapshot || null;
+    return appState.serverPaperSnapshot;
   }
 }
 
@@ -216,6 +244,7 @@ export async function fetchCorrelationMatrix() {
 
     appState.correlationMatrix = data;
     persistState();
+
     return data;
   } catch {
     appState.correlationMatrix = null;
@@ -247,6 +276,7 @@ export async function fetchPortfolioRisk() {
 
     appState.portfolioRiskData = data;
     persistState();
+
     return data;
   } catch {
     appState.portfolioRiskData = {
@@ -254,6 +284,7 @@ export async function fetchPortfolioRisk() {
       decision: "REDUCE",
       reason: "Portfolio risk unavailable."
     };
+
     return appState.portfolioRiskData;
   }
 }
@@ -371,6 +402,7 @@ export async function fetchExitSuggestion(scan, ai, targetEl) {
 export function buildJournalContextForPair(scan) {
   const pair = scan?.pair || "";
   const stats = appState.archiveStatsCache?.[pair];
+
   if (!stats) {
     return {
       pairExpectancy: 0,
@@ -383,6 +415,7 @@ export function buildJournalContextForPair(scan) {
   }
 
   const now = new Date();
+
   const hour = Number(
     now.toLocaleString("en-GB", {
       hour: "2-digit",
@@ -415,5 +448,6 @@ function getCurrentSession(hour) {
   if (london) return "London";
   if (newYork) return "NewYork";
   if (tokyo) return "Tokyo";
+
   return "OffSession";
-}
+  }
