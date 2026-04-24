@@ -1,82 +1,142 @@
 export async function onRequestPost(context) {
   try {
-    const body = await context.request.json();
+    const body = await safeJson(context.request);
     const rows = Array.isArray(body.rows) ? body.rows : [];
 
     if (!rows.length) {
       return json({
         ok: true,
         pairs: [],
-        matrix: []
+        matrix: [],
+        alerts: []
       });
     }
 
-    const pairs = rows.map((r) => String(r.pair || "").toUpperCase());
-    const seriesMap = Object.fromEntries(
-      rows.map((r) => [
-        String(r.pair || "").toUpperCase(),
-        Array.isArray(r.closes) ? r.closes.map((x) => Number(x)).filter(Number.isFinite) : []
-      ])
-    );
+    const normalized = rows
+      .map((row) => ({
+        pair: String(row.pair || "").toUpperCase(),
+        closes: Array.isArray(row.closes)
+          ? row.closes.map(Number).filter(Number.isFinite)
+          : []
+      }))
+      .filter((row) => row.pair && row.closes.length >= 20)
+      .slice(0, 25);
 
-    const matrix = pairs.map((a) => {
-      return pairs.map((b) => {
-        const corr = pearson(toReturns(seriesMap[a]), toReturns(seriesMap[b]));
-        return Number.isFinite(corr) ? Number(corr.toFixed(4)) : 0;
-      });
-    });
+    const pairs = normalized.map((row) => row.pair);
+    const matrix = [];
+
+    for (let i = 0; i < normalized.length; i += 1) {
+      const row = [];
+
+      for (let j = 0; j < normalized.length; j += 1) {
+        if (i === j) {
+          row.push(1);
+        } else {
+          row.push(
+            Number(
+              correlation(
+                normalized[i].closes,
+                normalized[j].closes
+              ).toFixed(3)
+            )
+          );
+        }
+      }
+
+      matrix.push(row);
+    }
+
+    const alerts = [];
+
+    for (let i = 0; i < pairs.length; i += 1) {
+      for (let j = i + 1; j < pairs.length; j += 1) {
+        const value = Number(matrix[i][j] || 0);
+
+        if (Math.abs(value) >= 0.85) {
+          alerts.push({
+            pairA: pairs[i],
+            pairB: pairs[j],
+            correlation: value,
+            level: "high"
+          });
+        } else if (Math.abs(value) >= 0.7) {
+          alerts.push({
+            pairA: pairs[i],
+            pairB: pairs[j],
+            correlation: value,
+            level: "medium"
+          });
+        }
+      }
+    }
 
     return json({
       ok: true,
       pairs,
-      matrix
+      matrix,
+      alerts
     });
-  } catch {
+  } catch (error) {
     return json({
       ok: false,
+      error: String(error?.message || error || "correlation-error"),
       pairs: [],
-      matrix: []
+      matrix: [],
+      alerts: []
     }, 500);
   }
 }
 
-function toReturns(series) {
-  const out = [];
-  for (let i = 1; i < series.length; i += 1) {
-    const prev = Number(series[i - 1] || 0);
-    const curr = Number(series[i] || 0);
-    if (prev > 0 && curr > 0) {
-      out.push((curr - prev) / prev);
-    }
-  }
-  return out;
+export async function onRequestGet() {
+  return json({
+    ok: true,
+    message: "POST rows to compute correlation matrix."
+  });
 }
 
-function pearson(a, b) {
-  const n = Math.min(a.length, b.length);
-  if (n < 5) return 0;
+async function safeJson(request) {
+  try {
+    return await request.json();
+  } catch {
+    return {};
+  }
+}
 
-  const x = a.slice(-n);
-  const y = b.slice(-n);
+function correlation(a, b) {
+  const length = Math.min(a.length, b.length);
+  if (length < 2) return 0;
 
-  const meanX = x.reduce((s, v) => s + v, 0) / n;
-  const meanY = y.reduce((s, v) => s + v, 0) / n;
+  const x = a.slice(-length);
+  const y = b.slice(-length);
 
-  let num = 0;
-  let denX = 0;
-  let denY = 0;
+  const meanX = average(x);
+  const meanY = average(y);
 
-  for (let i = 0; i < n; i += 1) {
+  let numerator = 0;
+  let denomX = 0;
+  let denomY = 0;
+
+  for (let i = 0; i < length; i += 1) {
     const dx = x[i] - meanX;
     const dy = y[i] - meanY;
-    num += dx * dy;
-    denX += dx * dx;
-    denY += dy * dy;
+
+    numerator += dx * dy;
+    denomX += dx * dx;
+    denomY += dy * dy;
   }
 
-  const den = Math.sqrt(denX * denY);
-  if (!den) return 0;
-  return num / den;
+  const denominator = Math.sqrt(denomX * denomY);
+
+  if (!Number.isFinite(denominator) || denominator === 0) {
+    return 0;
+  }
+
+  return numerator / denominator;
+}
+
+function average(values) {
+  if (!values.length) return 0;
+  return values.reduce((sum, value) => sum + Number(value || 0), 0) / values.length;
 }
 
 function json(data, status = 200) {
@@ -87,4 +147,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-    }
+}
