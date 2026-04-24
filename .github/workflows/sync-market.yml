@@ -9,8 +9,18 @@ jobs:
   sync-market:
     runs-on: ubuntu-latest
     steps:
+      - name: Validate secrets
+        run: |
+          if [ -z "${{ secrets.SITE_URL }}" ]; then
+            echo "SITE_URL is missing"
+            exit 1
+          fi
+          if [ -z "${{ secrets.SYNC_SECRET }}" ]; then
+            echo "SYNC_SECRET is missing"
+            exit 1
+          fi
+
       - name: Call Cloudflare sync endpoint
         run: |
-          curl -sS -X POST "${{ secrets.SITE_URL }}/api/sync-market" \
-            -H "Authorization: Bearer ${{ secrets.SYNC_SECRET }}" \
+          curl --fail --show-error --silent -X POST "https://ftmo-7v3.pages.dev/api/sync-market?token=${{ secrets.SYNC_SECRET }}" \
             -H "Accept: application/json"
