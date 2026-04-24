@@ -1,0 +1,40 @@
+name: Server paper trading
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+
+jobs:
+  paper-run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check secrets presence
+        run: |
+          if [ -z "${{ secrets.SITE_URL }}" ]; then
+            echo "ERROR: SITE_URL missing"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.SYNC_SECRET }}" ]; then
+            echo "ERROR: SYNC_SECRET missing"
+            exit 1
+          fi
+
+          echo "SITE_URL present"
+          echo "SYNC_SECRET present"
+
+      - name: Call server paper engine
+        run: |
+          HTTP_CODE=$(curl -sS \
+            -o response.json \
+            -w "%{http_code}" \
+            "${{ secrets.SITE_URL }}/api/paper-run?token=${{ secrets.SYNC_SECRET }}&timeframe=M15")
+
+          echo "HTTP_CODE=$HTTP_CODE"
+          cat response.json || true
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            exit 1
+          fi
