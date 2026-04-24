@@ -1,3 +1,6 @@
+const MIN_ROWS_FOR_PRIMARY = 24;
+const IDEAL_ROWS = 200;
+
 export async function onRequestGet(context) {
   return handleRequest(context);
 }
@@ -12,6 +15,7 @@ async function handleRequest(context) {
 
     let pair = cleanPair(url.searchParams.get("pair"));
     let timeframe = normalizeTimeframe(url.searchParams.get("timeframe"));
+    const forceLive = String(url.searchParams.get("forceLive") || "0") === "1";
 
     if (context.request.method.toUpperCase() === "POST") {
       try {
@@ -25,29 +29,51 @@ async function handleRequest(context) {
       return json({ ok: false, error: "Missing pair" }, 400);
     }
 
+    if (!timeframe) {
+      timeframe = "M15";
+    }
+
     const env = context.env || {};
-    const apiKey = env.TWELVEDATA_API_KEY || "";
     const db = env.DB || null;
+    const apiKey = env.TWELVEDATA_API_KEY || "";
 
     const symbolMeta = mapSymbolForProvider(pair);
     if (!symbolMeta) {
       return json(buildSyntheticFallback(pair, timeframe, "unsupported-symbol"));
     }
 
-    if (apiKey) {
-      const livePayload = await tryTwelveDataLive(symbolMeta, timeframe, apiKey);
-      if (livePayload?.ok && Array.isArray(livePayload.candles) && livePayload.candles.length) {
-        return json(livePayload);
-      }
-    }
-
-    if (db) {
+    // 1) D1 FIRST
+    if (!forceLive && db) {
       const d1Payload = await tryD1History(db, pair, timeframe);
-      if (d1Payload?.ok && Array.isArray(d1Payload.candles) && d1Payload.candles.length) {
+      if (d1Payload?.ok && Array.isArray(d1Payload.candles) && d1Payload.candles.length >= MIN_ROWS_FOR_PRIMARY) {
         return json(d1Payload);
       }
     }
 
+    // 2) LIVE FALLBACK + OPTIONAL WRITEBACK TO D1
+    if (apiKey) {
+      const livePayload = await tryTwelveDataLive(symbolMeta, timeframe, apiKey);
+      if (livePayload?.ok && Array.isArray(livePayload.candles) && livePayload.candles.length) {
+        if (db) {
+          await upsertCandlesToD1(db, livePayload.candles, pair, timeframe, "twelvedata-live");
+        }
+
+        return json(livePayload);
+      }
+    }
+
+    // 3) D1 SECOND CHANCE (if few rows but not enough before)
+    if (db) {
+      const d1Payload = await tryD1History(db, pair, timeframe);
+      if (d1Payload?.ok && Array.isArray(d1Payload.candles) && d1Payload.candles.length) {
+        return json({
+          ...d1Payload,
+          source: "d1-partial-fallback"
+        });
+      }
+    }
+
+    // 4) SYNTHETIC LAST RESORT
     return json(buildSyntheticFallback(pair, timeframe, "synthetic-fallback"));
   } catch (error) {
     return json({
@@ -70,73 +96,6 @@ async function handleRequest(context) {
   }
 }
 
-async function tryTwelveDataLive(symbolMeta, timeframe, apiKey) {
-  try {
-    const interval = mapTimeframeToProvider(timeframe);
-
-    const candleUrl =
-      `https://api.twelvedata.com/time_series` +
-      `?symbol=${encodeURIComponent(symbolMeta.providerSymbol)}` +
-      `&interval=${encodeURIComponent(interval)}` +
-      `&outputsize=220` +
-      `&apikey=${encodeURIComponent(apiKey)}`;
-
-    const candleRes = await fetch(candleUrl, {
-      method: "GET",
-      headers: { Accept: "application/json" }
-    });
-
-    if (!candleRes.ok) return null;
-
-    const candleData = await candleRes.json();
-    if (!Array.isArray(candleData.values)) return null;
-
-    const candles = candleData.values
-      .map((row) => ({
-        time: toUnixSeconds(row.datetime),
-        open: roundPrice(Number(row.open), symbolMeta.localPair),
-        high: roundPrice(Number(row.high), symbolMeta.localPair),
-        low: roundPrice(Number(row.low), symbolMeta.localPair),
-        close: roundPrice(Number(row.close), symbolMeta.localPair)
-      }))
-      .filter((c) =>
-        Number.isFinite(c.time) &&
-        Number.isFinite(c.open) &&
-        Number.isFinite(c.high) &&
-        Number.isFinite(c.low) &&
-        Number.isFinite(c.close) &&
-        c.time > 0
-      )
-      .sort((a, b) => a.time - b.time)
-      .slice(-220);
-
-    if (!candles.length) return null;
-
-    const closes = candles.map((c) => c.close);
-    const highs = candles.map((c) => c.high);
-    const lows = candles.map((c) => c.low);
-
-    return {
-      ok: true,
-      source: "twelvedata-live",
-      pair: symbolMeta.localPair,
-      timeframe,
-      price: candles.at(-1)?.close ?? null,
-      candles,
-      indicators: {
-        atr14: safeNum(atr(highs, lows, closes, 14)),
-        rsi14: safeNum(rsi(closes, 14)),
-        ema20: safeNum(ema(closes, 20)),
-        ema50: safeNum(ema(closes, 50)),
-        macd: safeNum(computeMacdLine(closes)),
-        momentum: safeNum(computeMomentum(closes, 12))
-      }
-    };
-  } catch {
-    return null;
-  }
-}
-
 async function tryD1History(db, pair, timeframe) {
   try {
     const result = await db
@@ -145,9 +104,9 @@ async function tryD1History(db, pair, timeframe) {
         FROM market_candles
         WHERE pair = ? AND timeframe = ?
         ORDER BY ts DESC
-        LIMIT 220
+        LIMIT ?
       `)
-      .bind(pair, timeframe)
+      .bind(pair, timeframe, IDEAL_ROWS)
       .all();
 
     const rows = Array.isArray(result?.results) ? result.results : [];
@@ -177,10 +136,83 @@ async function tryD1History(db, pair, timeframe) {
     const highs = candles.map((c) => c.high);
     const lows = candles.map((c) => c.low);
 
+    const lastTs = candles.at(-1)?.time || 0;
+    const nowTs = Math.floor(Date.now() / 1000);
+    const freshnessSec = nowTs - lastTs;
+
     return {
       ok: true,
-      source: "d1-history-fallback",
+      source: "d1-primary",
       pair,
+      timeframe,
+      price: candles.at(-1)?.close ?? null,
+      candles,
+      freshnessSec,
+      indicators: {
+        atr14: safeNum(atr(highs, lows, closes, 14)),
+        rsi14: safeNum(rsi(closes, 14)),
+        ema20: safeNum(ema(closes, 20)),
+        ema50: safeNum(ema(closes, 50)),
+        macd: safeNum(computeMacdLine(closes)),
+        momentum: safeNum(computeMomentum(closes, 12))
+      }
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function tryTwelveDataLive(symbolMeta, timeframe, apiKey) {
+  try {
+    const interval = mapTimeframeToProvider(timeframe);
+
+    const candleUrl =
+      `https://api.twelvedata.com/time_series` +
+      `?symbol=${encodeURIComponent(symbolMeta.providerSymbol)}` +
+      `&interval=${encodeURIComponent(interval)}` +
+      `&outputsize=${IDEAL_ROWS}` +
+      `&apikey=${encodeURIComponent(apiKey)}`;
+
+    const candleRes = await fetch(candleUrl, {
+      method: "GET",
+      headers: { Accept: "application/json" }
+    });
+
+    if (!candleRes.ok) return null;
+
+    const candleData = await candleRes.json();
+    if (candleData?.status === "error") return null;
+    if (!Array.isArray(candleData.values)) return null;
+
+    const candles = candleData.values
+      .map((row) => ({
+        time: toUnixSeconds(row.datetime),
+        open: roundPrice(Number(row.open), symbolMeta.localPair),
+        high: roundPrice(Number(row.high), symbolMeta.localPair),
+        low: roundPrice(Number(row.low), symbolMeta.localPair),
+        close: roundPrice(Number(row.close), symbolMeta.localPair)
+      }))
+      .filter((c) =>
+        Number.isFinite(c.time) &&
+        Number.isFinite(c.open) &&
+        Number.isFinite(c.high) &&
+        Number.isFinite(c.low) &&
+        Number.isFinite(c.close) &&
+        c.time > 0
+      )
+      .sort((a, b) => a.time - b.time)
+      .slice(-IDEAL_ROWS);
+
+    if (!candles.length) return null;
+
+    const closes = candles.map((c) => c.close);
+    const highs = candles.map((c) => c.high);
+    const lows = candles.map((c) => c.low);
+
+    return {
+      ok: true,
+      source: "twelvedata-live",
+      pair: symbolMeta.localPair,
       timeframe,
       price: candles.at(-1)?.close ?? null,
       candles,
@@ -195,6 +227,37 @@ async function tryD1History(db, pair, timeframe) {
     };
   } catch {
     return null;
+  }
+}
+
+async function upsertCandlesToD1(db, candles, pair, timeframe, source) {
+  try {
+    const CHUNK = 100;
+
+    for (let i = 0; i < candles.length; i += CHUNK) {
+      const chunk = candles.slice(i, i + CHUNK);
+
+      const statements = chunk.map((candle) =>
+        db.prepare(`
+          INSERT OR REPLACE INTO market_candles
+          (pair, timeframe, ts, open, high, low, close, source)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          pair,
+          timeframe,
+          candle.time,
+          candle.open,
+          candle.high,
+          candle.low,
+          candle.close,
+          source
+        )
+      );
+
+      await db.batch(statements);
+    }
+  } catch {
+    // silent writeback failure
   }
 }
 
@@ -290,9 +353,9 @@ function generateSyntheticCandles(pair, timeframe) {
 
   const candles = [];
   let price = base;
-  let time = Math.floor(Date.now() / 1000) - 220 * timeframeToSeconds(timeframe);
+  let time = Math.floor(Date.now() / 1000) - IDEAL_ROWS * timeframeToSeconds(timeframe);
 
-  for (let i = 0; i < 220; i += 1) {
+  for (let i = 0; i < IDEAL_ROWS; i += 1) {
     const wave = Math.sin(i / 7) * step * 1.2;
     const drift = (hashCode(pair) % 2 === 0 ? 1 : -1) * step * 0.08;
     const noise = (Math.random() - 0.5) * step * 1.6;
@@ -425,17 +488,8 @@ function atr(highs, lows, closes, period = 14) {
 }
 
 function toUnixSeconds(datetimeValue) {
-  const direct = new Date(datetimeValue).getTime();
-  if (Number.isFinite(direct) && direct > 0) {
-    return Math.floor(direct / 1000);
-  }
-
-  const fallback = new Date(`${datetimeValue}Z`).getTime();
-  if (Number.isFinite(fallback) && fallback > 0) {
-    return Math.floor(fallback / 1000);
-  }
-
-  return 0;
+  const ms = Date.parse(String(datetimeValue).trim());
+  return Number.isFinite(ms) ? Math.floor(ms / 1000) : 0;
 }
 
 function roundPrice(value, symbol) {
@@ -473,4 +527,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-          }
+  }
