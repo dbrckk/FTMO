@@ -1,12 +1,17 @@
 import { PAIRS } from "./config.js";
 import { appState, persistState, els } from "./state.js";
-import { setupChart } from "./chart.js?v=2";
+import { setupChart } from "./chart.js";
 import {
   fetchCorrelationMatrix,
   refreshAiDecision,
   fetchArchiveStatsBatch
 } from "./api.js";
-import { scanPair, computeHedgeScore, isEliteTrade, computeConfluenceScore } from "./scan.js";
+import {
+  scanPair,
+  computeHedgeScore,
+  isEliteTrade,
+  computeConfluenceScore
+} from "./scan.js";
 import {
   renderOverview,
   renderPairList,
@@ -30,15 +35,29 @@ import {
 import { runPaperEngine } from "./paper-engine.js";
 
 let paperLoop = null;
+let refreshInFlight = false;
 
 document.addEventListener("DOMContentLoaded", async () => {
-  cacheEls();
-  bindEvents();
-  setupChart();
-  setActiveTab("dashboard");
-  renderTabs();
-  await refreshAll(true);
-  startPaperLoop();
+  try {
+    cacheEls();
+    bindEvents();
+    setupChart();
+
+    if (!appState.activeTab) {
+      setActiveTab("dashboard");
+    }
+
+    renderTabs();
+    renderTrades();
+    renderWatchlist();
+    renderPaperLab();
+    renderFtmoRisk();
+
+    await refreshAll(true);
+    startPaperLoop();
+  } catch (error) {
+    console.error("App init failed", error);
+  }
 });
 
 function cacheEls() {
@@ -105,6 +124,7 @@ function bindEvents() {
 
   document.getElementById("clearTradesBtn")?.addEventListener("click", () => {
     clearTrades(renderTrades);
+    renderFtmoRisk();
   });
 
   document.getElementById("watchlistBtn")?.addEventListener("click", () => {
@@ -133,7 +153,10 @@ function bindEvents() {
   });
 }
 
-async function refreshAll(force = false) {
+export async function refreshAll(force = false) {
+  if (refreshInFlight) return;
+  refreshInFlight = true;
+
   try {
     await fetchArchiveStatsBatch();
 
@@ -151,13 +174,18 @@ async function refreshAll(force = false) {
         const bScore = Number(b.ultraScore || b.finalScore || 0);
 
         if (bScore !== aScore) return bScore - aScore;
-        if ((b.confluence?.score || 0) !== (a.confluence?.score || 0)) {
-          return (b.confluence?.score || 0) - (a.confluence?.score || 0);
-        }
-        return (b.finalScore || 0) - (a.finalScore || 0);
+
+        const bConf = Number(b.confluence?.score || 0);
+        const aConf = Number(a.confluence?.score || 0);
+        if (bConf !== aConf) return bConf - aConf;
+
+        return Number(b.finalScore || 0) - Number(a.finalScore || 0);
       });
 
-    if (!appState.selectedPair || !appState.scans.find((s) => s.pair === appState.selectedPair)) {
+    if (
+      !appState.selectedPair ||
+      !appState.scans.find((s) => s.pair === appState.selectedPair)
+    ) {
       appState.selectedPair = appState.scans[0]?.pair || "EURUSD";
     }
 
@@ -180,6 +208,8 @@ async function refreshAll(force = false) {
     persistState();
   } catch (error) {
     console.error("refreshAll failed", error);
+  } finally {
+    refreshInFlight = false;
   }
 }
 
