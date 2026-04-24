@@ -119,6 +119,7 @@ async function handleSync(context) {
 
 async function syncOnePair(db, apiKey, pair, timeframe) {
   const symbolMeta = mapSymbolForProvider(pair);
+
   if (!symbolMeta) {
     throw new Error(`Unsupported pair ${pair}`);
   }
@@ -243,23 +244,28 @@ function mapSymbolForProvider(pair) {
     USDCAD: "USD/CAD",
     AUDUSD: "AUD/USD",
     NZDUSD: "NZD/USD",
+
     EURGBP: "EUR/GBP",
     EURJPY: "EUR/JPY",
     EURCHF: "EUR/CHF",
     EURCAD: "EUR/CAD",
     EURAUD: "EUR/AUD",
     EURNZD: "EUR/NZD",
+
     GBPJPY: "GBP/JPY",
     GBPCHF: "GBP/CHF",
     GBPCAD: "GBP/CAD",
     GBPAUD: "GBP/AUD",
     GBPNZD: "GBP/NZD",
+
     AUDJPY: "AUD/JPY",
     AUDCAD: "AUD/CAD",
     AUDCHF: "AUD/CHF",
     AUDNZD: "AUD/NZD",
+
     NZDJPY: "NZD/JPY",
     NZDCAD: "NZD/CAD",
+
     XAUUSD: "XAU/USD"
   };
 
@@ -277,6 +283,7 @@ function mapTimeframeToProvider(tf) {
   if (tf === "M15") return "15min";
   if (tf === "H1") return "1h";
   if (tf === "H4") return "4h";
+
   throw new Error(`Unsupported timeframe ${tf}`);
 }
 
