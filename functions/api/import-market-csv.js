@@ -45,12 +45,11 @@ export async function onRequestPost(context) {
       return json({ ok: false, error: "D1 binding DB missing" }, 500);
     }
 
-    const form = await context.request.formData();
+    const payload = await parseIncomingRequest(context.request);
 
-    const pair = cleanPair(form.get("pair"));
-    const timeframe = normalizeTimeframe(form.get("timeframe"));
-    const replaceExisting = String(form.get("replaceExisting") || "0") === "1";
-    const file = form.get("file");
+    const pair = cleanPair(payload.pair);
+    const timeframe = normalizeTimeframe(payload.timeframe);
+    const replaceExisting = String(payload.replaceExisting || "0") === "1";
 
     if (!pair) {
       return json({ ok: false, error: "Missing pair" }, 400);
@@ -60,13 +59,19 @@ export async function onRequestPost(context) {
       return json({ ok: false, error: "Missing timeframe" }, 400);
     }
 
-    if (!file || typeof file.text !== "function") {
-      return json({ ok: false, error: "Missing file" }, 400);
+    let raw = "";
+
+    if (typeof payload.csvText === "string" && payload.csvText.trim()) {
+      raw = payload.csvText.trim();
+    } else if (payload.file && typeof payload.file.text === "function") {
+      raw = await payload.file.text();
     }
 
-    const raw = await file.text();
-    const parsedRows = parseCsv(raw, pair, timeframe);
+    if (!raw) {
+      return json({ ok: false, error: "Missing CSV content" }, 400);
+    }
 
+    const parsedRows = parseCsv(raw, pair, timeframe);
     if (!parsedRows.length) {
       return json({ ok: false, error: "No valid CSV rows parsed" }, 400);
     }
@@ -98,6 +103,52 @@ export async function onRequestPost(context) {
       error: String(error?.message || error || "import-market-csv-error")
     }, 500);
   }
+}
+
+async function parseIncomingRequest(request) {
+  const contentType = (request.headers.get("content-type") || "").toLowerCase();
+
+  if (contentType.includes("multipart/form-data")) {
+    const form = await request.formData();
+    return {
+      pair: form.get("pair"),
+      timeframe: form.get("timeframe"),
+      replaceExisting: form.get("replaceExisting"),
+      csvText: form.get("csvText"),
+      file: form.get("file")
+    };
+  }
+
+  if (contentType.includes("application/x-www-form-urlencoded")) {
+    const form = await request.formData();
+    return {
+      pair: form.get("pair"),
+      timeframe: form.get("timeframe"),
+      replaceExisting: form.get("replaceExisting"),
+      csvText: form.get("csvText"),
+      file: null
+    };
+  }
+
+  if (contentType.includes("application/json")) {
+    const body = await request.json();
+    return {
+      pair: body?.pair,
+      timeframe: body?.timeframe,
+      replaceExisting: body?.replaceExisting,
+      csvText: body?.csvText,
+      file: null
+    };
+  }
+
+  const text = await request.text();
+  return {
+    pair: "",
+    timeframe: "",
+    replaceExisting: "0",
+    csvText: text,
+    file: null
+  };
 }
 
 async function insertRows(db, rows) {
@@ -296,4 +347,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-      }
+}
