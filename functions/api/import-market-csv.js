@@ -72,6 +72,7 @@ export async function onRequestPost(context) {
     }
 
     const parsedRows = parseCsv(raw, pair, timeframe);
+
     if (!parsedRows.length) {
       return json({ ok: false, error: "No valid CSV rows parsed" }, 400);
     }
@@ -195,8 +196,11 @@ function parseCsv(raw, pair, timeframe) {
   for (const line of lines) {
     if (looksLikeHeader(line)) continue;
 
-    const delimiter = line.includes(";") ? ";" : ",";
-    const parts = line.split(delimiter).map((p) => p.trim());
+    const delimiter = detectDelimiter(line);
+    const parts = line
+      .split(delimiter)
+      .map((p) => p.trim())
+      .filter(Boolean);
 
     if (parts.length < 5) continue;
 
@@ -207,14 +211,7 @@ function parseCsv(raw, pair, timeframe) {
     let low = "";
     let close = "";
 
-    if (parts.length >= 6) {
-      datePart = parts[0];
-      timePart = parts[1];
-      open = parts[2];
-      high = parts[3];
-      low = parts[4];
-      close = parts[5];
-    } else {
+    if (parts[0].includes(" ") && isNumeric(parts[1])) {
       const split = splitDateTime(parts[0]);
       datePart = split.datePart;
       timePart = split.timePart;
@@ -222,6 +219,23 @@ function parseCsv(raw, pair, timeframe) {
       high = parts[2];
       low = parts[3];
       close = parts[4];
+    } else if (parts.length >= 6 && looksLikeDate(parts[0]) && looksLikeTime(parts[1])) {
+      datePart = parts[0];
+      timePart = parts[1];
+      open = parts[2];
+      high = parts[3];
+      low = parts[4];
+      close = parts[5];
+    } else if (parts.length === 5 && parts[0].includes(" ")) {
+      const split = splitDateTime(parts[0]);
+      datePart = split.datePart;
+      timePart = split.timePart;
+      open = parts[1];
+      high = parts[2];
+      low = parts[3];
+      close = parts[4];
+    } else {
+      continue;
     }
 
     const ts = toUnix(datePart, timePart);
@@ -253,6 +267,31 @@ function parseCsv(raw, pair, timeframe) {
   }
 
   return rows;
+}
+
+function detectDelimiter(line) {
+  if (line.includes("\t")) return "\t";
+  if (line.includes(";")) return ";";
+  return ",";
+}
+
+function isNumeric(value) {
+  const n = Number(String(value).replace(",", "."));
+  return Number.isFinite(n);
+}
+
+function looksLikeDate(value) {
+  const v = String(value).trim();
+  return (
+    /^\d{4}[./-]\d{2}[./-]\d{2}$/.test(v) ||
+    /^\d{2}[./-]\d{2}[./-]\d{4}$/.test(v) ||
+    /^\d{8}$/.test(v)
+  );
+}
+
+function looksLikeTime(value) {
+  const v = String(value).trim();
+  return /^\d{2}:\d{2}(:\d{2})?$/.test(v);
 }
 
 function looksLikeHeader(line) {
@@ -347,4 +386,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-}
+      }
