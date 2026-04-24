@@ -43,6 +43,7 @@
 
     h1, h2, h3, p { margin: 0; }
     h1 { font-size: 28px; margin-bottom: 8px; }
+    h3 { margin-bottom: 10px; }
     p { color: var(--muted); }
 
     .grid {
@@ -79,6 +80,12 @@
       border: 1px solid var(--border);
       background: rgba(255,255,255,0.04);
       color: var(--text);
+    }
+
+    textarea {
+      min-height: 220px;
+      resize: vertical;
+      line-height: 1.5;
     }
 
     button {
@@ -155,6 +162,28 @@
       line-height: 1.5;
     }
 
+    .mode-switch {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    .mode-btn {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .mode-btn.active {
+      background: linear-gradient(180deg, rgba(56,189,248,0.30), rgba(56,189,248,0.16));
+      border-color: rgba(56,189,248,0.30);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
     @media (max-width: 760px) {
       .grid, .stats {
         grid-template-columns: 1fr;
@@ -171,8 +200,8 @@
     <div class="panel">
       <h1>Import CSV Dukascopy → D1</h1>
       <p>
-        Depuis ton téléphone : choisis la pair, le timeframe, puis envoie le CSV Dukascopy.
-        Le fichier sera importé directement dans <strong>market_candles</strong>.
+        Depuis ton téléphone : choisis la pair, le timeframe, puis importe soit un fichier, soit du texte brut.
+        Les bougies seront envoyées dans <strong>market_candles</strong>.
       </p>
     </div>
 
@@ -198,6 +227,11 @@
     </div>
 
     <div class="panel">
+      <div class="mode-switch">
+        <button id="modeFileBtn" type="button" class="mode-btn active">Import fichier</button>
+        <button id="modeTextBtn" type="button" class="mode-btn">Coller le CSV</button>
+      </div>
+
       <form id="importForm">
         <div class="grid">
           <div class="field">
@@ -242,9 +276,21 @@
           </div>
         </div>
 
-        <div class="field">
+        <div id="fileModeWrap" class="field">
           <label for="file">Fichier CSV Dukascopy</label>
-          <input id="file" name="file" type="file" accept=".csv,.txt" required />
+          <input id="file" name="file" type="file" accept="*/*" />
+          <div class="small">
+            Sur smartphone, certains CSV ne sont pas reconnus correctement. Ici, tous les types de fichiers sont acceptés.
+            Tu peux aussi renommer le fichier en <strong>.txt</strong> si besoin.
+          </div>
+        </div>
+
+        <div id="textModeWrap" class="field hidden">
+          <label for="csvText">CSV collé manuellement</label>
+          <textarea id="csvText" name="csvText" placeholder="Colle ici le contenu complet du CSV..."></textarea>
+          <div class="small">
+            Mode utile si Android bloque l’upload. Ouvre ton fichier CSV, copie le texte, puis colle-le ici.
+          </div>
         </div>
 
         <div class="checkbox-row">
@@ -262,7 +308,7 @@
     </div>
 
     <div class="panel">
-      <h3 style="margin-bottom:10px;">Format accepté</h3>
+      <h3>Format accepté</h3>
       <div class="small">
         Le parser accepte en général :
         <br>• `Date, Time, Open, High, Low, Close`
@@ -273,12 +319,12 @@
     </div>
 
     <div class="panel">
-      <h3 style="margin-bottom:10px;">Résultat</h3>
+      <h3>Résultat</h3>
       <div id="resultBox" class="box">Aucune action pour le moment.</div>
     </div>
 
     <div class="panel">
-      <h3 style="margin-bottom:10px;">Résumé par pair</h3>
+      <h3>Résumé par pair</h3>
       <div id="summaryBox" class="box">Chargement...</div>
     </div>
   </div>
@@ -294,30 +340,48 @@
     const submitBtn = document.getElementById("submitBtn");
     const refreshBtn = document.getElementById("refreshBtn");
 
+    const modeFileBtn = document.getElementById("modeFileBtn");
+    const modeTextBtn = document.getElementById("modeTextBtn");
+    const fileModeWrap = document.getElementById("fileModeWrap");
+    const textModeWrap = document.getElementById("textModeWrap");
+    const fileInput = document.getElementById("file");
+    const csvText = document.getElementById("csvText");
+
+    let importMode = "file";
+
+    modeFileBtn.addEventListener("click", () => setMode("file"));
+    modeTextBtn.addEventListener("click", () => setMode("text"));
     refreshBtn.addEventListener("click", loadStatus);
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
 
-      const file = document.getElementById("file").files[0];
       const pair = document.getElementById("pair").value;
       const timeframe = document.getElementById("timeframe").value;
       const replaceExisting = document.getElementById("replaceExisting").checked;
-
-      if (!file) {
-        setResult("Choisis un fichier CSV.", true);
-        return;
-      }
 
       submitBtn.disabled = true;
       setResult("Import en cours...");
 
       try {
         const fd = new FormData();
-        fd.append("file", file);
         fd.append("pair", pair);
         fd.append("timeframe", timeframe);
         fd.append("replaceExisting", replaceExisting ? "1" : "0");
+
+        if (importMode === "file") {
+          const file = fileInput.files[0];
+          if (!file) {
+            throw new Error("Choisis un fichier.");
+          }
+          fd.append("file", file);
+        } else {
+          const text = String(csvText.value || "").trim();
+          if (!text) {
+            throw new Error("Colle le contenu du CSV.");
+          }
+          fd.append("csvText", text);
+        }
 
         const res = await fetch("/api/import-market-csv", {
           method: "POST",
@@ -343,11 +407,21 @@ Source: ${data.source || "dukascopy"}`, false
 
         await loadStatus();
       } catch (err) {
-        setResult(`Erreur: ${err.message || err}`, true);
+        setResult(\`Erreur: \${err.message || err}\`, true);
       } finally {
         submitBtn.disabled = false;
       }
     });
+
+    function setMode(mode) {
+      importMode = mode;
+
+      const isFile = mode === "file";
+      fileModeWrap.classList.toggle("hidden", !isFile);
+      textModeWrap.classList.toggle("hidden", isFile);
+      modeFileBtn.classList.toggle("active", isFile);
+      modeTextBtn.classList.toggle("active", !isFile);
+    }
 
     function setResult(text, isError = false) {
       resultBox.textContent = text;
@@ -366,19 +440,19 @@ Source: ${data.source || "dukascopy"}`, false
 
         if (Array.isArray(data.summary) && data.summary.length) {
           summaryBox.textContent = data.summary
-            .map((row) => `${row.pair} ${row.timeframe} → ${row.rows} rows`)
-            .join("\n");
+            .map((row) => \`\${row.pair} \${row.timeframe} → \${row.rows} rows\`)
+            .join("\\n");
         } else {
           summaryBox.textContent = "Aucune donnée importée pour le moment.";
         }
       } catch (err) {
         apiStatus.textContent = "ERR";
         dbStatus.textContent = "ERR";
-        summaryBox.textContent = `Erreur chargement état: ${err.message || err}`;
+        summaryBox.textContent = \`Erreur chargement état: \${err.message || err}\`;
       }
     }
 
     loadStatus();
   </script>
 </body>
-  </html>
+            </html>
