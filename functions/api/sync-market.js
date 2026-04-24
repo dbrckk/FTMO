@@ -1,29 +1,22 @@
-const DEFAULT_PAIRS = [
+const CORE_PAIRS = [
+  "XAUUSD",
   "EURUSD",
   "GBPUSD",
-  "USDJPY",
-  "USDCHF",
-  "USDCAD",
-  "AUDUSD",
-  "NZDUSD",
-  "EURGBP",
-  "EURJPY",
-  "EURCHF",
-  "EURCAD",
-  "EURAUD",
-  "EURNZD",
-  "GBPJPY",
-  "GBPCHF",
-  "GBPCAD",
-  "GBPAUD",
-  "GBPNZD",
-  "AUDJPY",
-  "AUDCAD",
-  "AUDCHF",
-  "AUDNZD",
-  "NZDJPY",
-  "NZDCAD",
-  "XAUUSD"
+  "USDJPY"
+];
+
+const ROTATION_GROUPS = [
+  ["USDCHF", "USDCAD"],
+  ["AUDUSD", "NZDUSD"],
+  ["EURGBP", "EURJPY"],
+  ["EURCHF", "EURCAD"],
+  ["EURAUD", "EURNZD"],
+  ["GBPJPY", "GBPCHF"],
+  ["GBPCAD", "GBPAUD"],
+  ["GBPNZD", "AUDJPY"],
+  ["AUDCAD", "AUDCHF"],
+  ["AUDNZD", "NZDJPY"],
+  ["NZDCAD"]
 ];
 
 const DEFAULT_TIMEFRAMES = ["M15"];
@@ -58,11 +51,24 @@ async function handleSync(context) {
     }
 
     const url = new URL(context.request.url);
+
     const requestedPair = cleanPair(url.searchParams.get("pair"));
     const requestedTimeframe = normalizeTimeframe(url.searchParams.get("timeframe"));
+    const requestedGroup = normalizeGroup(url.searchParams.get("group"));
+    const includeCore = String(url.searchParams.get("includeCore") || "1") !== "0";
 
-    const pairs = requestedPair ? [requestedPair] : DEFAULT_PAIRS;
     const timeframes = requestedTimeframe ? [requestedTimeframe] : DEFAULT_TIMEFRAMES;
+
+    let pairs = [];
+
+    if (requestedPair) {
+      pairs = [requestedPair];
+    } else {
+      const groupPairs = requestedGroup ? getPairsForGroup(requestedGroup) : getPairsForGroup(1);
+      pairs = includeCore
+        ? dedupeStrings([...CORE_PAIRS, ...groupPairs])
+        : groupPairs;
+    }
 
     const results = [];
 
@@ -93,6 +99,10 @@ async function handleSync(context) {
 
     return json({
       ok: true,
+      mode: requestedPair ? "single-pair" : "rotation-group",
+      group: requestedPair ? null : (requestedGroup || 1),
+      groupCount: ROTATION_GROUPS.length,
+      pairsSynced: pairs,
       totalJobs: results.length,
       success,
       failed,
@@ -197,6 +207,22 @@ async function syncOnePair(db, apiKey, pair, timeframe) {
   return inserted;
 }
 
+function getPairsForGroup(groupNumber) {
+  const index = groupNumber - 1;
+  return ROTATION_GROUPS[index] || [];
+}
+
+function normalizeGroup(value) {
+  const n = Number(value);
+  if (!Number.isInteger(n)) return 0;
+  if (n < 1 || n > ROTATION_GROUPS.length) return 0;
+  return n;
+}
+
+function dedupeStrings(values) {
+  return [...new Set(values.map((v) => String(v).trim()).filter(Boolean))];
+}
+
 function isAuthorized(request, syncSecret) {
   if (!syncSecret) return true;
 
@@ -288,4 +314,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-        }
+      }
