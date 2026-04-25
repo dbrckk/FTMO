@@ -192,6 +192,8 @@ export function renderSelectedPair() {
     reason: "Aucune décision IA disponible."
   };
 
+  const mtf = getMtfForPair(pair);
+
   setText("selectedPairName", scan.pair);
   setText("trendMini", Math.round(scan.trendScore || 0));
   setText("confidenceMini", `${Math.round(scan.ultraScore || scan.finalScore || 0)}%`);
@@ -212,6 +214,7 @@ export function renderSelectedPair() {
       metricCard("Prix", formatPrice(scan.current, scan.pair), "marché"),
       metricCard("Final", Math.round(scan.finalScore || 0), "global"),
       metricCard("ULTRA", Math.round(scan.ultraScore || 0), scan.ultraGrade || "-"),
+      metricCard("MTF", mtf ? Math.round(mtf.score || 0) : "-", mtf?.label || "alignment"),
       metricCard("Trend", Math.round(scan.trendScore || 0), "direction"),
       metricCard("Timing", Math.round(scan.timingScore || 0), "timing"),
       metricCard("Risk", Math.round(scan.riskScore || 0), "risk"),
@@ -245,6 +248,9 @@ export function renderSelectedPair() {
     els.tradeSuggestionBox.innerHTML = `
       <strong>${esc(scan.tradeStatus || ai.decision || scan.signal || "WAIT")}</strong><br>
       Ultra Score: ${Math.round(scan.ultraScore || 0)} (${esc(scan.ultraGrade || "-")})<br>
+      MTF Score: ${mtf ? Math.round(mtf.score || 0) : "-"}<br>
+      MTF Direction: ${mtf ? esc(mtf.signal || "WAIT") : "-"}<br>
+      MTF TF: ${mtf ? formatAlignedTimeframes(mtf.timeframes) : "-"}<br>
       Entry: ${formatPrice(scan.current, scan.pair)}<br>
       Stop: ${formatPrice(scan.stopLoss || scan.current * 0.995, scan.pair)}<br>
       Target: ${formatPrice(scan.takeProfit || scan.current * 1.01, scan.pair)}<br>
@@ -278,7 +284,18 @@ export function renderSelectedPair() {
 
   setValue("tradePair", scan.pair);
   setValue("tradeDirection", scan.signal === "SELL" ? "sell" : "buy");
-  setValue("tradeEntry", Number(scan.current || 0).toFixed(scan.pair === "XAUUSD" ? 2 : scan.pair.includes("JPY") ? 3 : 5));
+
+  setValue(
+    "tradeEntry",
+    Number(scan.current || 0).toFixed(
+      scan.pair === "XAUUSD" || scan.pair === "BTCUSD"
+        ? 2
+        : scan.pair.includes("JPY")
+          ? 3
+          : 5
+    )
+  );
+
   setValue("riskPercent", String(riskPct));
 }
 
@@ -644,7 +661,7 @@ export function renderTimeframeSummary() {
         </span>
         <span>Score ${Math.round(best.ultraScore || 0)}</span>
         <span>${esc(best.signal || "WAIT")}</span>
-        <span>${Number(item.freshPairs || 0)}/${Number(item.totalPairs || 25)} fresh</span>
+        <span>${Number(item.freshPairs || 0)}/${Number(item.totalPairs || 26)} fresh</span>
       </div>
     `;
   }).join("");
@@ -679,6 +696,13 @@ export function renderTimeframeSummary() {
       }
     });
   });
+}
+
+function getMtfForPair(pair) {
+  const mtf = appState.timeframeSummary?.mtfAlignment;
+  const topPairs = Array.isArray(mtf?.topPairs) ? mtf.topPairs : [];
+
+  return topPairs.find((item) => item.pair === pair) || null;
 }
 
 function pickBestMtfTimeframe(mtfItem) {
