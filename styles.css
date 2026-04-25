@@ -415,7 +415,8 @@ button:hover {
 #paperPairStats,
 #paperRecentTrades,
 #paperServerRuns,
-#paperHealthBox {
+#paperHealthBox,
+#timeframeSummaryBox {
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid var(--border);
   border-radius: 18px;
