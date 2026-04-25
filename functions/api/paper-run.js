@@ -15,6 +15,13 @@ const EXPLORATION_SCORE = 58;
 const DEFAULT_RISK_PERCENT = 0.25;
 const EXPLORATION_RISK_PERCENT = 0.1;
 
+const MAX_CANDLE_AGE_SECONDS = {
+  M5: 60 * 60,
+  M15: 3 * 60 * 60,
+  H1: 8 * 60 * 60,
+  H4: 24 * 60 * 60
+};
+
 export async function onRequestGet(context) {
   return handlePaperRun(context);
 }
@@ -67,14 +74,14 @@ async function handlePaperRun(context) {
         scans.length,
         opened.length,
         closed.length,
-        "server-paper-run-with-archive-edge-correlation-guard"
+        "server-paper-run-with-archive-edge-correlation-guard-freshness"
       )
       .run();
 
     return json({
       ok: true,
       source: "server-paper-engine",
-      version: "archive-edge-v3-correlation-guard",
+      version: "archive-edge-v4-freshness-guard",
       runId,
       timeframe,
       scannedPairs: scans.length,
@@ -88,6 +95,7 @@ async function handlePaperRun(context) {
         ultraScore: s.ultraScore,
         archiveEdgeScore: s.archiveEdgeScore,
         archiveConfidence: s.archiveConfidence,
+        candleAgeMinutes: s.candleAgeMinutes ?? null,
         status: s.status,
         reason: s.reason
       })),
@@ -242,7 +250,25 @@ async function scanAllPairs(db, timeframe, archiveStats) {
       continue;
     }
 
-    scans.push(buildScan(pair, timeframe, candles, archiveStats[pair] || null));
+    const freshness = getCandleFreshness(candles, timeframe);
+
+    if (!freshness.fresh) {
+      scans.push({
+        pair,
+        timeframe,
+        status: "SKIPPED",
+        reason: `Stale market data: ${freshness.ageMinutes} min old`,
+        ultraScore: 0,
+        archiveEdgeScore: 50,
+        archiveConfidence: 0,
+        candleAgeMinutes: freshness.ageMinutes
+      });
+      continue;
+    }
+
+    const scan = buildScan(pair, timeframe, candles, archiveStats[pair] || null);
+    scan.candleAgeMinutes = freshness.ageMinutes;
+    scans.push(scan);
   }
 
   return scans.sort((a, b) => Number(b.ultraScore || 0) - Number(a.ultraScore || 0));
@@ -279,6 +305,29 @@ async function getCandles(db, pair, timeframe) {
       c.close > 0
     )
     .sort((a, b) => a.time - b.time);
+}
+
+function getCandleFreshness(candles, timeframe) {
+  const last = candles.at(-1);
+  const lastTs = Number(last?.time || 0);
+  const now = Math.floor(Date.now() / 1000);
+
+  if (!lastTs) {
+    return {
+      fresh: false,
+      ageSeconds: 999999999,
+      ageMinutes: 999999
+    };
+  }
+
+  const ageSeconds = Math.max(0, now - lastTs);
+  const maxAge = MAX_CANDLE_AGE_SECONDS[timeframe] || MAX_CANDLE_AGE_SECONDS.M15;
+
+  return {
+    fresh: ageSeconds <= maxAge,
+    ageSeconds,
+    ageMinutes: Math.round(ageSeconds / 60)
+  };
 }
 
 function buildScan(pair, timeframe, candles, pairArchiveStats) {
