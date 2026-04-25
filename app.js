@@ -46,7 +46,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   try {
     cacheEls();
     bindEvents();
-    setupChart();
+    setupChartSafe();
 
     const timeframeSelect = document.getElementById("timeframeSelect");
     if (timeframeSelect) {
@@ -70,8 +70,34 @@ document.addEventListener("DOMContentLoaded", async () => {
     startPaperLoop();
   } catch (error) {
     console.error("App init failed", error);
+
+    const pairList = document.getElementById("pairList");
+    if (pairList) {
+      pairList.innerHTML = `
+        <div class="bad" style="padding:14px;">
+          Front init error: ${String(error?.message || error)}
+        </div>
+      `;
+    }
   }
 });
+
+function setupChartSafe() {
+  try {
+    setupChart();
+  } catch (error) {
+    console.warn("Chart disabled, app continues", error);
+
+    const chartBox = document.getElementById("chart");
+    if (chartBox) {
+      chartBox.innerHTML = `
+        <div class="muted" style="padding:16px;">
+          Chart temporarily unavailable. Scanner still running.
+        </div>
+      `;
+    }
+  }
+}
 
 function cacheEls() {
   [
@@ -165,8 +191,8 @@ function bindEvents() {
     refreshAll(true);
   });
 
-  document.getElementById("tradeForm")?.addEventListener("submit", (e) => {
-    onAddTrade(e, renderTrades, renderFtmoRisk);
+  document.getElementById("tradeForm")?.addEventListener("submit", (event) => {
+    onAddTrade(event, renderTrades, renderFtmoRisk);
   });
 
   document.getElementById("clearTradesBtn")?.addEventListener("click", () => {
@@ -283,6 +309,15 @@ export async function refreshAll(force = false) {
     persistState();
   } catch (error) {
     console.error("refreshAll failed", error);
+
+    const pairList = document.getElementById("pairList");
+    if (pairList) {
+      pairList.innerHTML = `
+        <div class="bad" style="padding:14px;">
+          Refresh error: ${String(error?.message || error)}
+        </div>
+      `;
+    }
   } finally {
     refreshInFlight = false;
   }
@@ -365,6 +400,7 @@ function startPaperLoop() {
 function renderTimeframeLabel() {
   const label = document.getElementById("chartTimeframeLabel");
   if (!label) return;
+
   label.textContent = `${appState.timeframe || "M15"} primary candles`;
 }
 
