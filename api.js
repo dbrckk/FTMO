@@ -76,6 +76,32 @@ export async function fetchServerPaperSnapshot() {
   }
 }
 
+export async function fetchPaperHealth() {
+  try {
+    const url = new URL(API.paperHealth, window.location.origin);
+    url.searchParams.set("timeframe", appState.timeframe || "M15");
+
+    const data = await fetchJsonWithTimeout(
+      url.toString(),
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json"
+        }
+      },
+      4000
+    );
+
+    appState.paperHealth = data || null;
+    persistState();
+
+    return data;
+  } catch {
+    appState.paperHealth = appState.paperHealth || null;
+    return appState.paperHealth;
+  }
+}
+
 export async function saveClosedPaperTrade(trade) {
   try {
     return await fetchJsonWithTimeout(
@@ -450,4 +476,4 @@ function getCurrentSession(hour) {
   if (tokyo) return "Tokyo";
 
   return "OffSession";
-  }
+      }
