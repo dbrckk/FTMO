@@ -2,6 +2,11 @@ name: Server paper trading
 
 on:
   workflow_dispatch:
+    inputs:
+      timeframe:
+        description: "M5, M15, H1, H4, or AUTO"
+        required: false
+        default: "AUTO"
   schedule:
     - cron: "*/15 * * * *"
 
@@ -25,16 +30,54 @@ jobs:
           echo "SITE_URL present"
           echo "SYNC_SECRET present"
 
+      - name: Compute paper timeframe
+        id: vars
+        shell: bash
+        run: |
+          MANUAL_TIMEFRAME="${{ github.event.inputs.timeframe }}"
+          SLOT=$(( $(date -u +%s) / 900 ))
+
+          if [ -n "$MANUAL_TIMEFRAME" ] && [ "$MANUAL_TIMEFRAME" != "AUTO" ]; then
+            TIMEFRAME="$MANUAL_TIMEFRAME"
+          else
+            MOD=$(( SLOT % 16 ))
+
+            if [ "$MOD" -eq 0 ]; then
+              TIMEFRAME="H4"
+            elif [ "$MOD" -eq 4 ] || [ "$MOD" -eq 8 ] || [ "$MOD" -eq 12 ]; then
+              TIMEFRAME="H1"
+            else
+              TIMEFRAME="M15"
+            fi
+          fi
+
+          echo "timeframe=$TIMEFRAME" >> "$GITHUB_OUTPUT"
+          echo "Using paper timeframe $TIMEFRAME"
+
       - name: Call server paper engine
         run: |
           HTTP_CODE=$(curl -sS \
             -o response.json \
             -w "%{http_code}" \
-            "${{ secrets.SITE_URL }}/api/paper-run?token=${{ secrets.SYNC_SECRET }}&timeframe=M15")
+            "${{ secrets.SITE_URL }}/api/paper-run?token=${{ secrets.SYNC_SECRET }}&timeframe=${{ steps.vars.outputs.timeframe }}")
 
           echo "HTTP_CODE=$HTTP_CODE"
           cat response.json || true
 
           if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            exit 1
+          fi
+
+          OK=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('response.json','utf8')); console.log(j.ok === true ? 'true' : 'false')")
+          VERSION=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('response.json','utf8')); console.log(j.version || '')")
+          OPENED=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('response.json','utf8')); console.log(j.opened ?? 0)")
+          CLOSED=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('response.json','utf8')); console.log(j.closed ?? 0)")
+
+          echo "OK=$OK"
+          echo "VERSION=$VERSION"
+          echo "OPENED=$OPENED"
+          echo "CLOSED=$CLOSED"
+
+          if [ "$OK" != "true" ]; then
             exit 1
           fi
