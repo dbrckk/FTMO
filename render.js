@@ -541,6 +541,48 @@ export function renderPaperHealth() {
   `;
 }
 
+export function renderTimeframeSummary() {
+  const box = document.getElementById("timeframeSummaryBox");
+  if (!box) return;
+
+  const data = appState.timeframeSummary;
+
+  if (!data || !data.ok || !data.summary) {
+    box.innerHTML = `<div class="muted">Multi-timeframe summary unavailable.</div>`;
+    return;
+  }
+
+  const order = ["M15", "H1", "H4"];
+
+  box.innerHTML = order.map((timeframe) => {
+    const item = data.summary?.[timeframe];
+
+    if (!item) {
+      return `
+        <div class="top-row">
+          <strong>${timeframe}</strong>
+          <span class="muted">No data</span>
+        </div>
+      `;
+    }
+
+    const best = item.best || {};
+    const statusClass = best.allowed ? "ok" : item.freshPairs >= 20 ? "warning" : "bad";
+
+    return `
+      <div class="top-row">
+        <strong>${timeframe}</strong>
+        <span class="${statusClass}">
+          ${best.pair ? esc(best.pair) : "-"}
+        </span>
+        <span>Score ${Math.round(best.ultraScore || 0)}</span>
+        <span>${esc(best.signal || "WAIT")}</span>
+        <span>${Number(item.freshPairs || 0)}/${Number(item.totalPairs || 25)} fresh</span>
+      </div>
+    `;
+  }).join("");
+}
+
 function formatDateShort(value) {
   if (!value) return "-";
 
