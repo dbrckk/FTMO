@@ -102,6 +102,31 @@ export async function fetchPaperHealth() {
   }
 }
 
+export async function fetchTimeframeSummary() {
+  try {
+    const url = new URL(API.timeframeSummary, window.location.origin);
+
+    const data = await fetchJsonWithTimeout(
+      url.toString(),
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json"
+        }
+      },
+      5000
+    );
+
+    appState.timeframeSummary = data || null;
+    persistState();
+
+    return data;
+  } catch {
+    appState.timeframeSummary = appState.timeframeSummary || null;
+    return appState.timeframeSummary;
+  }
+}
+
 export async function saveClosedPaperTrade(trade) {
   try {
     return await fetchJsonWithTimeout(
@@ -476,4 +501,4 @@ function getCurrentSession(hour) {
   if (tokyo) return "Tokyo";
 
   return "OffSession";
-      }
+}
