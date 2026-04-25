@@ -1,0 +1,388 @@
+name: API smoke test
+
+on:
+  workflow_dispatch:
+    inputs:
+      timeframe:
+        description: "M15, H1, H4, M5"
+        required: false
+        default: "M15"
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check secrets presence
+        run: |
+          if [ -z "${{ secrets.SITE_URL }}" ]; then
+            echo "ERROR: SITE_URL missing"
+            exit 1
+          fi
+
+          echo "SITE_URL present"
+
+      - name: Prepare variables
+        id: vars
+        shell: bash
+        run: |
+          SITE_URL="${{ secrets.SITE_URL }}"
+          SITE_URL="${SITE_URL%/}"
+
+          TIMEFRAME="${{ github.event.inputs.timeframe }}"
+          if [ -z "$TIMEFRAME" ]; then
+            TIMEFRAME="M15"
+          fi
+
+          echo "site_url=$SITE_URL" >> "$GITHUB_OUTPUT"
+          echo "timeframe=$TIMEFRAME" >> "$GITHUB_OUTPUT"
+
+          echo "SITE_URL=$SITE_URL"
+          echo "TIMEFRAME=$TIMEFRAME"
+
+      - name: Test market data BTCUSD
+        shell: bash
+        run: |
+          URL="${{ steps.vars.outputs.site_url }}/api/market-data?pair=BTCUSD&timeframe=${{ steps.vars.outputs.timeframe }}&limit=50"
+
+          HTTP_CODE=$(curl -sS -o btc.json -w "%{http_code}" "$URL")
+
+          echo "HTTP_CODE=$HTTP_CODE"
+          cat btc.json || true
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "BTC market-data HTTP error"
+            exit 1
+          fi
+
+          OK=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('btc.json','utf8')); console.log(j.ok === true ? 'true' : 'false')")
+          PAIR=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('btc.json','utf8')); console.log(j.pair || '')")
+          COUNT=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('btc.json','utf8')); console.log(j.count ?? 0)")
+
+          echo "OK=$OK"
+          echo "PAIR=$PAIR"
+          echo "COUNT=$COUNT"
+
+          if [ "$OK" != "true" ]; then
+            echo "BTC market-data ok=false"
+            exit 1
+          fi
+
+          if [ "$PAIR" != "BTCUSD" ]; then
+            echo "BTC pair mismatch"
+            exit 1
+          fi
+
+      - name: Test paper health
+        shell: bash
+        run: |
+          URL="${{ steps.vars.outputs.site_url }}/api/paper-health?timeframe=${{ steps.vars.outputs.timeframe }}"
+
+          HTTP_CODE=$(curl -sS -o health.json -w "%{http_code}" "$URL")
+
+          echo "HTTP_CODE=$HTTP_CODE"
+          cat health.json || true
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "paper-health HTTP error"
+            exit 1
+          fi
+
+          OK=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('health.json','utf8')); console.log(j.ok === true ? 'true' : 'false')")
+          TOTAL=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('health.json','utf8')); console.log(j.market?.totalPairs ?? 0)")
+          FRESH=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('health.json','utf8')); console.log(j.market?.freshPairs ?? 0)")
+
+          echo "OK=$OK"
+          echo "TOTAL_PAIRS=$TOTAL"
+          echo "FRESH_PAIRS=$FRESH"
+
+          if [ "$OK" != "true" ]; then
+            echo "paper-health ok=false"
+            exit 1
+          fi
+
+          if [ "$TOTAL" -ne 26 ]; then
+            echo "Expected 26 assets"
+            exit 1
+          fi
+
+      - name: Test timeframe summary
+        shell: bash
+        run: |
+          URL="${{ steps.vars.outputs.site_url }}/api/timeframe-summary"
+
+          HTTP_CODE=$(curl -sS -o mtf.json -w "%{http_code}" "$URL")
+
+          echo "HTTP_CODE=$HTTP_CODE"
+          cat mtf.json || true
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "timeframe-summary HTTP error"
+            exit 1
+          fi
+
+          OK=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('mtf.json','utf8')); console.log(j.ok === true ? 'true' : 'false')")
+          HAS_BTC=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('mtf.json','utf8')); const rows=Object.values(j.summary||{}); const found=rows.some(x => (x.topAllowed||[]).some(p=>p.pair==='BTCUSD') || (x.topBlocked||[]).some(p=>p.pair==='BTCUSD') || x.best?.pair==='BTCUSD'); console.log(found ? 'true' : 'false')")
+
+          echo "OK=$OK"
+          echo "HAS_BTC=$HAS_BTC"
+
+          if [ "$OK" != "true" ]; then
+            echo "timeframe-summary ok=false"
+            exit 1
+          fi
+
+      - name: Test correlation matrix
+        shell: bash
+        run: |
+          URL="${{ steps.vars.outputs.site_url }}/api/correlation-matrix?timeframe=${{ steps.vars.outputs.timeframe }}&limit=120"
+
+          HTTP_CODE=$(curl -sS -o corr.json -w "%{http_code}" "$URL")
+
+          echo "HTTP_CODE=$HTTP_CODE"
+          cat corr.json || true
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "correlation-matrix HTTP error"
+            exit 1
+          fi
+
+          OK=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('corr.json','utf8')); console.log(j.ok === true ? 'true' : 'false')")
+          HAS_BTC=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('corr.json','utf8')); console.log((j.pairs||[]).includes('BTCUSD') ? 'true' : 'false')")
+          HAS_CLUSTER=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('corr.json','utf8')); console.log((j.clusters||[]).some(c=>c.name==='BTC_USD') ? 'true' : 'false')")
+
+          echo "OK=$OK"
+          echo "HAS_BTC=$HAS_BTC"
+          echo "HAS_BTC_CLUSTER=$HAS_CLUSTER"
+
+          if [ "$OK" != "true" ]; then
+            echo "correlation-matrix ok=false"
+            exit 1
+          fi
+
+      - name: Test archive stats BTCUSD
+        shell: bash
+        run: |
+          URL="${{ steps.vars.outputs.site_url }}/api/archive-stats?pair=BTCUSD&timeframe=${{ steps.vars.outputs.timeframe }}"
+
+          HTTP_CODE=$(curl -sS -o archive.json -w "%{http_code}" "$URL")
+
+          echo "HTTP_CODE=$HTTP_CODE"
+          cat archive.json || true
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "archive-stats HTTP error"
+            exit 1
+          fi
+
+          OK=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('archive.json','utf8')); console.log(j.ok === true ? 'true' : 'false')")
+          PAIR=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('archive.json','utf8')); console.log(j.pair || '')")
+
+          echo "OK=$OK"
+          echo "PAIR=$PAIR"
+
+          if [ "$OK" != "true" ]; then
+            echo "archive-stats ok=false"
+            exit 1
+          fi
+
+          if [ "$PAIR" != "BTCUSD" ]; then
+            echo "archive-stats pair mismatch"
+            exit 1
+          fi
+
+      - name: Test ML BTCUSD
+        shell: bash
+        run: |
+          URL="${{ steps.vars.outputs.site_url }}/api/ml-score?pair=BTCUSD&timeframe=${{ steps.vars.outputs.timeframe }}&signal=BUY&ultraScore=78&trendScore=74&timingScore=70&riskScore=52&smartMoneyScore=65&executionScore=64&archiveEdgeScore=55&volatility=0.012&momentum=1.5&rr=2.1"
+
+          HTTP_CODE=$(curl -sS -o ml.json -w "%{http_code}" "$URL")
+
+          echo "HTTP_CODE=$HTTP_CODE"
+          cat ml.json || true
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "ml-score HTTP error"
+            exit 1
+          fi
+
+          OK=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('ml.json','utf8')); console.log(j.ok === true ? 'true' : 'false')")
+          SCORE=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('ml.json','utf8')); console.log(j.mlScore ?? 0)")
+
+          echo "OK=$OK"
+          echo "ML_SCORE=$SCORE"
+
+          if [ "$OK" != "true" ]; then
+            echo "ml-score ok=false"
+            exit 1
+          fi
+
+      - name: Test VectorBT BTCUSD
+        shell: bash
+        run: |
+          URL="${{ steps.vars.outputs.site_url }}/api/vectorbt-score?pair=BTCUSD&timeframe=${{ steps.vars.outputs.timeframe }}&signal=BUY&ultraScore=78&trendScore=74&timingScore=70&riskScore=52&archiveEdgeScore=55&rr=2.1"
+
+          HTTP_CODE=$(curl -sS -o vbt.json -w "%{http_code}" "$URL")
+
+          echo "HTTP_CODE=$HTTP_CODE"
+          cat vbt.json || true
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "vectorbt-score HTTP error"
+            exit 1
+          fi
+
+          OK=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('vbt.json','utf8')); console.log(j.ok === true ? 'true' : 'false')")
+          SCORE=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('vbt.json','utf8')); console.log(j.vectorbtScore ?? 0)")
+
+          echo "OK=$OK"
+          echo "VECTORBT_SCORE=$SCORE"
+
+          if [ "$OK" != "true" ]; then
+            echo "vectorbt-score ok=false"
+            exit 1
+          fi
+
+      - name: Test AI decision BTCUSD
+        shell: bash
+        run: |
+          URL="${{ steps.vars.outputs.site_url }}/api/ai-decision?pair=BTCUSD&timeframe=${{ steps.vars.outputs.timeframe }}&signal=BUY&tradeAllowed=true&ultraScore=82&mlScore=76&vectorbtScore=72&trendScore=78&timingScore=73&riskScore=54&archiveEdgeScore=58&mtfScore=78&mtfSignal=BUY&rr=2.1"
+
+          HTTP_CODE=$(curl -sS -o ai.json -w "%{http_code}" "$URL")
+
+          echo "HTTP_CODE=$HTTP_CODE"
+          cat ai.json || true
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "ai-decision HTTP error"
+            exit 1
+          fi
+
+          OK=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('ai.json','utf8')); console.log(j.ok === true ? 'true' : 'false')")
+          PAIR=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('ai.json','utf8')); console.log(j.pair || '')")
+          DECISION=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('ai.json','utf8')); console.log(j.decision || '')")
+
+          echo "OK=$OK"
+          echo "PAIR=$PAIR"
+          echo "DECISION=$DECISION"
+
+          if [ "$OK" != "true" ]; then
+            echo "ai-decision ok=false"
+            exit 1
+          fi
+
+          if [ "$PAIR" != "BTCUSD" ]; then
+            echo "ai-decision pair mismatch"
+            exit 1
+          fi
+
+      - name: Test exit engine BTCUSD
+        shell: bash
+        run: |
+          URL="${{ steps.vars.outputs.site_url }}/api/exit-engine?pair=BTCUSD&timeframe=${{ steps.vars.outputs.timeframe }}&signal=BUY&ultraScore=80&trendScore=76&timingScore=70&riskScore=52&executionScore=64&smartMoneyScore=65&archiveEdgeScore=55&mtfScore=75&mtfSignal=BUY&volatility=0.012"
+
+          HTTP_CODE=$(curl -sS -o exit.json -w "%{http_code}" "$URL")
+
+          echo "HTTP_CODE=$HTTP_CODE"
+          cat exit.json || true
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "exit-engine HTTP error"
+            exit 1
+          fi
+
+          OK=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('exit.json','utf8')); console.log(j.ok === true ? 'true' : 'false')")
+          PAIR=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('exit.json','utf8')); console.log(j.pair || '')")
+          ACTION=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('exit.json','utf8')); console.log(j.exitAction || '')")
+
+          echo "OK=$OK"
+          echo "PAIR=$PAIR"
+          echo "EXIT_ACTION=$ACTION"
+
+          if [ "$OK" != "true" ]; then
+            echo "exit-engine ok=false"
+            exit 1
+          fi
+
+          if [ "$PAIR" != "BTCUSD" ]; then
+            echo "exit-engine pair mismatch"
+            exit 1
+          fi
+
+      - name: Test portfolio risk BTCUSD
+        shell: bash
+        run: |
+          URL="${{ steps.vars.outputs.site_url }}/api/portfolio-risk"
+
+          cat > payload.json <<'JSON'
+          {
+            "positions": [
+              { "pair": "BTCUSD", "riskPercent": 0.5 },
+              { "pair": "EURUSD", "riskPercent": 0.5 },
+              { "pair": "XAUUSD", "riskPercent": 0.5 }
+            ]
+          }
+          JSON
+
+          HTTP_CODE=$(curl -sS \
+            -o portfolio.json \
+            -w "%{http_code}" \
+            -H "Content-Type: application/json" \
+            -d @payload.json \
+            "$URL")
+
+          echo "HTTP_CODE=$HTTP_CODE"
+          cat portfolio.json || true
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "portfolio-risk HTTP error"
+            exit 1
+          fi
+
+          OK=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('portfolio.json','utf8')); console.log(j.ok === true ? 'true' : 'false')")
+          HAS_CRYPTO=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('portfolio.json','utf8')); console.log(j.cryptoExposure?.name === 'BTC_USD' ? 'true' : 'false')")
+
+          echo "OK=$OK"
+          echo "HAS_CRYPTO=$HAS_CRYPTO"
+
+          if [ "$OK" != "true" ]; then
+            echo "portfolio-risk ok=false"
+            exit 1
+          fi
+
+          if [ "$HAS_CRYPTO" != "true" ]; then
+            echo "BTC crypto exposure missing"
+            exit 1
+          fi
+
+      - name: Test paper trades
+        shell: bash
+        run: |
+          URL="${{ steps.vars.outputs.site_url }}/api/paper-trades?pair=BTCUSD&timeframe=${{ steps.vars.outputs.timeframe }}&limit=20"
+
+          HTTP_CODE=$(curl -sS -o paper.json -w "%{http_code}" "$URL")
+
+          echo "HTTP_CODE=$HTTP_CODE"
+          cat paper.json || true
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "paper-trades HTTP error"
+            exit 1
+          fi
+
+          OK=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('paper.json','utf8')); console.log(j.ok === true ? 'true' : 'false')")
+
+          echo "OK=$OK"
+
+          if [ "$OK" != "true" ]; then
+            echo "paper-trades ok=false"
+            exit 1
+          fi
+
+      - name: Final summary
+        run: |
+          echo "======================================"
+          echo "API SMOKE TEST PASSED"
+          echo "BTCUSD integration is active"
+          echo "Timeframe: ${{ steps.vars.outputs.timeframe }}"
+          echo "======================================"
