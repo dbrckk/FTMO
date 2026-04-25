@@ -16,6 +16,13 @@
       </div>
 
       <div class="header-actions">
+        <select id="timeframeSelect" class="timeframe-select" aria-label="Timeframe">
+          <option value="M5">M5</option>
+          <option value="M15" selected>M15</option>
+          <option value="H1">H1</option>
+          <option value="H4">H4</option>
+        </select>
+
         <button id="refreshBtn" class="btn-primary" type="button">Refresh scan</button>
         <button id="watchlistBtn" type="button">Watchlist</button>
         <button id="exportBtn" type="button">Export</button>
@@ -150,7 +157,7 @@
           <section class="panel">
             <div class="panel-title">
               <h3>Chart</h3>
-              <span>D1 primary candles</span>
+              <span id="chartTimeframeLabel">D1 primary candles</span>
             </div>
             <div id="chart"></div>
           </section>
@@ -357,4 +364,4 @@
 
   <script type="module" src="./app.js"></script>
 </body>
-                  </html>
+              </html>
