@@ -255,7 +255,9 @@ export async function refreshAll(force = false) {
 
     await fetchCorrelationMatrix();
     await refreshAiDecision(force, renderSelectedPair);
-    await runPaperEngine(appState.scans);
+
+    const mtfProtectedScans = applyBrowserPaperMtfGuard(appState.scans);
+    await runPaperEngine(mtfProtectedScans);
 
     await Promise.allSettled([
       fetchServerPaperSnapshot(),
@@ -284,6 +286,70 @@ export async function refreshAll(force = false) {
   } finally {
     refreshInFlight = false;
   }
+}
+
+function applyBrowserPaperMtfGuard(scans) {
+  return (scans || []).map((scan) => {
+    const mtf = getMtfForPair(scan.pair);
+
+    if (!mtf) {
+      return {
+        ...scan,
+        tradeAllowed: false,
+        tradeStatus: "BLOCKED MTF",
+        tradeReason: "No multi-timeframe alignment available."
+      };
+    }
+
+    const scanSignal = String(scan.signal || "").toUpperCase();
+    const mtfSignal = String(mtf.signal || "").toUpperCase();
+    const mtfScore = Number(mtf.score || 0);
+
+    const opposite =
+      (scanSignal === "BUY" && mtfSignal === "SELL") ||
+      (scanSignal === "SELL" && mtfSignal === "BUY");
+
+    if (opposite) {
+      return {
+        ...scan,
+        tradeAllowed: false,
+        tradeStatus: "BLOCKED MTF",
+        tradeReason: `MTF opposite direction: ${mtfSignal}.`
+      };
+    }
+
+    if (mtfScore < 60) {
+      return {
+        ...scan,
+        tradeAllowed: false,
+        tradeStatus: "BLOCKED MTF",
+        tradeReason: `MTF score too weak: ${Math.round(mtfScore)}/100.`
+      };
+    }
+
+    if (mtfScore < 68 && Number(scan.ultraScore || 0) < 82) {
+      return {
+        ...scan,
+        tradeAllowed: false,
+        tradeStatus: "BLOCKED MTF",
+        tradeReason: `MTF not strong enough for browser paper: ${Math.round(mtfScore)}/100.`
+      };
+    }
+
+    return {
+      ...scan,
+      mtfScore,
+      mtfSignal,
+      mtfLabel: mtf.label || "MTF alignment"
+    };
+  });
+}
+
+function getMtfForPair(pair) {
+  const mtf = appState.timeframeSummary?.mtfAlignment;
+  const topPairs = Array.isArray(mtf?.topPairs) ? mtf.topPairs : [];
+
+  return topPairs.find((item) => item.pair === pair) || null;
 }
 
 function startPaperLoop() {
