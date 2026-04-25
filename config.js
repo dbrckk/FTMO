@@ -36,6 +36,7 @@ export const PAIRS = [
 ];
 
 export const API = {
+  paperHealth: "/api/paper-health"
   market: "/api/market-data",
   ml: "/api/ml-score",
   vectorbt: "/api/vectorbt-score",
