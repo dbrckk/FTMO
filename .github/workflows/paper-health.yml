@@ -2,6 +2,11 @@ name: Paper server health check
 
 on:
   workflow_dispatch:
+    inputs:
+      timeframe:
+        description: "M5, M15, H1, H4, or AUTO"
+        required: false
+        default: "AUTO"
   schedule:
     - cron: "*/15 * * * *"
 
@@ -19,12 +24,36 @@ jobs:
 
           echo "SITE_URL present"
 
+      - name: Compute health timeframe
+        id: vars
+        shell: bash
+        run: |
+          MANUAL_TIMEFRAME="${{ github.event.inputs.timeframe }}"
+          SLOT=$(( $(date -u +%s) / 900 ))
+
+          if [ -n "$MANUAL_TIMEFRAME" ] && [ "$MANUAL_TIMEFRAME" != "AUTO" ]; then
+            TIMEFRAME="$MANUAL_TIMEFRAME"
+          else
+            MOD=$(( SLOT % 16 ))
+
+            if [ "$MOD" -eq 0 ]; then
+              TIMEFRAME="H4"
+            elif [ "$MOD" -eq 4 ] || [ "$MOD" -eq 8 ] || [ "$MOD" -eq 12 ]; then
+              TIMEFRAME="H1"
+            else
+              TIMEFRAME="M15"
+            fi
+          fi
+
+          echo "timeframe=$TIMEFRAME" >> "$GITHUB_OUTPUT"
+          echo "Using health timeframe $TIMEFRAME"
+
       - name: Check paper server health
         run: |
           HTTP_CODE=$(curl -sS \
             -o health.json \
             -w "%{http_code}" \
-            "${{ secrets.SITE_URL }}/api/paper-health?timeframe=M15")
+            "${{ secrets.SITE_URL }}/api/paper-health?timeframe=${{ steps.vars.outputs.timeframe }}")
 
           echo "HTTP_CODE=$HTTP_CODE"
           cat health.json || true
