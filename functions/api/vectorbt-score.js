@@ -1,345 +1,729 @@
+const MODEL_VERSION = "vectorbt-score-btc-v3";
+
 export async function onRequestPost(context) {
   try {
     const body = await safeJson(context.request);
-    const data = body?.data || body || {};
-    const candles = Array.isArray(data.candles) ? data.candles : [];
+    const scan = normalizeScan(body.scan || body);
 
-    if (candles.length < 30) {
+    if (!scan.pair) {
       return json({
-        ok: true,
-        source: "vectorbt-local-fallback",
+        ok: false,
+        error: "Missing pair",
         vectorbtScore: 50,
-        confidenceBand: "low",
-        explanation: "Pas assez de bougies pour un backtest fiable.",
-        metrics: emptyMetrics()
-      });
+        confidenceBand: "fallback",
+        metrics: null
+      }, 400);
     }
 
-    const normalized = normalizeCandles(candles);
-    const metrics = runLocalBacktest(normalized, data);
-    const vectorbtScore = scoreBacktest(metrics);
+    const result = scoreVectorbt(scan);
 
     return json({
       ok: true,
-      source: "local-vectorbt-like-engine",
-      vectorbtScore,
-      confidenceBand:
-        metrics.totalTrades >= 20 && vectorbtScore >= 70 ? "high" :
-        metrics.totalTrades >= 10 ? "medium" :
-        "low",
-      explanation: buildExplanation(metrics, vectorbtScore),
-      metrics
+      source: "vectorbt-score",
+      version: MODEL_VERSION,
+      pair: scan.pair,
+      timeframe: scan.timeframe,
+      ...result
     });
   } catch (error) {
     return json({
-      ok: true,
-      source: "vectorbt-safe-fallback",
-      vectorbtScore: 55,
-      confidenceBand: "medium",
-      explanation: String(error?.message || "VectorBT fallback utilisé."),
-      metrics: emptyMetrics()
+      ok: false,
+      error: String(error?.message || error || "vectorbt-score-error"),
+      vectorbtScore: 50,
+      confidenceBand: "fallback",
+      metrics: null
+    }, 500);
+  }
+}
+
+export async function onRequestGet(context) {
+  try {
+    const url = new URL(context.request.url);
+
+    const scan = normalizeScan({
+      pair: url.searchParams.get("pair") || "EURUSD",
+      timeframe: url.searchParams.get("timeframe") || "M15",
+      signal: url.searchParams.get("signal") || "WAIT",
+      ultraScore: url.searchParams.get("ultraScore") || 50,
+      trendScore: url.searchParams.get("trendScore") || 50,
+      timingScore: url.searchParams.get("timingScore") || 50,
+      riskScore: url.searchParams.get("riskScore") || 50,
+      archiveEdgeScore: url.searchParams.get("archiveEdgeScore") || 50,
+      rr: url.searchParams.get("rr") || 2
     });
+
+    const result = scoreVectorbt(scan);
+
+    return json({
+      ok: true,
+      source: "vectorbt-score",
+      version: MODEL_VERSION,
+      pair: scan.pair,
+      timeframe: scan.timeframe,
+      ...result
+    });
+  } catch (error) {
+    return json({
+      ok: false,
+      error: String(error?.message || error || "vectorbt-score-get-error"),
+      vectorbtScore: 50,
+      confidenceBand: "fallback",
+      metrics: null
+    }, 500);
   }
 }
 
-export async function onRequestGet() {
-  return json({
-    ok: true,
-    message: "POST candles to compute vectorbt-like score."
-  });
+function normalizeScan(input) {
+  const pair = String(input.pair || "")
+    .toUpperCase()
+    .replace("/", "")
+    .trim();
+
+  const timeframe = normalizeTimeframe(input.timeframe) || "M15";
+  const candles = Array.isArray(input.candles)
+    ? input.candles.map(normalizeCandle).filter(Boolean)
+    : [];
+
+  return {
+    pair,
+    timeframe,
+    candles,
+
+    signal: String(input.signal || "WAIT").toUpperCase(),
+    direction: String(input.direction || "").toLowerCase(),
+
+    ultraScore: safeNumber(input.ultraScore, 50),
+    finalScore: safeNumber(input.finalScore, 50),
+    localScore: safeNumber(input.localScore, 50),
+
+    trendScore: safeNumber(input.trendScore, 50),
+    timingScore: safeNumber(input.timingScore, 50),
+    riskScore: safeNumber(input.riskScore, 50),
+    smartMoneyScore: safeNumber(input.smartMoneyScore, 50),
+    executionScore: safeNumber(input.executionScore, 50),
+    archiveEdgeScore: safeNumber(input.archiveEdgeScore, 50),
+
+    rr: safeNumber(input.rr, getDefaultRr(pair)),
+    volatility: safeNumber(input.volatility, 0),
+    momentum: safeNumber(input.momentum, 0),
+    rsi14: safeNumber(input.rsi14, 50)
+  };
 }
 
-function normalizeCandles(candles) {
-  return candles
-    .map((c) => ({
-      time: Number(c.time || c.ts || 0),
-      open: Number(c.open || 0),
-      high: Number(c.high || 0),
-      low: Number(c.low || 0),
-      close: Number(c.close || 0)
-    }))
-    .filter((c) =>
-      Number.isFinite(c.time) &&
-      Number.isFinite(c.open) &&
-      Number.isFinite(c.high) &&
-      Number.isFinite(c.low) &&
-      Number.isFinite(c.close) &&
-      c.close > 0
-    )
-    .sort((a, b) => a.time - b.time);
+function normalizeCandle(row) {
+  const time = Number(row.time ?? row.ts ?? row.timestamp ?? 0);
+  const open = Number(row.open);
+  const high = Number(row.high);
+  const low = Number(row.low);
+  const close = Number(row.close);
+
+  if (
+    !Number.isFinite(time) ||
+    !Number.isFinite(open) ||
+    !Number.isFinite(high) ||
+    !Number.isFinite(low) ||
+    !Number.isFinite(close) ||
+    close <= 0
+  ) {
+    return null;
+  }
+
+  return {
+    time,
+    open,
+    high,
+    low,
+    close
+  };
 }
 
-function runLocalBacktest(candles, params) {
-  const closes = candles.map((c) => c.close);
-  const highs = candles.map((c) => c.high);
-  const lows = candles.map((c) => c.low);
+function scoreVectorbt(scan) {
+  const profile = getPairProfile(scan.pair);
 
-  const fastPeriod = Number(params.fast_ema || 20);
-  const slowPeriod = Number(params.slow_ema || 50);
-  const atrPeriod = Number(params.atr_period || 14);
-  const stopAtrMult = Number(params.stop_atr_mult || 1.4);
-  const takeAtrMult = Number(params.take_atr_mult || 2.6);
+  if (scan.candles.length >= 70) {
+    const metrics = runLocalBacktest(scan, profile);
+    const score = scoreBacktestMetrics(metrics, scan, profile);
 
-  const fast = emaSeries(closes, fastPeriod);
-  const slow = emaSeries(closes, slowPeriod);
-  const atrValues = atrSeries(highs, lows, closes, atrPeriod);
+    return {
+      vectorbtScore: Math.round(score),
+      confidenceBand: getConfidenceBand(score, metrics),
+      modelBias: getModelBias(scan, score),
+      metrics,
+      notes: buildNotes(scan, score, metrics, true)
+    };
+  }
 
+  const fallbackScore = scoreWithoutCandles(scan, profile);
+
+  return {
+    vectorbtScore: Math.round(fallbackScore),
+    confidenceBand: getFallbackConfidenceBand(fallbackScore),
+    modelBias: getModelBias(scan, fallbackScore),
+    metrics: {
+      mode: "fallback",
+      trades: 0,
+      winRate: 50,
+      expectancy: 0,
+      profitFactor: 0,
+      maxDrawdownR: 0,
+      averageR: 0,
+      sampleQuality: "no-candles"
+    },
+    notes: buildNotes(scan, fallbackScore, null, false)
+  };
+}
+
+function runLocalBacktest(scan, profile) {
+  const candles = scan.candles;
   const trades = [];
+  const maxBarsHold = getMaxBarsHold(scan.timeframe, scan.pair);
+  const rr = safeNumber(scan.rr, profile.defaultRr);
 
-  let position = null;
+  for (let i = 55; i < candles.length - 3; i += 1) {
+    const slice = candles.slice(0, i + 1);
+    const closes = slice.map((c) => c.close);
+    const highs = slice.map((c) => c.high);
+    const lows = slice.map((c) => c.low);
 
-  for (let i = slowPeriod + 2; i < candles.length; i += 1) {
-    const price = candles[i].close;
-    const atrValue = atrValues[i] || price * 0.002;
+    const current = closes.at(-1);
+    const ema20Value = ema(closes, 20);
+    const ema50Value = ema(closes, 50);
+    const rsiValue = rsi(closes, 14);
+    const atrValue = atr(highs, lows, closes, 14);
+    const momentum = computeMomentum(closes, 12);
 
-    const bullish =
-      fast[i] > slow[i] &&
-      fast[i - 1] <= slow[i - 1];
+    const signal = getBacktestSignal({
+      current,
+      ema20Value,
+      ema50Value,
+      rsiValue,
+      momentum
+    });
 
-    const bearish =
-      fast[i] < slow[i] &&
-      fast[i - 1] >= slow[i - 1];
+    if (signal === "WAIT") continue;
 
-    if (!position) {
-      if (bullish) {
-        position = {
-          direction: "buy",
-          entry: price,
-          stop: price - atrValue * stopAtrMult,
-          target: price + atrValue * takeAtrMult,
-          entryIndex: i
+    const entry = current;
+    const riskDistance = atrValue > 0
+      ? atrValue * profile.atrMultiplier
+      : entry * profile.fallbackRiskPercent;
+
+    if (!riskDistance || !Number.isFinite(riskDistance)) continue;
+
+    const stop =
+      signal === "SELL"
+        ? entry + riskDistance
+        : entry - riskDistance;
+
+    const target =
+      signal === "SELL"
+        ? entry - riskDistance * rr
+        : entry + riskDistance * rr;
+
+    const future = candles.slice(i + 1, i + 1 + maxBarsHold);
+
+    if (!future.length) continue;
+
+    const result = resolveTrade({
+      direction: signal === "SELL" ? "sell" : "buy",
+      entry,
+      stop,
+      target,
+      future
+    });
+
+    trades.push({
+      direction: signal === "SELL" ? "sell" : "buy",
+      entry: roundByPair(entry, scan.pair),
+      stop: roundByPair(stop, scan.pair),
+      target: roundByPair(target, scan.pair),
+      exit: roundByPair(result.exit, scan.pair),
+      pnlR: round(result.pnlR, 3),
+      reason: result.reason
+    });
+
+    i += Math.max(2, Math.floor(maxBarsHold / 3));
+  }
+
+  return buildMetrics(trades, scan, profile);
+}
+
+function getBacktestSignal(data) {
+  const bullish =
+    data.ema20Value > data.ema50Value &&
+    data.current > data.ema20Value &&
+    data.momentum > 0 &&
+    data.rsiValue >= 45 &&
+    data.rsiValue <= 72;
+
+  const bearish =
+    data.ema20Value < data.ema50Value &&
+    data.current < data.ema20Value &&
+    data.momentum < 0 &&
+    data.rsiValue <= 55 &&
+    data.rsiValue >= 25;
+
+  if (bullish) return "BUY";
+  if (bearish) return "SELL";
+
+  return "WAIT";
+}
+
+function resolveTrade({ direction, entry, stop, target, future }) {
+  for (const candle of future) {
+    if (direction === "buy") {
+      const hitStop = candle.low <= stop;
+      const hitTarget = candle.high >= target;
+
+      if (hitStop && hitTarget) {
+        return {
+          exit: stop,
+          pnlR: -1,
+          reason: "both-hit-stop-first"
         };
-      } else if (bearish) {
-        position = {
-          direction: "sell",
-          entry: price,
-          stop: price + atrValue * stopAtrMult,
-          target: price - atrValue * takeAtrMult,
-          entryIndex: i
+      }
+
+      if (hitStop) {
+        return {
+          exit: stop,
+          pnlR: -1,
+          reason: "stop-loss"
         };
       }
 
-      continue;
-    }
-
-    const candle = candles[i];
-    const maxHoldBars = 16;
-
-    let exit = null;
-    let reason = "";
-
-    if (position.direction === "buy") {
-      if (candle.low <= position.stop) {
-        exit = position.stop;
-        reason = "stop";
-      } else if (candle.high >= position.target) {
-        exit = position.target;
-        reason = "target";
-      }
-    } else {
-      if (candle.high >= position.stop) {
-        exit = position.stop;
-        reason = "stop";
-      } else if (candle.low <= position.target) {
-        exit = position.target;
-        reason = "target";
+      if (hitTarget) {
+        return {
+          exit: target,
+          pnlR: Math.abs(target - entry) / Math.abs(entry - stop),
+          reason: "take-profit"
+        };
       }
     }
 
-    if (!exit && i - position.entryIndex >= maxHoldBars) {
-      exit = price;
-      reason = "time";
-    }
+    if (direction === "sell") {
+      const hitStop = candle.high >= stop;
+      const hitTarget = candle.low <= target;
 
-    if (exit) {
-      const risk = Math.abs(position.entry - position.stop);
-      let pnlR = 0;
-
-      if (risk > 0) {
-        pnlR =
-          position.direction === "buy"
-            ? (exit - position.entry) / risk
-            : (position.entry - exit) / risk;
+      if (hitStop && hitTarget) {
+        return {
+          exit: stop,
+          pnlR: -1,
+          reason: "both-hit-stop-first"
+        };
       }
 
-      trades.push({
-        direction: position.direction,
-        entry: position.entry,
-        exit,
-        pnlR,
-        reason
-      });
+      if (hitStop) {
+        return {
+          exit: stop,
+          pnlR: -1,
+          reason: "stop-loss"
+        };
+      }
 
-      position = null;
+      if (hitTarget) {
+        return {
+          exit: target,
+          pnlR: Math.abs(entry - target) / Math.abs(stop - entry),
+          reason: "take-profit"
+        };
+      }
     }
   }
 
-  return buildMetrics(trades);
+  const last = future.at(-1);
+  const exit = Number(last.close || entry);
+  const risk = Math.abs(entry - stop);
+
+  const pnlR = direction === "buy"
+    ? (exit - entry) / risk
+    : (entry - exit) / risk;
+
+  return {
+    exit,
+    pnlR,
+    reason: "time-exit"
+  };
 }
 
-function buildMetrics(trades) {
-  if (!trades.length) return emptyMetrics();
+function buildMetrics(trades, scan, profile) {
+  const count = trades.length;
 
-  const totalTrades = trades.length;
-  const wins = trades.filter((t) => t.pnlR > 0).length;
-  const losses = totalTrades - wins;
-  const winRatePct = (wins / totalTrades) * 100;
+  if (!count) {
+    return {
+      mode: "local-vectorbt",
+      trades: 0,
+      winRate: 50,
+      expectancy: 0,
+      profitFactor: 0,
+      maxDrawdownR: 0,
+      averageR: 0,
+      sampleQuality: "empty",
+      recentExpectancy: 0,
+      recentWinRate: 50,
+      longTrades: 0,
+      shortTrades: 0
+    };
+  }
 
-  const grossWin = trades
-    .filter((t) => t.pnlR > 0)
-    .reduce((sum, t) => sum + t.pnlR, 0);
+  const wins = trades.filter((trade) => Number(trade.pnlR || 0) > 0);
+  const losses = trades.filter((trade) => Number(trade.pnlR || 0) <= 0);
 
-  const grossLossAbs = Math.abs(
-    trades
-      .filter((t) => t.pnlR <= 0)
-      .reduce((sum, t) => sum + t.pnlR, 0)
-  );
+  const totalR = trades.reduce((sum, trade) => sum + Number(trade.pnlR || 0), 0);
+  const grossWin = wins.reduce((sum, trade) => sum + Math.max(0, Number(trade.pnlR || 0)), 0);
+  const grossLoss = Math.abs(losses.reduce((sum, trade) => sum + Math.min(0, Number(trade.pnlR || 0)), 0));
 
-  const expectancy =
-    trades.reduce((sum, t) => sum + t.pnlR, 0) / totalTrades;
+  const recent = trades.slice(-20);
+  const recentWins = recent.filter((trade) => Number(trade.pnlR || 0) > 0);
+  const recentR = recent.reduce((sum, trade) => sum + Number(trade.pnlR || 0), 0);
 
-  const profitFactor = grossLossAbs > 0 ? grossWin / grossLossAbs : grossWin > 0 ? 3 : 0;
+  return {
+    mode: "local-vectorbt",
+    pair: scan.pair,
+    timeframe: scan.timeframe,
+    trades: count,
+    winRate: round((wins.length / count) * 100, 2),
+    expectancy: round(totalR / count, 4),
+    profitFactor: grossLoss > 0
+      ? round(grossWin / grossLoss, 3)
+      : grossWin > 0
+        ? 99
+        : 0,
+    maxDrawdownR: round(computeMaxDrawdownR(trades), 3),
+    averageR: round(totalR / count, 4),
+    recentExpectancy: recent.length ? round(recentR / recent.length, 4) : 0,
+    recentWinRate: recent.length ? round((recentWins.length / recent.length) * 100, 2) : 50,
+    longTrades: trades.filter((trade) => trade.direction === "buy").length,
+    shortTrades: trades.filter((trade) => trade.direction === "sell").length,
+    sampleQuality: getSampleQuality(count, profile.type),
+    lastTrades: trades.slice(-8)
+  };
+}
 
+function computeMaxDrawdownR(trades) {
   let equity = 0;
   let peak = 0;
   let maxDrawdown = 0;
 
   for (const trade of trades) {
-    equity += trade.pnlR;
+    equity += Number(trade.pnlR || 0);
     peak = Math.max(peak, equity);
     maxDrawdown = Math.min(maxDrawdown, equity - peak);
   }
 
-  const returns = trades.map((t) => t.pnlR);
-  const avg = expectancy;
-  const std = standardDeviation(returns);
-  const sharpeRatio = std > 0 ? avg / std : 0;
-
-  return {
-    totalReturnPct: Number((expectancy * totalTrades * 2).toFixed(2)),
-    winRatePct: Number(winRatePct.toFixed(2)),
-    maxDrawdownPct: Number((Math.abs(maxDrawdown) * 2).toFixed(2)),
-    totalTrades,
-    wins,
-    losses,
-    profitFactor: Number(profitFactor.toFixed(2)),
-    sharpeRatio: Number(sharpeRatio.toFixed(3)),
-    expectancy: Number(expectancy.toFixed(4))
-  };
+  return Math.abs(maxDrawdown);
 }
 
-function scoreBacktest(metrics) {
-  if (!metrics.totalTrades) return 50;
+function scoreBacktestMetrics(metrics, scan, profile) {
+  if (!metrics.trades) {
+    return scoreWithoutCandles(scan, profile) - 6;
+  }
 
-  const winScore = clamp(50 + (metrics.winRatePct - 50) * 1.1, 1, 99);
-  const pfScore = clamp(metrics.profitFactor * 28, 1, 99);
-  const expScore = clamp(50 + metrics.expectancy * 28, 1, 99);
-  const ddScore = clamp(80 - metrics.maxDrawdownPct * 2.5, 1, 99);
-  const sampleScore = clamp(metrics.totalTrades * 3, 1, 99);
+  const sampleFactor =
+    metrics.trades >= 35 ? 1 :
+    metrics.trades >= 20 ? 0.86 :
+    metrics.trades >= 10 ? 0.68 :
+    0.48;
 
-  return Math.round(
-    winScore * 0.24 +
-      pfScore * 0.24 +
-      expScore * 0.24 +
-      ddScore * 0.16 +
-      sampleScore * 0.12
+  const winRateScore = clamp(50 + (metrics.winRate - 50) * 1.35, 1, 99);
+  const expectancyScore = clamp(50 + metrics.expectancy * 38, 1, 99);
+  const recentScore = clamp(50 + metrics.recentExpectancy * 34, 1, 99);
+  const profitFactorScore = clamp(45 + metrics.profitFactor * 14, 1, 99);
+  const drawdownScore = clamp(84 - metrics.maxDrawdownR * 8, 1, 99);
+
+  let raw =
+    winRateScore * 0.22 +
+    expectancyScore * 0.28 +
+    recentScore * 0.18 +
+    profitFactorScore * 0.16 +
+    drawdownScore * 0.16;
+
+  raw = 50 + (raw - 50) * sampleFactor;
+
+  raw += (safeNumber(scan.trendScore, 50) - 50) * 0.08;
+  raw += (safeNumber(scan.timingScore, 50) - 50) * 0.06;
+  raw += (safeNumber(scan.archiveEdgeScore, 50) - 50) * 0.07;
+
+  if (scan.signal === "WAIT") raw -= 10;
+
+  if (profile.type === "crypto") {
+    raw -= 3;
+
+    if (metrics.trades >= 15 && metrics.expectancy > 0.15) raw += 5;
+    if (metrics.maxDrawdownR > 5) raw -= 7;
+    if (metrics.recentExpectancy < -0.1) raw -= 6;
+  }
+
+  if (profile.type === "gold") {
+    if (metrics.expectancy > 0.1) raw += 2;
+    if (metrics.maxDrawdownR > 4.5) raw -= 5;
+  }
+
+  return clamp(raw, 1, 99);
+}
+
+function scoreWithoutCandles(scan, profile) {
+  let score = clamp(
+    safeNumber(scan.ultraScore, 50) * 0.30 +
+      safeNumber(scan.trendScore, 50) * 0.18 +
+      safeNumber(scan.timingScore, 50) * 0.16 +
+      safeNumber(scan.riskScore, 50) * 0.13 +
+      safeNumber(scan.archiveEdgeScore, 50) * 0.15 +
+      safeNumber(scan.executionScore, 50) * 0.08,
+    1,
+    99
   );
+
+  if (scan.signal === "WAIT") score -= 12;
+  if (profile.type === "crypto") score -= 4;
+  if (profile.type === "gold") score += 1;
+
+  return clamp(score, 1, 99);
 }
 
-function buildExplanation(metrics, score) {
-  if (!metrics.totalTrades) {
-    return "Backtest local neutre : aucun trade détecté sur la fenêtre.";
+function getPairProfile(pair) {
+  if (pair === "BTCUSD") {
+    return {
+      type: "crypto",
+      defaultRr: 2.1,
+      atrMultiplier: 1.85,
+      fallbackRiskPercent: 0.006
+    };
   }
 
-  if (score >= 75) {
-    return `Backtest favorable : WR ${metrics.winRatePct}%, PF ${metrics.profitFactor}, expectancy ${metrics.expectancy}R.`;
+  if (pair === "XAUUSD") {
+    return {
+      type: "gold",
+      defaultRr: 2.2,
+      atrMultiplier: 1.55,
+      fallbackRiskPercent: 0.003
+    };
   }
 
-  if (score >= 58) {
-    return `Backtest moyen : WR ${metrics.winRatePct}%, PF ${metrics.profitFactor}, ${metrics.totalTrades} trades.`;
-  }
-
-  return `Backtest faible : expectancy ${metrics.expectancy}R, drawdown ${metrics.maxDrawdownPct}%.`;
-}
-
-function emptyMetrics() {
   return {
-    totalReturnPct: 0,
-    winRatePct: 0,
-    maxDrawdownPct: 0,
-    totalTrades: 0,
-    wins: 0,
-    losses: 0,
-    profitFactor: 0,
-    sharpeRatio: 0,
-    expectancy: 0
+    type: "forex",
+    defaultRr: 2.0,
+    atrMultiplier: pair.includes("JPY") ? 1.55 : 1.4,
+    fallbackRiskPercent: 0.002
   };
 }
 
-function emaSeries(values, period) {
+function getDefaultRr(pair) {
+  if (pair === "BTCUSD") return 2.1;
+  if (pair === "XAUUSD") return 2.2;
+
+  return 2;
+}
+
+function getMaxBarsHold(timeframe, pair) {
+  const p = String(pair || "").toUpperCase();
+
+  if (p === "BTCUSD") {
+    if (timeframe === "M5") return 18;
+    if (timeframe === "M15") return 14;
+    if (timeframe === "H1") return 10;
+    if (timeframe === "H4") return 8;
+  }
+
+  if (timeframe === "M5") return 18;
+  if (timeframe === "M15") return 12;
+  if (timeframe === "H1") return 10;
+  if (timeframe === "H4") return 8;
+
+  return 12;
+}
+
+function getSampleQuality(count, type) {
+  if (type === "crypto") {
+    if (count >= 25) return "high";
+    if (count >= 12) return "medium";
+    if (count >= 5) return "low";
+
+    return "very-low";
+  }
+
+  if (count >= 35) return "high";
+  if (count >= 18) return "medium";
+  if (count >= 8) return "low";
+
+  return "very-low";
+}
+
+function getConfidenceBand(score, metrics) {
+  if (metrics.trades >= 30 && score >= 78) return "very-high";
+  if (metrics.trades >= 18 && score >= 70) return "high";
+  if (metrics.trades >= 8 && score >= 60) return "medium";
+  if (score >= 50) return "low";
+
+  return "very-low";
+}
+
+function getFallbackConfidenceBand(score) {
+  if (score >= 76) return "medium";
+  if (score >= 64) return "low";
+
+  return "very-low";
+}
+
+function getModelBias(scan, score) {
+  if (scan.signal === "WAIT") return "neutral";
+  if (score >= 72 && scan.signal === "BUY") return "bullish";
+  if (score >= 72 && scan.signal === "SELL") return "bearish";
+  if (score < 55) return "avoid";
+
+  return "neutral";
+}
+
+function buildNotes(scan, score, metrics, hasBacktest) {
+  const notes = [];
+
+  notes.push(`VectorBT score ${Math.round(score)}/100`);
+
+  if (hasBacktest) {
+    notes.push(`Local backtest trades: ${metrics?.trades || 0}`);
+    notes.push(`Expectancy: ${Number(metrics?.expectancy || 0).toFixed(3)}R`);
+  } else {
+    notes.push("Fallback scoring without candles");
+  }
+
+  if (scan.pair === "BTCUSD") {
+    notes.push("BTC volatility-adjusted backtest model");
+  }
+
+  if (scan.pair === "XAUUSD") {
+    notes.push("Gold backtest model");
+  }
+
+  if (scan.signal === "WAIT") {
+    notes.push("No directional signal");
+  }
+
+  return notes;
+}
+
+function ema(values, period) {
+  const nums = values.map(Number).filter(Number.isFinite);
+
+  if (!nums.length) return 0;
+
   const k = 2 / (period + 1);
-  const out = [];
-  let prev = values[0] || 0;
+  let prev = nums[0];
 
-  for (let i = 0; i < values.length; i += 1) {
-    prev = i === 0 ? values[i] : values[i] * k + prev * (1 - k);
-    out.push(prev);
+  for (let i = 1; i < nums.length; i += 1) {
+    prev = nums[i] * k + prev * (1 - k);
   }
 
-  return out;
+  return prev;
 }
 
-function atrSeries(highs, lows, closes, period = 14) {
-  const out = [];
+function rsi(values, period = 14) {
+  const nums = values.map(Number).filter(Number.isFinite);
 
-  for (let i = 0; i < highs.length; i += 1) {
-    if (i === 0) {
-      out.push(0);
-      continue;
-    }
+  if (nums.length <= period) return 50;
 
-    const tr = Math.max(
-      highs[i] - lows[i],
-      Math.abs(highs[i] - closes[i - 1]),
-      Math.abs(lows[i] - closes[i - 1])
+  let gains = 0;
+  let losses = 0;
+
+  for (let i = nums.length - period; i < nums.length; i += 1) {
+    const diff = nums[i] - nums[i - 1];
+
+    if (diff >= 0) gains += diff;
+    else losses += Math.abs(diff);
+  }
+
+  if (losses === 0 && gains === 0) return 50;
+  if (losses === 0) return 100;
+
+  const rs = gains / losses;
+
+  return 100 - 100 / (1 + rs);
+}
+
+function atr(highs, lows, closes, period = 14) {
+  if (highs.length < 2) return 0;
+
+  const trs = [];
+
+  for (let i = 1; i < highs.length; i += 1) {
+    trs.push(
+      Math.max(
+        highs[i] - lows[i],
+        Math.abs(highs[i] - closes[i - 1]),
+        Math.abs(lows[i] - closes[i - 1])
+      )
     );
-
-    const start = Math.max(1, i - period + 1);
-    const values = [];
-
-    for (let j = start; j <= i; j += 1) {
-      const value = Math.max(
-        highs[j] - lows[j],
-        Math.abs(highs[j] - closes[j - 1]),
-        Math.abs(lows[j] - closes[j - 1])
-      );
-      values.push(value);
-    }
-
-    out.push(values.reduce((sum, v) => sum + v, 0) / values.length);
   }
 
-  return out;
+  const recent = trs.slice(-period);
+
+  if (!recent.length) return 0;
+
+  return recent.reduce((sum, value) => sum + value, 0) / recent.length;
 }
 
-function standardDeviation(values) {
-  if (!values.length) return 0;
-  const avg = values.reduce((sum, v) => sum + v, 0) / values.length;
-  const variance = values.reduce((sum, v) => sum + Math.pow(v - avg, 2), 0) / values.length;
-  return Math.sqrt(variance);
+function computeMomentum(values, lookback = 12) {
+  if (values.length <= lookback) return 0;
+
+  const current = values.at(-1);
+  const past = values.at(-1 - lookback);
+
+  if (!past) return 0;
+
+  return ((current - past) / past) * 100;
+}
+
+function normalizeTimeframe(value) {
+  const timeframe = String(value || "")
+    .toUpperCase()
+    .trim();
+
+  return ["M5", "M15", "H1", "H4"].includes(timeframe) ? timeframe : "";
+}
+
+function roundByPair(value, pair) {
+  const n = Number(value);
+
+  if (!Number.isFinite(n)) return 0;
+
+  const p = String(pair || "").toUpperCase();
+
+  if (p === "XAUUSD" || p === "BTCUSD") return Number(n.toFixed(2));
+  if (p.includes("JPY")) return Number(n.toFixed(3));
+
+  return Number(n.toFixed(5));
 }
 
 async function safeJson(request) {
   try {
+    const contentType = request.headers.get("content-type") || "";
+
+    if (!contentType.toLowerCase().includes("application/json")) {
+      return {};
+    }
+
     return await request.json();
   } catch {
     return {};
   }
 }
 
+function safeNumber(value, fallback = 0) {
+  const n = Number(value);
+
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function round(value, digits = 2) {
+  const n = Number(value);
+
+  if (!Number.isFinite(n)) return 0;
+
+  return Number(n.toFixed(digits));
+}
+
 function clamp(value, min = 1, max = 99) {
   const n = Number(value);
+
   if (!Number.isFinite(n)) return min;
+
   return Math.max(min, Math.min(max, n));
 }
 
@@ -351,4 +735,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-      }
+                                 }
