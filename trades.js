@@ -1,116 +1,79 @@
 import { appState, persistState } from "./state.js";
-
-export function computeDynamicRiskPercent(scan) {
-  const ftmo = appState.ftmo || {};
-  const requested = Number(ftmo.requestedRiskPercent || 1);
-
-  const ultra = Number(scan?.ultraScore || scan?.finalScore || 50);
-  const archiveEdge = Number(scan?.archiveEdgeScore || 50);
-  const execution = Number(scan?.executionScore || 50);
-  const session = Number(scan?.sessionScore || 50);
-  const isGold = scan?.pair === "XAUUSD";
-
-  let risk = requested;
-
-  if (ultra >= 85) risk = Math.min(requested, 1.0);
-  else if (ultra >= 78) risk = Math.min(requested, 0.8);
-  else if (ultra >= 70) risk = Math.min(requested, 0.6);
-  else if (ultra >= 62) risk = Math.min(requested, 0.4);
-  else risk = Math.min(requested, 0.25);
-
-  if (archiveEdge >= 68) risk += 0.1;
-  if (execution >= 68) risk += 0.05;
-  if (session < 52) risk -= 0.1;
-
-  if (isGold) {
-    risk -= 0.05;
-    if (Number(scan?.goldDangerScore || 0) >= 58) {
-      risk -= 0.1;
-    }
-    if (Number(scan?.goldStructureScore || 0) >= 72) {
-      risk += 0.05;
-    }
-  }
-
-  const remaining = getRemainingFtmoRiskPercent();
-  risk = Math.min(risk, remaining);
-  risk = Math.max(0.1, risk);
-
-  return Number(risk.toFixed(2));
-}
-
-export function computePositionSizing(scan, capitalInput) {
-  const capital = Number(capitalInput || appState.ftmo?.accountSize || 10000);
-  const riskPercent = computeDynamicRiskPercent(scan);
-  const riskAmount = capital * (riskPercent / 100);
-
-  const entry = Number(scan?.current || 0);
-  const stop = Number(scan?.stopLoss || 0);
-  let stopDistance = Math.abs(entry - stop);
-
-  if (!Number.isFinite(stopDistance) || stopDistance <= 0) {
-    const atrValue = Number(scan?.atr14 || 0);
-    stopDistance = atrValue > 0 ? atrValue * 1.4 : entry * 0.002;
-  }
-
-  const quantity = stopDistance > 0 ? riskAmount / stopDistance : 0;
-
-  let leverageLabel = "Normal";
-  if (quantity > 0) {
-    if (scan?.pair === "XAUUSD") leverageLabel = "Gold scaled";
-    else if (String(scan?.pair || "").includes("JPY")) leverageLabel = "JPY scaled";
-  }
-
-  return {
-    capital: Number(capital.toFixed(2)),
-    riskPercent,
-    riskAmount: Number(riskAmount.toFixed(2)),
-    stopDistance: Number(stopDistance.toFixed(5)),
-    quantity: Number(quantity.toFixed(2)),
-    leverageLabel
-  };
-}
+import { downloadJson, formatPrice, nowIso } from "./utils.js";
 
 export function onAddTrade(event, renderTrades, renderFtmoRisk) {
   event.preventDefault();
 
-  const pair = String(document.getElementById("tradePair")?.value || "").toUpperCase().trim();
-  const direction = String(document.getElementById("tradeDirection")?.value || "buy").toLowerCase();
+  const pair = String(document.getElementById("tradePair")?.value || "EURUSD")
+    .trim()
+    .toUpperCase();
+
+  const direction = String(document.getElementById("tradeDirection")?.value || "buy")
+    .trim()
+    .toLowerCase();
+
   const capital = Number(document.getElementById("tradeCapital")?.value || appState.ftmo?.accountSize || 10000);
-  const riskPercent = Number(document.getElementById("riskPercent")?.value || appState.ftmo?.requestedRiskPercent || 1);
-  const entry = Number(document.getElementById("tradeEntry")?.value || 0);
+  const riskPercent = Number(document.getElementById("riskPercent")?.value || 1);
+  const entryInput = Number(document.getElementById("tradeEntry")?.value || 0);
   const notes = String(document.getElementById("tradeNotes")?.value || "").trim();
 
-  if (!pair || !Number.isFinite(entry) || entry <= 0) {
-    return;
-  }
+  const scan = (appState.scans || []).find((item) => item.pair === pair) || null;
+  const entry = entryInput || Number(scan?.current || 0);
 
-  const scan = (appState.scans || []).find((s) => s.pair === pair);
-
-  const stopLoss = Number(scan?.stopLoss || deriveFallbackStop(entry, pair, direction));
-  const takeProfit = Number(scan?.takeProfit || deriveFallbackTarget(entry, stopLoss, direction, 2));
-  const rr = computeRR(entry, stopLoss, takeProfit, direction);
+  const stopLoss = Number(scan?.stopLoss || buildFallbackStop(pair, direction, entry));
+  const takeProfit = Number(scan?.takeProfit || buildFallbackTarget(pair, direction, entry, stopLoss));
+  const sizing = computePositionSizing(
+    {
+      pair,
+      direction,
+      signal: direction === "sell" ? "SELL" : "BUY",
+      current: entry,
+      stopLoss,
+      takeProfit,
+      ultraScore: scan?.ultraScore || 0,
+      riskScore: scan?.riskScore || 50,
+      archiveEdgeScore: scan?.archiveEdgeScore || 50,
+      rr: scan?.rr || computeRr(entry, stopLoss, takeProfit, direction)
+    },
+    capital,
+    riskPercent
+  );
 
   const trade = {
-    id: `trade_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    id: `manual_${Date.now()}_${pair}_${Math.random().toString(36).slice(2, 8)}`,
     pair,
     direction,
-    capital: Number(capital.toFixed(2)),
-    riskPercent: Number(riskPercent.toFixed(2)),
-    entry: roundByPair(entry, pair),
-    stopLoss: roundByPair(stopLoss, pair),
-    takeProfit: roundByPair(takeProfit, pair),
-    rr: Number(rr.toFixed(2)),
     status: "active",
+    source: "manual",
+    openedAt: nowIso(),
+    entry,
+    stopLoss,
+    takeProfit,
+    capital,
+    riskPercent,
+    riskAmount: sizing.riskAmount,
+    quantity: sizing.quantity,
+    quantityRaw: sizing.quantityRaw,
+    leverageLabel: sizing.leverageLabel,
+    rr: sizing.rr,
     notes,
-    createdAt: new Date().toISOString(),
-    ultraScore: Number(scan?.ultraScore || 0),
-    tradeStatus: scan?.tradeStatus || "",
-    archiveEdgeScore: Number(scan?.archiveEdgeScore || 0)
+    scanSnapshot: scan
+      ? {
+          timeframe: scan.timeframe,
+          ultraScore: scan.ultraScore,
+          finalScore: scan.finalScore,
+          mlScore: scan.mlScore,
+          vectorbtScore: scan.vectorbtScore,
+          archiveEdgeScore: scan.archiveEdgeScore,
+          tradeStatus: scan.tradeStatus,
+          tradeReason: scan.tradeReason
+        }
+      : null
   };
 
+  appState.trades = Array.isArray(appState.trades) ? appState.trades : [];
   appState.trades.unshift(trade);
-  appState.trades = appState.trades.slice(0, 200);
+
   persistState();
 
   if (typeof renderTrades === "function") renderTrades();
@@ -120,106 +83,232 @@ export function onAddTrade(event, renderTrades, renderFtmoRisk) {
 export function clearTrades(renderTrades) {
   appState.trades = [];
   persistState();
-  if (typeof renderTrades === "function") renderTrades();
+
+  if (typeof renderTrades === "function") {
+    renderTrades();
+  }
 }
 
 export function toggleCurrentWatchlist(renderWatchlist) {
-  const pair = appState.selectedPair;
+  const pair = String(appState.selectedPair || "").toUpperCase();
+
   if (!pair) return;
 
-  if (!Array.isArray(appState.watchlist)) {
-    appState.watchlist = [];
-  }
+  appState.watchlist = Array.isArray(appState.watchlist) ? appState.watchlist : [];
 
-  const exists = appState.watchlist.includes(pair);
-
-  if (exists) {
-    appState.watchlist = appState.watchlist.filter((p) => p !== pair);
+  if (appState.watchlist.includes(pair)) {
+    appState.watchlist = appState.watchlist.filter((item) => item !== pair);
   } else {
     appState.watchlist.unshift(pair);
-    appState.watchlist = [...new Set(appState.watchlist)].slice(0, 50);
   }
 
   persistState();
-  if (typeof renderWatchlist === "function") renderWatchlist();
+
+  if (typeof renderWatchlist === "function") {
+    renderWatchlist();
+  }
 }
 
 export function exportTradesJson() {
-  const payload = {
-    exportedAt: new Date().toISOString(),
-    activeTrades: appState.trades || [],
+  downloadJson("ftmo-edge-trades.json", {
+    exportedAt: nowIso(),
+    trades: appState.trades || [],
+    watchlist: appState.watchlist || [],
     paperTrades: appState.paperTrades || [],
-    paperArchive: appState.paperArchive || [],
-    tradeArchive: appState.tradeArchive || []
-  };
-
-  const blob = new Blob([JSON.stringify(payload, null, 2)], {
-    type: "application/json"
+    paperArchive: appState.paperArchive || []
   });
-
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `ftmo-trades-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
 }
 
-function getRemainingFtmoRiskPercent() {
-  const ftmo = appState.ftmo || {};
-  const accountSize = Number(ftmo.accountSize || 10000);
-  const dailyLossLimitPercent = Number(ftmo.dailyLossLimitPercent || 5);
-  const closedTodayPnl = Number(ftmo.closedTodayPnl || 0);
+export function computeDynamicRiskPercent(scan) {
+  if (!scan) return 0.25;
 
-  const remainingDollar =
-    (accountSize * dailyLossLimitPercent / 100) -
-    Math.abs(closedTodayPnl);
+  const pair = String(scan.pair || "").toUpperCase();
+  const ultra = Number(scan.ultraScore || scan.finalScore || 0);
+  const risk = Number(scan.riskScore || 50);
+  const archive = Number(scan.archiveEdgeScore || 50);
+  const mtf = Number(scan.mtfScore || 0);
 
-  if (remainingDollar <= 0) return 0.1;
+  let riskPercent = 0.25;
 
-  return Number(((remainingDollar / accountSize) * 100).toFixed(2));
+  if (ultra >= 82) riskPercent = 0.5;
+  if (ultra >= 88 && risk >= 58) riskPercent = 0.75;
+  if (ultra >= 92 && risk >= 64 && archive >= 58) riskPercent = 1;
+
+  if (ultra < 72) riskPercent = 0.15;
+  if (risk < 45) riskPercent = 0.1;
+  if (archive < 45) riskPercent *= 0.7;
+
+  if (mtf > 0 && mtf < 60) riskPercent *= 0.6;
+  if (mtf >= 82) riskPercent *= 1.1;
+
+  if (pair === "XAUUSD") riskPercent *= 0.85;
+  if (pair === "BTCUSD") riskPercent *= 0.65;
+  if (pair.startsWith("GBP")) riskPercent *= 0.9;
+
+  return Number(Math.max(0.05, Math.min(1, riskPercent)).toFixed(2));
 }
 
-function deriveFallbackStop(entry, pair, direction) {
-  const baseDistance =
-    pair === "XAUUSD"
-      ? 6
-      : String(pair).includes("JPY")
-        ? 0.35
-        : 0.0035;
+export function computePositionSizing(scan, capital = 10000, forcedRiskPercent = null) {
+  const pair = String(scan?.pair || "EURUSD").toUpperCase();
+  const direction = String(scan?.direction || "").toLowerCase() || signalToDirection(scan?.signal);
+  const entry = Number(scan?.current || scan?.entry || 0);
+  const stopLoss = Number(scan?.stopLoss || buildFallbackStop(pair, direction, entry));
+  const takeProfit = Number(scan?.takeProfit || buildFallbackTarget(pair, direction, entry, stopLoss));
 
-  return direction === "sell" ? entry + baseDistance : entry - baseDistance;
-}
+  const riskPercent = Number.isFinite(Number(forcedRiskPercent))
+    ? Number(forcedRiskPercent)
+    : computeDynamicRiskPercent(scan);
 
-function deriveFallbackTarget(entry, stopLoss, direction, rr = 2) {
-  const riskDistance = Math.abs(entry - stopLoss);
-  if (direction === "sell") {
-    return entry - riskDistance * rr;
+  const accountCapital = Number(capital || appState.ftmo?.accountSize || 10000);
+  const riskAmount = accountCapital * (riskPercent / 100);
+  const stopDistance = Math.abs(entry - stopLoss);
+
+  if (!entry || !stopDistance || !Number.isFinite(stopDistance)) {
+    return {
+      pair,
+      riskPercent,
+      riskAmount: Number(riskAmount.toFixed(2)),
+      quantity: "-",
+      quantityRaw: 0,
+      stopDistance: 0,
+      rr: 0,
+      leverageLabel: "invalid stop"
+    };
   }
-  return entry + riskDistance * rr;
+
+  const rr = computeRr(entry, stopLoss, takeProfit, direction);
+
+  if (pair === "BTCUSD") {
+    const btcAmount = riskAmount / stopDistance;
+    const notional = btcAmount * entry;
+    const leverage = accountCapital > 0 ? notional / accountCapital : 0;
+
+    return {
+      pair,
+      riskPercent,
+      riskAmount: Number(riskAmount.toFixed(2)),
+      quantity: `${formatBtcAmount(btcAmount)} BTC`,
+      quantityRaw: Number(btcAmount.toFixed(8)),
+      stopDistance: Number(stopDistance.toFixed(2)),
+      rr,
+      notional: Number(notional.toFixed(2)),
+      leverageLabel: `${leverage.toFixed(2)}x notional`
+    };
+  }
+
+  if (pair === "XAUUSD") {
+    const ounces = riskAmount / stopDistance;
+    const notional = ounces * entry;
+    const leverage = accountCapital > 0 ? notional / accountCapital : 0;
+
+    return {
+      pair,
+      riskPercent,
+      riskAmount: Number(riskAmount.toFixed(2)),
+      quantity: `${ounces.toFixed(2)} oz`,
+      quantityRaw: Number(ounces.toFixed(4)),
+      stopDistance: Number(stopDistance.toFixed(2)),
+      rr,
+      notional: Number(notional.toFixed(2)),
+      leverageLabel: `${leverage.toFixed(2)}x notional`
+    };
+  }
+
+  const units = riskAmount / stopDistance;
+  const lots = units / 100000;
+  const notional = units * entry;
+  const leverage = accountCapital > 0 ? notional / accountCapital : 0;
+
+  return {
+    pair,
+    riskPercent,
+    riskAmount: Number(riskAmount.toFixed(2)),
+    quantity: `${lots.toFixed(2)} lots`,
+    quantityRaw: Number(lots.toFixed(4)),
+    units: Math.round(units),
+    stopDistance: Number(stopDistance.toFixed(pair.includes("JPY") ? 3 : 5)),
+    rr,
+    notional: Number(notional.toFixed(2)),
+    leverageLabel: `${leverage.toFixed(2)}x notional`
+  };
 }
 
-function computeRR(entry, stopLoss, takeProfit, direction) {
-  const risk =
-    direction === "sell"
-      ? Math.abs(stopLoss - entry)
-      : Math.abs(entry - stopLoss);
+function buildFallbackStop(pair, direction, entry) {
+  const p = String(pair || "").toUpperCase();
+  const price = Number(entry || 0);
 
-  const reward =
-    direction === "sell"
-      ? Math.abs(entry - takeProfit)
-      : Math.abs(takeProfit - entry);
+  if (!price) return 0;
 
-  if (!Number.isFinite(risk) || risk <= 0) return 0;
-  return reward / risk;
+  const distance =
+    p === "BTCUSD" ? price * 0.006 :
+    p === "XAUUSD" ? price * 0.003 :
+    p.includes("JPY") ? 0.35 :
+    price * 0.002;
+
+  return direction === "sell"
+    ? roundByPair(price + distance, p)
+    : roundByPair(price - distance, p);
+}
+
+function buildFallbackTarget(pair, direction, entry, stopLoss) {
+  const p = String(pair || "").toUpperCase();
+  const price = Number(entry || 0);
+  const stop = Number(stopLoss || 0);
+
+  if (!price || !stop) return 0;
+
+  const rr =
+    p === "BTCUSD" ? 2.1 :
+    p === "XAUUSD" ? 2.2 :
+    2;
+
+  const distance = Math.abs(price - stop);
+
+  return direction === "sell"
+    ? roundByPair(price - distance * rr, p)
+    : roundByPair(price + distance * rr, p);
+}
+
+function computeRr(entry, stopLoss, takeProfit, direction) {
+  const price = Number(entry || 0);
+  const stop = Number(stopLoss || 0);
+  const target = Number(takeProfit || 0);
+
+  const risk = Math.abs(price - stop);
+  const reward = Math.abs(target - price);
+
+  if (!risk || !reward) return 0;
+
+  return Number((reward / risk).toFixed(2));
+}
+
+function signalToDirection(signal) {
+  const raw = String(signal || "").toUpperCase();
+
+  if (raw === "SELL") return "sell";
+  if (raw === "BUY") return "buy";
+
+  return "buy";
 }
 
 function roundByPair(value, pair) {
   const n = Number(value);
+
   if (!Number.isFinite(n)) return 0;
-  if (pair === "XAUUSD") return Number(n.toFixed(2));
+
+  if (pair === "XAUUSD" || pair === "BTCUSD") return Number(n.toFixed(2));
   if (String(pair).includes("JPY")) return Number(n.toFixed(3));
+
   return Number(n.toFixed(5));
-                     }
+}
+
+function formatBtcAmount(value) {
+  const n = Number(value);
+
+  if (!Number.isFinite(n)) return "0";
+
+  if (n >= 1) return n.toFixed(4);
+  if (n >= 0.01) return n.toFixed(5);
+
+  return n.toFixed(6);
+}
