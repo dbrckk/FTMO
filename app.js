@@ -5,7 +5,8 @@ import {
   fetchCorrelationMatrix,
   refreshAiDecision,
   fetchArchiveStatsBatch,
-  fetchServerPaperSnapshot
+  fetchServerPaperSnapshot,
+  fetchPaperHealth
 } from "./api.js";
 import {
   scanPair,
@@ -24,6 +25,7 @@ import {
   renderWatchlist,
   renderFtmoRisk,
   renderPaperLab,
+  renderPaperHealth,
   renderTabs,
   setActiveTab
 } from "./render.js";
@@ -52,6 +54,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderTrades();
     renderWatchlist();
     renderPaperLab();
+    renderPaperHealth();
     renderFtmoRisk();
 
     await refreshAll(true);
@@ -110,7 +113,8 @@ function cacheEls() {
     "paperPairStats",
     "paperRecentTrades",
     "paperOpenKpi",
-    "paperServerRuns"
+    "paperServerRuns",
+    "paperHealthBox"
   ].forEach((id) => {
     els[id] = document.getElementById(id) || null;
   });
@@ -146,8 +150,12 @@ function bindEvents() {
   document.getElementById("tabPaperBtn")?.addEventListener("click", async () => {
     setActiveTab("paper");
     renderTabs();
-    await fetchServerPaperSnapshot();
+    await Promise.allSettled([
+      fetchServerPaperSnapshot(),
+      fetchPaperHealth()
+    ]);
     renderPaperLab();
+    renderPaperHealth();
   });
 
   document.getElementById("paperEngineToggleBtn")?.addEventListener("click", () => {
@@ -164,7 +172,8 @@ export async function refreshAll(force = false) {
   try {
     await Promise.allSettled([
       fetchArchiveStatsBatch(),
-      fetchServerPaperSnapshot()
+      fetchServerPaperSnapshot(),
+      fetchPaperHealth()
     ]);
 
     const scans = await Promise.all(PAIRS.map((pair) => scanPair(pair)));
@@ -200,7 +209,11 @@ export async function refreshAll(force = false) {
     await fetchCorrelationMatrix();
     await refreshAiDecision(force, renderSelectedPair);
     await runPaperEngine(appState.scans);
-    await fetchServerPaperSnapshot();
+
+    await Promise.allSettled([
+      fetchServerPaperSnapshot(),
+      fetchPaperHealth()
+    ]);
 
     renderOverview();
     renderPairList(refreshAiDecision);
@@ -212,6 +225,7 @@ export async function refreshAll(force = false) {
     renderWatchlist();
     renderFtmoRisk();
     renderPaperLab();
+    renderPaperHealth();
     renderTabs();
 
     persistState();
