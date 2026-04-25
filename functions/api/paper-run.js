@@ -40,8 +40,10 @@ async function handlePaperRun(context) {
     const url = new URL(context.request.url);
     const timeframe = normalizeTimeframe(url.searchParams.get("timeframe")) || TIMEFRAME;
 
+    const archiveStats = await getArchiveStats(db, timeframe);
     const openBefore = await getOpenTrades(db, timeframe);
-    const scans = await scanAllPairs(db, timeframe);
+    const scans = await scanAllPairs(db, timeframe, archiveStats);
+
     const closed = await updateOpenTrades(db, openBefore, scans);
     const openAfterClose = await getOpenTrades(db, timeframe);
     const opened = await openNewTrades(db, scans, openAfterClose);
@@ -65,13 +67,14 @@ async function handlePaperRun(context) {
         scans.length,
         opened.length,
         closed.length,
-        `server-paper-run`
+        "server-paper-run-with-archive-edge"
       )
       .run();
 
     return json({
       ok: true,
       source: "server-paper-engine",
+      version: "archive-edge-v2",
       runId,
       timeframe,
       scannedPairs: scans.length,
@@ -83,6 +86,8 @@ async function handlePaperRun(context) {
         pair: s.pair,
         direction: s.direction,
         ultraScore: s.ultraScore,
+        archiveEdgeScore: s.archiveEdgeScore,
+        archiveConfidence: s.archiveConfidence,
         status: s.status,
         reason: s.reason
       })),
@@ -97,7 +102,128 @@ async function handlePaperRun(context) {
   }
 }
 
-async function scanAllPairs(db, timeframe) {
+async function getArchiveStats(db, timeframe) {
+  try {
+    const res = await db
+      .prepare(`
+        SELECT
+          pair,
+          direction,
+          pnl_r,
+          win,
+          session,
+          hour,
+          closed_at
+        FROM paper_trades
+        WHERE timeframe = ?
+        ORDER BY closed_at DESC
+        LIMIT 8000
+      `)
+      .bind(timeframe)
+      .all();
+
+    const rows = Array.isArray(res.results) ? res.results : [];
+    return buildArchiveStats(rows);
+  } catch {
+    return {};
+  }
+}
+
+function buildArchiveStats(rows) {
+  const out = {};
+
+  for (const row of rows) {
+    const pair = String(row.pair || "").toUpperCase();
+    if (!pair) continue;
+
+    if (!out[pair]) {
+      out[pair] = {
+        all: [],
+        directions: { buy: [], sell: [] },
+        sessions: {},
+        hours: {},
+        last20: []
+      };
+    }
+
+    const trade = {
+      pnlR: Number(row.pnl_r || 0),
+      win: Number(row.win || 0) === 1 || Number(row.pnl_r || 0) > 0,
+      direction: String(row.direction || "buy").toLowerCase(),
+      session: String(row.session || "OffSession"),
+      hour: String(Number(row.hour || 0)),
+      closedAt: row.closed_at || ""
+    };
+
+    out[pair].all.push(trade);
+    out[pair].last20 = out[pair].all.slice(0, 20);
+
+    if (out[pair].directions[trade.direction]) {
+      out[pair].directions[trade.direction].push(trade);
+    }
+
+    if (!out[pair].sessions[trade.session]) {
+      out[pair].sessions[trade.session] = [];
+    }
+
+    out[pair].sessions[trade.session].push(trade);
+
+    if (!out[pair].hours[trade.hour]) {
+      out[pair].hours[trade.hour] = [];
+    }
+
+    out[pair].hours[trade.hour].push(trade);
+  }
+
+  const packed = {};
+
+  for (const [pair, stat] of Object.entries(out)) {
+    packed[pair] = {
+      pairTradesCount: stat.all.length,
+      pairWinRate: winRate(stat.all),
+      pairExpectancy: expectancy(stat.all),
+      last20WinRate: winRate(stat.last20),
+      last20Expectancy: expectancy(stat.last20),
+      archiveConfidence: Math.min(99, stat.all.length),
+      directions: {
+        buy: packStats(stat.directions.buy),
+        sell: packStats(stat.directions.sell)
+      },
+      sessions: Object.fromEntries(
+        Object.entries(stat.sessions).map(([key, value]) => [key, packStats(value)])
+      ),
+      hours: Object.fromEntries(
+        Object.entries(stat.hours).map(([key, value]) => [key, packStats(value)])
+      )
+    };
+  }
+
+  return packed;
+}
+
+function packStats(trades) {
+  return {
+    trades: trades.length,
+    winRate: winRate(trades),
+    expectancy: expectancy(trades)
+  };
+}
+
+function winRate(trades) {
+  if (!trades.length) return 50;
+
+  const wins = trades.filter((t) => t.win || Number(t.pnlR || 0) > 0).length;
+  return Number(((wins / trades.length) * 100).toFixed(2));
+}
+
+function expectancy(trades) {
+  if (!trades.length) return 0;
+
+  const total = trades.reduce((sum, t) => sum + Number(t.pnlR || 0), 0);
+  return Number((total / trades.length).toFixed(4));
+}
+
+async function scanAllPairs(db, timeframe, archiveStats) {
   const scans = [];
 
   for (const pair of PAIRS) {
@@ -109,12 +235,14 @@ async function scanAllPairs(db, timeframe) {
         timeframe,
         status: "SKIPPED",
         reason: "Not enough candles",
-        ultraScore: 0
+        ultraScore: 0,
+        archiveEdgeScore: 50,
+        archiveConfidence: 0
       });
       continue;
     }
 
-    scans.push(buildScan(pair, timeframe, candles));
+    scans.push(buildScan(pair, timeframe, candles, archiveStats[pair] || null));
   }
 
   return scans.sort((a, b) => Number(b.ultraScore || 0) - Number(a.ultraScore || 0));
@@ -153,7 +281,7 @@ async function getCandles(db, pair, timeframe) {
     .sort((a, b) => a.time - b.time);
 }
 
-function buildScan(pair, timeframe, candles) {
+function buildScan(pair, timeframe, candles, pairArchiveStats) {
   const closes = candles.map((c) => c.close);
   const highs = candles.map((c) => c.high);
   const lows = candles.map((c) => c.low);
@@ -191,7 +319,10 @@ function buildScan(pair, timeframe, candles) {
     99
   );
 
+  const session = inferSession(new Date());
+  const hour = inferHour(new Date());
   const sessionScore = scoreSession();
+
   const rr = pair === "XAUUSD" ? 2.2 : 2.0;
 
   const direction =
@@ -201,14 +332,15 @@ function buildScan(pair, timeframe, candles) {
         ? "sell"
         : "wait";
 
-  const archiveEdge = 50;
+  const archive = computeArchiveEdge(pairArchiveStats, direction, session, hour);
+  const archiveEdge = archive.archiveEdgeScore;
 
   let ultraScore = clamp(
-    trendScore * 0.28 +
-      timingScore * 0.24 +
-      riskScore * 0.16 +
-      sessionScore * 0.12 +
-      archiveEdge * 0.10 +
+    trendScore * 0.25 +
+      timingScore * 0.22 +
+      riskScore * 0.14 +
+      sessionScore * 0.10 +
+      archiveEdge * 0.19 +
       clamp(rr * 24, 1, 99) * 0.10,
     1,
     99
@@ -216,12 +348,12 @@ function buildScan(pair, timeframe, candles) {
 
   if (pair === "XAUUSD") {
     ultraScore = clamp(
-      trendScore * 0.25 +
-        timingScore * 0.24 +
-        riskScore * 0.12 +
-        sessionScore * 0.14 +
-        archiveEdge * 0.10 +
-        clamp(rr * 28, 1, 99) * 0.15,
+      trendScore * 0.22 +
+        timingScore * 0.22 +
+        riskScore * 0.10 +
+        sessionScore * 0.12 +
+        archiveEdge * 0.22 +
+        clamp(rr * 28, 1, 99) * 0.12,
       1,
       99
     );
@@ -241,10 +373,16 @@ function buildScan(pair, timeframe, candles) {
       ? current - riskDistance * rr
       : current + riskDistance * rr;
 
+  const archiveBad =
+    archive.archiveConfidence >= 12 &&
+    archive.pairExpectancy < -0.35 &&
+    archive.directionExpectancy < -0.25;
+
   const allowed =
     direction !== "wait" &&
     ultraScore >= MIN_OPEN_SCORE &&
-    riskScore >= 45;
+    riskScore >= 45 &&
+    !archiveBad;
 
   return {
     pair,
@@ -257,7 +395,12 @@ function buildScan(pair, timeframe, candles) {
     timingScore: Math.round(timingScore),
     riskScore: Math.round(riskScore),
     sessionScore: Math.round(sessionScore),
-    archiveEdgeScore: archiveEdge,
+    archiveEdgeScore: Math.round(archiveEdge),
+    archiveConfidence: archive.archiveConfidence,
+    archivePairWinRate: archive.pairWinRate,
+    archivePairExpectancy: archive.pairExpectancy,
+    archiveDirectionWinRate: archive.directionWinRate,
+    archiveDirectionExpectancy: archive.directionExpectancy,
     rsi14: round(rsi14, 2),
     atr14,
     rr,
@@ -265,8 +408,84 @@ function buildScan(pair, timeframe, candles) {
     takeProfit: roundByPair(takeProfit, pair),
     allowed,
     status: allowed ? (pair === "XAUUSD" ? "VALID GOLD SERVER" : "VALID SERVER") : "BLOCKED",
-    reason: allowed ? "Server paper setup accepted" : "Not enough confluence"
+    reason: allowed
+      ? "Server setup accepted with archive edge"
+      : archiveBad
+        ? "Archive expectancy negative"
+        : "Not enough confluence"
   };
+}
+
+function computeArchiveEdge(stats, direction, session, hour) {
+  if (!stats) {
+    return {
+      archiveEdgeScore: 50,
+      archiveConfidence: 0,
+      pairWinRate: 50,
+      pairExpectancy: 0,
+      directionWinRate: 50,
+      directionExpectancy: 0
+    };
+  }
+
+  const dirStats = stats.directions?.[direction] || {};
+  const sessionStats = stats.sessions?.[session] || {};
+  const hourStats = stats.hours?.[String(hour)] || {};
+
+  const pairWinRate = Number(stats.pairWinRate ?? 50);
+  const pairExpectancy = Number(stats.pairExpectancy ?? 0);
+  const last20WinRate = Number(stats.last20WinRate ?? 50);
+  const last20Expectancy = Number(stats.last20Expectancy ?? 0);
+
+  const directionWinRate = Number(dirStats.winRate ?? 50);
+  const directionExpectancy = Number(dirStats.expectancy ?? 0);
+
+  const sessionWinRate = Number(sessionStats.winRate ?? 50);
+  const sessionExpectancy = Number(sessionStats.expectancy ?? 0);
+
+  const hourWinRate = Number(hourStats.winRate ?? 50);
+  const hourExpectancy = Number(hourStats.expectancy ?? 0);
+
+  const confidence = Number(stats.archiveConfidence || 0);
+
+  const confidenceFactor =
+    confidence >= 40 ? 1 :
+    confidence >= 25 ? 0.9 :
+    confidence >= 12 ? 0.75 :
+    confidence >= 6 ? 0.6 :
+    0.45;
+
+  const wrScore =
+    scoreWinRate(pairWinRate) * 0.20 +
+    scoreWinRate(directionWinRate) * 0.22 +
+    scoreWinRate(sessionWinRate) * 0.14 +
+    scoreWinRate(hourWinRate) * 0.10 +
+    scoreWinRate(last20WinRate) * 0.10;
+
+  const expScore =
+    scoreExpectancy(pairExpectancy) * 0.12 +
+    scoreExpectancy(directionExpectancy) * 0.14 +
+    scoreExpectancy(sessionExpectancy) * 0.05 +
+    scoreExpectancy(hourExpectancy) * 0.03;
+
+  const raw = wrScore + expScore;
+
+  return {
+    archiveEdgeScore: clamp(50 + (raw - 50) * confidenceFactor, 1, 99),
+    archiveConfidence: confidence,
+    pairWinRate,
+    pairExpectancy,
+    directionWinRate,
+    directionExpectancy
+  };
+}
+
+function scoreWinRate(winRate) {
+  return clamp(50 + (Number(winRate || 50) - 50) * 1.35, 1, 99);
+}
+
+function scoreExpectancy(expectancyValue) {
+  return clamp(50 + Number(expectancyValue || 0) * 36, 1, 99);
 }
 
 async function getOpenTrades(db, timeframe) {
@@ -347,9 +566,7 @@ async function openNewTrades(db, scans, currentOpenTrades) {
   const opened = [];
   const openPairs = new Set(currentOpenTrades.map((t) => t.pair));
 
-  if (currentOpenTrades.length >= MAX_OPEN_TRADES) {
-    return opened;
-  }
+  if (currentOpenTrades.length >= MAX_OPEN_TRADES) return opened;
 
   const candidates = scans
     .filter((s) => s.allowed)
@@ -500,7 +717,7 @@ function buildClosedTrade(trade, exitPrice, reason, scan) {
     ultraScore: Number(trade.ultra_score || scan?.ultraScore || 0),
     mlScore: Number(trade.ml_score || 50),
     vectorbtScore: 50,
-    archiveEdgeScore: Number(trade.archive_edge_score || 50),
+    archiveEdgeScore: Number(trade.archive_edge_score || scan?.archiveEdgeScore || 50),
     closeReason: reason,
     source: "server-paper"
   };
@@ -725,4 +942,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-    }
+}
