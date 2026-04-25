@@ -6,7 +6,8 @@ import {
   refreshAiDecision,
   fetchArchiveStatsBatch,
   fetchServerPaperSnapshot,
-  fetchPaperHealth
+  fetchPaperHealth,
+  fetchTimeframeSummary
 } from "./api.js";
 import {
   scanPair,
@@ -26,6 +27,7 @@ import {
   renderFtmoRisk,
   renderPaperLab,
   renderPaperHealth,
+  renderTimeframeSummary,
   renderTabs,
   setActiveTab
 } from "./render.js";
@@ -60,6 +62,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderWatchlist();
     renderPaperLab();
     renderPaperHealth();
+    renderTimeframeSummary();
     renderFtmoRisk();
     renderTimeframeLabel();
 
@@ -122,6 +125,7 @@ function cacheEls() {
     "paperOpenKpi",
     "paperServerRuns",
     "paperHealthBox",
+    "timeframeSummaryBox",
     "timeframeSelect"
   ].forEach((id) => {
     els[id] = document.getElementById(id) || null;
@@ -152,6 +156,7 @@ function bindEvents() {
     renderPairList(refreshAiDecision);
     renderPaperLab();
     renderPaperHealth();
+    renderTimeframeSummary();
 
     await refreshAll(true);
   });
@@ -188,11 +193,13 @@ function bindEvents() {
 
     await Promise.allSettled([
       fetchServerPaperSnapshot(),
-      fetchPaperHealth()
+      fetchPaperHealth(),
+      fetchTimeframeSummary()
     ]);
 
     renderPaperLab();
     renderPaperHealth();
+    renderTimeframeSummary();
   });
 
   document.getElementById("paperEngineToggleBtn")?.addEventListener("click", () => {
@@ -212,7 +219,8 @@ export async function refreshAll(force = false) {
     await Promise.allSettled([
       fetchArchiveStatsBatch(),
       fetchServerPaperSnapshot(),
-      fetchPaperHealth()
+      fetchPaperHealth(),
+      fetchTimeframeSummary()
     ]);
 
     const scans = await Promise.all(PAIRS.map((pair) => scanPair(pair)));
@@ -251,7 +259,8 @@ export async function refreshAll(force = false) {
 
     await Promise.allSettled([
       fetchServerPaperSnapshot(),
-      fetchPaperHealth()
+      fetchPaperHealth(),
+      fetchTimeframeSummary()
     ]);
 
     renderOverview();
@@ -265,6 +274,7 @@ export async function refreshAll(force = false) {
     renderFtmoRisk();
     renderPaperLab();
     renderPaperHealth();
+    renderTimeframeSummary();
     renderTabs();
     renderTimeframeLabel();
 
