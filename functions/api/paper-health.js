@@ -4,7 +4,7 @@ const PAIRS = [
   "GBPJPY", "GBPCHF", "GBPCAD", "GBPAUD", "GBPNZD",
   "AUDJPY", "AUDCAD", "AUDCHF", "AUDNZD",
   "NZDJPY", "NZDCAD",
-  "XAUUSD"
+  "XAUUSD", "BTCUSD"
 ];
 
 const MAX_CANDLE_AGE_SECONDS = {
@@ -41,13 +41,13 @@ export async function onRequestGet(context) {
     const missingPairs = market.filter((row) => row.rows === 0).length;
 
     const healthy =
-      freshPairs >= 20 &&
+      freshPairs >= 21 &&
       missingPairs === 0 &&
       Boolean(lastRun);
 
     const status =
       healthy ? "HEALTHY" :
-      freshPairs >= 15 ? "WARNING" :
+      freshPairs >= 16 ? "WARNING" :
       "UNHEALTHY";
 
     return json({
@@ -223,4 +223,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-      }
+                               }
