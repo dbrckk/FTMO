@@ -552,28 +552,74 @@ export function renderTimeframeSummary() {
     return;
   }
 
+  const mtf = data.mtfAlignment || {};
+  const bestMtf = mtf.best || null;
+  const topPairs = Array.isArray(mtf.topPairs) ? mtf.topPairs.slice(0, 5) : [];
   const order = ["M15", "H1", "H4"];
-  const rows = order
-    .map((timeframe) => data.summary?.[timeframe])
-    .filter(Boolean);
 
-  const alignment = computeMtfAlignment(rows);
-
-  const alignmentClass =
-    alignment.score >= 75
+  const mtfClass =
+    Number(bestMtf?.score || 0) >= 82
       ? "ok"
-      : alignment.score >= 55
+      : Number(bestMtf?.score || 0) >= 65
         ? "warning"
         : "bad";
 
-  const alignmentHtml = `
-    <div class="top-row">
-      <strong class="${alignmentClass}">MTF ${alignment.score}/100</strong>
-      <span>${esc(alignment.pair || "-")}</span>
-      <span>${esc(alignment.direction || "WAIT")}</span>
-      <span>${esc(alignment.label)}</span>
-    </div>
-  `;
+  const bestTimeframe = pickBestMtfTimeframe(bestMtf);
+
+  const bestHtml = bestMtf
+    ? `
+      <div class="top-row">
+        <strong class="${mtfClass}">MTF ${Number(bestMtf.score || 0)}/100</strong>
+        <span>${esc(bestMtf.pair || "-")}</span>
+        <span>${esc(bestMtf.signal || "WAIT")}</span>
+        <span>${esc(bestMtf.label || "Alignment")}</span>
+        <button
+          class="mini-action"
+          type="button"
+          data-mtf-jump="1"
+          data-pair="${esc(bestMtf.pair || "")}"
+          data-timeframe="${esc(bestTimeframe)}"
+        >
+          Open
+        </button>
+      </div>
+
+      <div class="top-row">
+        <strong>Aligned TF</strong>
+        <span>${formatAlignedTimeframes(bestMtf.timeframes)}</span>
+        <span>Avg ${Number(bestMtf.averageUltraScore || 0).toFixed(1)}</span>
+        <span>${Number(bestMtf.allowedCount || 0)} allowed</span>
+        <span>${Number(bestMtf.oppositeCount || 0)} opposite</span>
+      </div>
+    `
+    : `
+      <div class="top-row">
+        <strong class="bad">MTF 0/100</strong>
+        <span>No alignment</span>
+      </div>
+    `;
+
+  const topPairsHtml = topPairs.length
+    ? `
+      <div class="mtf-chip-row">
+        ${topPairs.map((p) => {
+          const timeframe = pickBestMtfTimeframe(p);
+
+          return `
+            <button
+              class="mtf-chip"
+              type="button"
+              data-mtf-jump="1"
+              data-pair="${esc(p.pair || "")}"
+              data-timeframe="${esc(timeframe)}"
+            >
+              ${esc(p.pair)} ${Number(p.score || 0)}
+            </button>
+          `;
+        }).join("")}
+      </div>
+    `
+    : "";
 
   const timeframeRows = order.map((timeframe) => {
     const item = data.summary?.[timeframe];
@@ -603,82 +649,55 @@ export function renderTimeframeSummary() {
     `;
   }).join("");
 
-  box.innerHTML = alignmentHtml + timeframeRows;
+  box.innerHTML = bestHtml + topPairsHtml + timeframeRows;
+
+  box.querySelectorAll("[data-mtf-jump]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const pair = String(button.dataset.pair || "").toUpperCase();
+      const timeframe = String(button.dataset.timeframe || "M15").toUpperCase();
+
+      if (!pair) return;
+      if (!["M5", "M15", "H1", "H4"].includes(timeframe)) return;
+
+      appState.selectedPair = pair;
+      appState.timeframe = timeframe;
+
+      appState.mlScoreCache = {};
+      appState.vectorbtCache = {};
+      appState.aiDecisionCache = {};
+      appState.archiveStatsCache = {};
+      appState.serverPaperSnapshot = null;
+      appState.paperHealth = null;
+
+      persistState();
+
+      const selector = document.getElementById("timeframeSelect");
+      if (selector) selector.value = timeframe;
+
+      if (window.__APP__?.refreshAll) {
+        await window.__APP__.refreshAll(true);
+      }
+    });
+  });
 }
 
-function computeMtfAlignment(rows) {
-  const bestRows = rows
-    .map((row) => row.best)
-    .filter((best) => best && best.pair && best.signal);
+function pickBestMtfTimeframe(mtfItem) {
+  const timeframes = Array.isArray(mtfItem?.timeframes) ? mtfItem.timeframes : [];
 
-  if (!bestRows.length) {
-    return {
-      score: 0,
-      pair: "",
-      direction: "WAIT",
-      label: "No MTF data"
-    };
-  }
+  if (timeframes.some((tf) => tf.timeframe === "M15")) return "M15";
+  if (timeframes.some((tf) => tf.timeframe === "H1")) return "H1";
+  if (timeframes.some((tf) => tf.timeframe === "H4")) return "H4";
+  if (timeframes.some((tf) => tf.timeframe === "M5")) return "M5";
 
-  const votes = {};
+  return "M15";
+}
 
-  for (const best of bestRows) {
-    const pair = String(best.pair || "");
-    const direction = String(best.signal || "WAIT").toUpperCase();
-    const key = `${pair}|${direction}`;
+function formatAlignedTimeframes(timeframes) {
+  if (!Array.isArray(timeframes) || !timeframes.length) return "-";
 
-    if (!votes[key]) {
-      votes[key] = {
-        pair,
-        direction,
-        count: 0,
-        scoreTotal: 0,
-        allowedCount: 0
-      };
-    }
-
-    votes[key].count += 1;
-    votes[key].scoreTotal += Number(best.ultraScore || 0);
-
-    if (best.allowed) {
-      votes[key].allowedCount += 1;
-    }
-  }
-
-  const bestVote = Object.values(votes).sort((a, b) => {
-    if (b.count !== a.count) return b.count - a.count;
-    return b.scoreTotal - a.scoreTotal;
-  })[0];
-
-  const averageScore = bestVote.scoreTotal / Math.max(1, bestVote.count);
-  const timeframeAgreement = bestVote.count / Math.max(1, bestRows.length);
-  const allowedBoost = bestVote.allowedCount / Math.max(1, bestVote.count);
-
-  const score = Math.round(
-    Math.min(
-      100,
-      averageScore * 0.55 +
-        timeframeAgreement * 30 +
-        allowedBoost * 15
-    )
-  );
-
-  let label = "Weak alignment";
-
-  if (score >= 80 && bestVote.count >= 2) {
-    label = "Strong alignment";
-  } else if (score >= 65 && bestVote.count >= 2) {
-    label = "Medium alignment";
-  } else if (score >= 50) {
-    label = "Mixed alignment";
-  }
-
-  return {
-    score,
-    pair: bestVote.pair,
-    direction: bestVote.direction,
-    label
-  };
+  return timeframes
+    .map((tf) => `${esc(tf.timeframe)}:${Math.round(tf.ultraScore || 0)}`)
+    .join(" · ");
 }
 
 function formatDateShort(value) {
