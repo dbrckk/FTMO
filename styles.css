@@ -49,6 +49,7 @@ textarea {
 
 button {
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 a {
@@ -135,6 +136,8 @@ button:hover {
   gap: 10px;
   margin-bottom: 18px;
   overflow-x: auto;
+  position: relative;
+  z-index: 5;
 }
 
 .tab-btn {
@@ -646,4 +649,4 @@ textarea {
   .pair-row > div:nth-child(5) {
     font-size: 12px;
   }
-                    }
+  }
