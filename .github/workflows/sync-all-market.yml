@@ -1,0 +1,165 @@
+name: Sync all market candles
+
+on:
+  workflow_dispatch:
+    inputs:
+      timeframe:
+        description: "M15, H1, H4, M5, or ALL"
+        required: false
+        default: "ALL"
+      delay_seconds:
+        description: "Delay between API calls"
+        required: false
+        default: "12"
+
+jobs:
+  sync-all-market:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check secrets presence
+        run: |
+          if [ -z "${{ secrets.SITE_URL }}" ]; then
+            echo "ERROR: SITE_URL missing"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.SYNC_SECRET }}" ]; then
+            echo "ERROR: SYNC_SECRET missing"
+            exit 1
+          fi
+
+          echo "SITE_URL present"
+          echo "SYNC_SECRET present"
+
+      - name: Sync all groups
+        shell: bash
+        run: |
+          INPUT_TIMEFRAME="${{ github.event.inputs.timeframe }}"
+          DELAY="${{ github.event.inputs.delay_seconds }}"
+
+          if [ -z "$INPUT_TIMEFRAME" ]; then
+            INPUT_TIMEFRAME="ALL"
+          fi
+
+          if [ -z "$DELAY" ]; then
+            DELAY="12"
+          fi
+
+          if [ "$INPUT_TIMEFRAME" = "ALL" ]; then
+            TIMEFRAMES=("M15" "H1" "H4")
+          else
+            TIMEFRAMES=("$INPUT_TIMEFRAME")
+          fi
+
+          TOTAL_INSERTED=0
+          TOTAL_FAILED=0
+          TOTAL_CALLS=0
+
+          for TF in "${TIMEFRAMES[@]}"; do
+            echo "========================================"
+            echo "SYNC TIMEFRAME: $TF"
+            echo "========================================"
+
+            for GROUP in 1 2 3 4 5 6 7 8 9 10 11; do
+              echo "Syncing timeframe=$TF group=$GROUP"
+
+              HTTP_CODE=$(curl -sS \
+                -o "response_${TF}_${GROUP}.json" \
+                -w "%{http_code}" \
+                "${{ secrets.SITE_URL }}/api/sync-market?token=${{ secrets.SYNC_SECRET }}&timeframe=${TF}&group=${GROUP}")
+
+              echo "HTTP_CODE=$HTTP_CODE"
+              cat "response_${TF}_${GROUP}.json" || true
+              echo ""
+
+              if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+                echo "sync-market HTTP error on timeframe=$TF group=$GROUP"
+                exit 1
+              fi
+
+              OK=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('response_${TF}_${GROUP}.json','utf8')); console.log(j.ok === true ? 'true' : 'false')")
+              INSERTED=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('response_${TF}_${GROUP}.json','utf8')); console.log(j.inserted ?? 0)")
+              FAILED=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('response_${TF}_${GROUP}.json','utf8')); console.log(j.failed ?? 0)")
+              REQUESTED=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('response_${TF}_${GROUP}.json','utf8')); console.log(j.requestedPairs ?? 0)")
+
+              echo "OK=$OK"
+              echo "INSERTED=$INSERTED"
+              echo "FAILED=$FAILED"
+              echo "REQUESTED_PAIRS=$REQUESTED"
+
+              TOTAL_CALLS=$((TOTAL_CALLS + 1))
+              TOTAL_INSERTED=$((TOTAL_INSERTED + INSERTED))
+              TOTAL_FAILED=$((TOTAL_FAILED + FAILED))
+
+              if [ "$OK" != "true" ]; then
+                echo "sync-market returned ok=false on timeframe=$TF group=$GROUP"
+                exit 1
+              fi
+
+              sleep "$DELAY"
+            done
+          done
+
+          echo "========================================"
+          echo "SYNC COMPLETE"
+          echo "TOTAL_CALLS=$TOTAL_CALLS"
+          echo "TOTAL_INSERTED=$TOTAL_INSERTED"
+          echo "TOTAL_FAILED=$TOTAL_FAILED"
+          echo "========================================"
+
+          if [ "$TOTAL_INSERTED" -le 0 ]; then
+            echo "No candles inserted"
+            exit 1
+          fi
+
+          if [ "$TOTAL_FAILED" -gt 0 ]; then
+            echo "Some sync calls failed"
+            exit 1
+          fi
+
+      - name: Check M15 paper health
+        run: |
+          HTTP_CODE=$(curl -sS \
+            -o health_m15.json \
+            -w "%{http_code}" \
+            "${{ secrets.SITE_URL }}/api/paper-health?timeframe=M15")
+
+          echo "HTTP_CODE=$HTTP_CODE"
+          cat health_m15.json || true
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "paper-health M15 HTTP error"
+            exit 1
+          fi
+
+      - name: Check BTC market data
+        run: |
+          HTTP_CODE=$(curl -sS \
+            -o btc_m15.json \
+            -w "%{http_code}" \
+            "${{ secrets.SITE_URL }}/api/market-data?pair=BTCUSD&timeframe=M15&limit=50")
+
+          echo "HTTP_CODE=$HTTP_CODE"
+          cat btc_m15.json || true
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "BTC market-data HTTP error"
+            exit 1
+          fi
+
+          OK=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('btc_m15.json','utf8')); console.log(j.ok === true ? 'true' : 'false')")
+          COUNT=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('btc_m15.json','utf8')); console.log(j.count ?? 0)")
+
+          echo "OK=$OK"
+          echo "BTC_M15_COUNT=$COUNT"
+
+          if [ "$OK" != "true" ]; then
+            echo "BTC market-data returned ok=false"
+            exit 1
+          fi
+
+          if [ "$COUNT" -le 0 ]; then
+            echo "BTCUSD has no M15 candles"
+            exit 1
+          fi
