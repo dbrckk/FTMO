@@ -46,6 +46,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     bindEvents();
     setupChart();
 
+    const timeframeSelect = document.getElementById("timeframeSelect");
+    if (timeframeSelect) {
+      timeframeSelect.value = appState.timeframe || "M15";
+    }
+
     if (!appState.activeTab) {
       setActiveTab("dashboard");
     }
@@ -56,6 +61,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderPaperLab();
     renderPaperHealth();
     renderFtmoRisk();
+    renderTimeframeLabel();
 
     await refreshAll(true);
     startPaperLoop();
@@ -72,6 +78,7 @@ function cacheEls() {
     "correlationSummary",
     "correlationMatrixBox",
     "chart",
+    "chartTimeframeLabel",
     "summaryMetrics",
     "topPriorityTrades",
     "topBlockedTrades",
@@ -114,13 +121,41 @@ function cacheEls() {
     "paperRecentTrades",
     "paperOpenKpi",
     "paperServerRuns",
-    "paperHealthBox"
+    "paperHealthBox",
+    "timeframeSelect"
   ].forEach((id) => {
     els[id] = document.getElementById(id) || null;
   });
 }
 
 function bindEvents() {
+  document.getElementById("timeframeSelect")?.addEventListener("change", async (event) => {
+    const nextTimeframe = String(event.target.value || "M15").toUpperCase();
+
+    if (!["M5", "M15", "H1", "H4"].includes(nextTimeframe)) return;
+    if (appState.timeframe === nextTimeframe) return;
+
+    appState.timeframe = nextTimeframe;
+
+    appState.scans = [];
+    appState.mlScoreCache = {};
+    appState.vectorbtCache = {};
+    appState.aiDecisionCache = {};
+    appState.archiveStatsCache = {};
+    appState.serverPaperSnapshot = null;
+    appState.paperHealth = null;
+
+    persistState();
+
+    renderTimeframeLabel();
+    renderOverview();
+    renderPairList(refreshAiDecision);
+    renderPaperLab();
+    renderPaperHealth();
+
+    await refreshAll(true);
+  });
+
   document.getElementById("refreshBtn")?.addEventListener("click", () => {
     refreshAll(true);
   });
@@ -150,10 +185,12 @@ function bindEvents() {
   document.getElementById("tabPaperBtn")?.addEventListener("click", async () => {
     setActiveTab("paper");
     renderTabs();
+
     await Promise.allSettled([
       fetchServerPaperSnapshot(),
       fetchPaperHealth()
     ]);
+
     renderPaperLab();
     renderPaperHealth();
   });
@@ -170,6 +207,8 @@ export async function refreshAll(force = false) {
   refreshInFlight = true;
 
   try {
+    renderTimeframeLabel();
+
     await Promise.allSettled([
       fetchArchiveStatsBatch(),
       fetchServerPaperSnapshot(),
@@ -227,6 +266,7 @@ export async function refreshAll(force = false) {
     renderPaperLab();
     renderPaperHealth();
     renderTabs();
+    renderTimeframeLabel();
 
     persistState();
   } catch (error) {
@@ -244,6 +284,12 @@ function startPaperLoop() {
   paperLoop = setInterval(() => {
     refreshAll(false);
   }, intervalMs);
+}
+
+function renderTimeframeLabel() {
+  const label = document.getElementById("chartTimeframeLabel");
+  if (!label) return;
+  label.textContent = `${appState.timeframe || "M15"} primary candles`;
 }
 
 window.__APP__ = {
