@@ -495,6 +495,52 @@ export function renderPaperLab() {
   }
 }
 
+export function renderPaperHealth() {
+  const box = document.getElementById("paperHealthBox");
+  if (!box) return;
+
+  const health = appState.paperHealth;
+
+  if (!health || !health.ok) {
+    box.innerHTML = `<div class="muted">Paper health unavailable.</div>`;
+    return;
+  }
+
+  const statusClass =
+    health.status === "HEALTHY"
+      ? "ok"
+      : health.status === "WARNING"
+        ? "warning"
+        : "bad";
+
+  const market = health.market || {};
+  const paper = health.paper || {};
+  const lastRun = paper.lastRun || null;
+
+  box.innerHTML = `
+    <div class="top-row">
+      <strong class="${statusClass}">${esc(health.status || "UNKNOWN")}</strong>
+      <span>${Number(market.freshPairs || 0)} fresh</span>
+      <span>${Number(market.stalePairs || 0)} stale</span>
+      <span>${Number(market.missingPairs || 0)} missing</span>
+    </div>
+
+    <div class="top-row">
+      <strong>Server paper</strong>
+      <span>${Number(paper.openTrades || 0)} open</span>
+      <span>${Number(paper.closedTrades || 0)} closed</span>
+      <span>${Number(paper.winRate || 0).toFixed(1)}% WR</span>
+    </div>
+
+    <div class="top-row">
+      <strong>Last run</strong>
+      <span>${lastRun ? esc(formatDateShort(lastRun.ranAt)) : "-"}</span>
+      <span>+${lastRun ? Number(lastRun.opened || 0) : 0}</span>
+      <span>-${lastRun ? Number(lastRun.closed || 0) : 0}</span>
+    </div>
+  `;
+}
+
 function formatDateShort(value) {
   if (!value) return "-";
 
@@ -521,4 +567,4 @@ function esc(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
-    }
+}
