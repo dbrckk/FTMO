@@ -4,7 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FTMO Edge AI</title>
-  <link rel="stylesheet" href="./styles.css" />
+
+  <link rel="stylesheet" href="./styles.css?v=btc-fix-4" />
+
   <script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
@@ -66,7 +68,9 @@
           <h3>Multi-Timeframe Edge</h3>
           <span>M15 · H1 · H4</span>
         </div>
-        <div id="timeframeSummaryBox"></div>
+        <div id="timeframeSummaryBox">
+          <div class="muted">Loading MTF...</div>
+        </div>
       </section>
 
       <div class="layout">
@@ -76,21 +80,27 @@
               <h2>Pairs scanner</h2>
               <span>26 assets</span>
             </div>
-            <div id="pairList" class="pair-list"></div>
+            <div id="pairList" class="pair-list">
+              <div class="muted">Waiting scanner...</div>
+            </div>
           </section>
 
           <section class="panel">
             <div class="panel-title">
               <h3>Priority trades</h3>
             </div>
-            <div id="topPriorityTrades"></div>
+            <div id="topPriorityTrades">
+              <div class="muted">No priority trade yet.</div>
+            </div>
           </section>
 
           <section class="panel">
             <div class="panel-title">
               <h3>Top blocked</h3>
             </div>
-            <div id="topBlockedTrades"></div>
+            <div id="topBlockedTrades">
+              <div class="muted">No blocked trade yet.</div>
+            </div>
           </section>
 
           <section class="panel">
@@ -320,7 +330,9 @@
           <h2>Paper Lab</h2>
           <button id="paperEngineToggleBtn" type="button">Browser Paper ON</button>
         </div>
-        <div id="paperEngineStatus"></div>
+        <div id="paperEngineStatus">
+          <div class="muted">Loading Paper Lab...</div>
+        </div>
       </section>
 
       <section class="panel">
@@ -328,7 +340,9 @@
           <h3>Paper Health</h3>
           <span>server monitor</span>
         </div>
-        <div id="paperHealthBox"></div>
+        <div id="paperHealthBox">
+          <div class="muted">Loading paper health...</div>
+        </div>
       </section>
 
       <div class="paper-grid">
@@ -370,6 +384,6 @@
     </main>
   </div>
 
-  <script type="module" src="./app.js"></script>
+  <script type="module" src="./app.js?v=btc-fix-4"></script>
 </body>
-            </html>
+                  </html>
