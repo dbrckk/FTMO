@@ -1,4 +1,4 @@
-name: Server paper trading
+name: Server paper run
 
 on:
   workflow_dispatch:
@@ -7,8 +7,9 @@ on:
         description: "M5, M15, H1, H4, or AUTO"
         required: false
         default: "AUTO"
+
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "5,20,35,50 * * * *"
 
 jobs:
   paper-run:
@@ -42,9 +43,9 @@ jobs:
           else
             MOD=$(( SLOT % 16 ))
 
-            if [ "$MOD" -eq 0 ]; then
+            if [ "$MOD" -eq 1 ]; then
               TIMEFRAME="H4"
-            elif [ "$MOD" -eq 4 ] || [ "$MOD" -eq 8 ] || [ "$MOD" -eq 12 ]; then
+            elif [ "$MOD" -eq 5 ] || [ "$MOD" -eq 9 ] || [ "$MOD" -eq 13 ]; then
               TIMEFRAME="H1"
             else
               TIMEFRAME="M15"
@@ -52,9 +53,9 @@ jobs:
           fi
 
           echo "timeframe=$TIMEFRAME" >> "$GITHUB_OUTPUT"
-          echo "Using paper timeframe $TIMEFRAME"
+          echo "Using timeframe $TIMEFRAME"
 
-      - name: Call server paper engine
+      - name: Run server paper engine
         run: |
           HTTP_CODE=$(curl -sS \
             -o response.json \
@@ -65,19 +66,41 @@ jobs:
           cat response.json || true
 
           if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "paper-run HTTP error"
             exit 1
           fi
 
           OK=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('response.json','utf8')); console.log(j.ok === true ? 'true' : 'false')")
-          VERSION=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('response.json','utf8')); console.log(j.version || '')")
+          SCANNED=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('response.json','utf8')); console.log(j.scannedPairs ?? 0)")
           OPENED=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('response.json','utf8')); console.log(j.opened ?? 0)")
           CLOSED=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('response.json','utf8')); console.log(j.closed ?? 0)")
 
           echo "OK=$OK"
-          echo "VERSION=$VERSION"
+          echo "SCANNED=$SCANNED"
           echo "OPENED=$OPENED"
           echo "CLOSED=$CLOSED"
 
           if [ "$OK" != "true" ]; then
+            echo "paper-run returned ok=false"
+            exit 1
+          fi
+
+          if [ "$SCANNED" -le 0 ]; then
+            echo "No pairs scanned"
+            exit 1
+          fi
+
+      - name: Check paper health
+        run: |
+          HTTP_CODE=$(curl -sS \
+            -o health.json \
+            -w "%{http_code}" \
+            "${{ secrets.SITE_URL }}/api/paper-health?timeframe=${{ steps.vars.outputs.timeframe }}")
+
+          echo "HTTP_CODE=$HTTP_CODE"
+          cat health.json || true
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "paper-health HTTP error"
             exit 1
           fi
