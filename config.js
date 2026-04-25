@@ -32,7 +32,8 @@ export const PAIRS = [
   { symbol: "NZDJPY", group: "cross", tier: 2 },
   { symbol: "NZDCAD", group: "cross", tier: 2 },
 
-  { symbol: "XAUUSD", group: "metals", tier: 2 }
+  { symbol: "XAUUSD", group: "metals", tier: 2 },
+  { symbol: "BTCUSD", group: "crypto", tier: 2 }
 ];
 
 export const API = {
