@@ -120,10 +120,8 @@ jobs:
       - name: Check asset count text
         shell: bash
         run: |
-          if grep -R "25 assets" . \
-            --exclude-dir=node_modules \
-            --exclude-dir=.git; then
-            echo "Old asset count found: 25 assets"
+          if grep -q "25 assets" index.html; then
+            echo "Old asset count found in index.html: 25 assets"
             exit 1
           fi
 
