@@ -7,8 +7,12 @@ on:
         description: "Rotation group number 1-11. Leave empty for auto rotation."
         required: false
         default: ""
+      timeframe:
+        description: "M5, M15, H1, H4, or AUTO"
+        required: false
+        default: "AUTO"
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "*/15 * * * *"
 
 jobs:
   sync-market:
@@ -30,28 +34,47 @@ jobs:
           echo "SITE_URL present"
           echo "SYNC_SECRET present"
 
-      - name: Compute rotation group
-        id: group
+      - name: Compute rotation group and timeframe
+        id: vars
         shell: bash
         run: |
           MANUAL_GROUP="${{ github.event.inputs.group }}"
+          MANUAL_TIMEFRAME="${{ github.event.inputs.timeframe }}"
+
+          SLOT=$(( $(date -u +%s) / 900 ))
 
           if [ -n "$MANUAL_GROUP" ]; then
             GROUP="$MANUAL_GROUP"
           else
-            SLOT=$(( $(date -u +%s) / 300 ))
             GROUP=$(( (SLOT % 11) + 1 ))
           fi
 
+          if [ -n "$MANUAL_TIMEFRAME" ] && [ "$MANUAL_TIMEFRAME" != "AUTO" ]; then
+            TIMEFRAME="$MANUAL_TIMEFRAME"
+          else
+            MOD=$(( SLOT % 12 ))
+
+            if [ "$MOD" -eq 0 ]; then
+              TIMEFRAME="H4"
+            elif [ "$MOD" -eq 4 ] || [ "$MOD" -eq 8 ]; then
+              TIMEFRAME="H1"
+            else
+              TIMEFRAME="M15"
+            fi
+          fi
+
           echo "group=$GROUP" >> "$GITHUB_OUTPUT"
+          echo "timeframe=$TIMEFRAME" >> "$GITHUB_OUTPUT"
+
           echo "Using group $GROUP"
+          echo "Using timeframe $TIMEFRAME"
 
       - name: Call Cloudflare sync endpoint
         run: |
           HTTP_CODE=$(curl -sS \
             -o response.json \
             -w "%{http_code}" \
-            "${{ secrets.SITE_URL }}/api/sync-market?token=${{ secrets.SYNC_SECRET }}&group=${{ steps.group.outputs.group }}")
+            "${{ secrets.SITE_URL }}/api/sync-market?token=${{ secrets.SYNC_SECRET }}&group=${{ steps.vars.outputs.group }}&timeframe=${{ steps.vars.outputs.timeframe }}")
 
           echo "HTTP_CODE=$HTTP_CODE"
           cat response.json || true
