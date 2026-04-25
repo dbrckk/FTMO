@@ -4,7 +4,7 @@ const PAIRS = [
   "GBPJPY", "GBPCHF", "GBPCAD", "GBPAUD", "GBPNZD",
   "AUDJPY", "AUDCAD", "AUDCHF", "AUDNZD",
   "NZDJPY", "NZDCAD",
-  "XAUUSD"
+  "XAUUSD", "BTCUSD"
 ];
 
 const TIMEFRAMES = ["M15", "H1", "H4"];
@@ -70,7 +70,7 @@ export async function onRequestGet(context) {
     return json({
       ok: true,
       source: "timeframe-summary",
-      version: "mtf-alignment-v2",
+      version: "mtf-alignment-v2-btc",
       generatedAt: new Date().toISOString(),
       timeframes,
       mtfAlignment,
@@ -197,13 +197,18 @@ function buildScan(pair, timeframe, candles, freshness) {
   const riskScore = clamp(
     74 -
       (pair === "XAUUSD" ? 8 : 0) -
+      (pair === "BTCUSD" ? 10 : 0) -
       (pair.startsWith("GBP") ? 2 : 0),
     1,
     99
   );
 
-  const sessionScore = scoreSession();
-  const rr = pair === "XAUUSD" ? 2.2 : 2.0;
+  const sessionScore = scoreSession(pair);
+
+  const rr =
+    pair === "XAUUSD" ? 2.2 :
+    pair === "BTCUSD" ? 2.1 :
+    2.0;
 
   const direction =
     trendScore >= 55 && timingScore >= 50
@@ -230,9 +235,18 @@ function buildScan(pair, timeframe, candles, freshness) {
     99
   );
 
+  const atrMultiplier =
+    pair === "XAUUSD" ? 1.55 :
+    pair === "BTCUSD" ? 1.85 :
+    1.4;
+
+  const fallbackRiskDistance =
+    pair === "BTCUSD" ? current * 0.006 :
+    current * 0.002;
+
   const riskDistance = atr14 > 0
-    ? atr14 * (pair === "XAUUSD" ? 1.55 : 1.4)
-    : current * 0.002;
+    ? atr14 * atrMultiplier
+    : fallbackRiskDistance;
 
   const stopLoss =
     direction === "sell"
@@ -269,7 +283,13 @@ function buildScan(pair, timeframe, candles, freshness) {
     stopLoss: roundByPair(stopLoss, pair),
     takeProfit: roundByPair(takeProfit, pair),
     allowed,
-    status: allowed ? "VALID" : "BLOCKED",
+    status: allowed
+      ? pair === "BTCUSD"
+        ? "VALID BTC"
+        : pair === "XAUUSD"
+          ? "VALID GOLD"
+          : "VALID"
+      : "BLOCKED",
     reason: allowed ? "Multi-timeframe setup valid" : "Not enough confluence"
   };
 }
@@ -285,8 +305,8 @@ function buildMtfAlignment(scansByTimeframe, timeframes) {
 
     if (!pairScans.length) continue;
 
-    const buy = computePairDirectionAlignment(pair, "BUY", pairScans, timeframes);
-    const sell = computePairDirectionAlignment(pair, "SELL", pairScans, timeframes);
+    const buy = computePairDirectionAlignment(pair, "BUY", pairScans);
+    const sell = computePairDirectionAlignment(pair, "SELL", pairScans);
 
     const best = buy.score >= sell.score ? buy : sell;
 
@@ -479,7 +499,7 @@ function computeMomentum(values, lookback = 12) {
   return ((current - past) / past) * 100;
 }
 
-function scoreSession() {
+function scoreSession(pair = "") {
   const hour = Number(
     new Date().toLocaleString("en-GB", {
       hour: "2-digit",
@@ -487,6 +507,14 @@ function scoreSession() {
       timeZone: "Europe/Paris"
     })
   );
+
+  const p = String(pair || "").toUpperCase();
+
+  if (p === "BTCUSD") {
+    if (hour >= 13 && hour < 23) return 66;
+    if (hour >= 1 && hour < 8) return 58;
+    return 54;
+  }
 
   if (hour >= 14 && hour < 18) return 68;
   if (hour >= 9 && hour < 14) return 62;
@@ -501,6 +529,7 @@ function roundByPair(value, pair) {
   if (!Number.isFinite(n)) return 0;
 
   if (pair === "XAUUSD") return Number(n.toFixed(2));
+  if (pair === "BTCUSD") return Number(n.toFixed(2));
   if (String(pair).includes("JPY")) return Number(n.toFixed(3));
 
   return Number(n.toFixed(5));
@@ -528,4 +557,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-               }
+                }
