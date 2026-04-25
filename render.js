@@ -553,8 +553,29 @@ export function renderTimeframeSummary() {
   }
 
   const order = ["M15", "H1", "H4"];
+  const rows = order
+    .map((timeframe) => data.summary?.[timeframe])
+    .filter(Boolean);
 
-  box.innerHTML = order.map((timeframe) => {
+  const alignment = computeMtfAlignment(rows);
+
+  const alignmentClass =
+    alignment.score >= 75
+      ? "ok"
+      : alignment.score >= 55
+        ? "warning"
+        : "bad";
+
+  const alignmentHtml = `
+    <div class="top-row">
+      <strong class="${alignmentClass}">MTF ${alignment.score}/100</strong>
+      <span>${esc(alignment.pair || "-")}</span>
+      <span>${esc(alignment.direction || "WAIT")}</span>
+      <span>${esc(alignment.label)}</span>
+    </div>
+  `;
+
+  const timeframeRows = order.map((timeframe) => {
     const item = data.summary?.[timeframe];
 
     if (!item) {
@@ -581,6 +602,83 @@ export function renderTimeframeSummary() {
       </div>
     `;
   }).join("");
+
+  box.innerHTML = alignmentHtml + timeframeRows;
+}
+
+function computeMtfAlignment(rows) {
+  const bestRows = rows
+    .map((row) => row.best)
+    .filter((best) => best && best.pair && best.signal);
+
+  if (!bestRows.length) {
+    return {
+      score: 0,
+      pair: "",
+      direction: "WAIT",
+      label: "No MTF data"
+    };
+  }
+
+  const votes = {};
+
+  for (const best of bestRows) {
+    const pair = String(best.pair || "");
+    const direction = String(best.signal || "WAIT").toUpperCase();
+    const key = `${pair}|${direction}`;
+
+    if (!votes[key]) {
+      votes[key] = {
+        pair,
+        direction,
+        count: 0,
+        scoreTotal: 0,
+        allowedCount: 0
+      };
+    }
+
+    votes[key].count += 1;
+    votes[key].scoreTotal += Number(best.ultraScore || 0);
+
+    if (best.allowed) {
+      votes[key].allowedCount += 1;
+    }
+  }
+
+  const bestVote = Object.values(votes).sort((a, b) => {
+    if (b.count !== a.count) return b.count - a.count;
+    return b.scoreTotal - a.scoreTotal;
+  })[0];
+
+  const averageScore = bestVote.scoreTotal / Math.max(1, bestVote.count);
+  const timeframeAgreement = bestVote.count / Math.max(1, bestRows.length);
+  const allowedBoost = bestVote.allowedCount / Math.max(1, bestVote.count);
+
+  const score = Math.round(
+    Math.min(
+      100,
+      averageScore * 0.55 +
+        timeframeAgreement * 30 +
+        allowedBoost * 15
+    )
+  );
+
+  let label = "Weak alignment";
+
+  if (score >= 80 && bestVote.count >= 2) {
+    label = "Strong alignment";
+  } else if (score >= 65 && bestVote.count >= 2) {
+    label = "Medium alignment";
+  } else if (score >= 50) {
+    label = "Mixed alignment";
+  }
+
+  return {
+    score,
+    pair: bestVote.pair,
+    direction: bestVote.direction,
+    label
+  };
 }
 
 function formatDateShort(value) {
