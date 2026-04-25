@@ -67,14 +67,14 @@ async function handlePaperRun(context) {
         scans.length,
         opened.length,
         closed.length,
-        "server-paper-run-with-archive-edge"
+        "server-paper-run-with-archive-edge-correlation-guard"
       )
       .run();
 
     return json({
       ok: true,
       source: "server-paper-engine",
-      version: "archive-edge-v2",
+      version: "archive-edge-v3-correlation-guard",
       runId,
       timeframe,
       scannedPairs: scans.length,
@@ -568,17 +568,39 @@ async function openNewTrades(db, scans, currentOpenTrades) {
 
   if (currentOpenTrades.length >= MAX_OPEN_TRADES) return opened;
 
+  const currentRiskGroups = buildRiskGroupsFromTrades(currentOpenTrades);
+
   const candidates = scans
     .filter((s) => s.allowed)
     .filter((s) => s.direction === "buy" || s.direction === "sell")
     .filter((s) => !openPairs.has(s.pair))
-    .sort((a, b) => Number(b.ultraScore || 0) - Number(a.ultraScore || 0));
+    .filter((s) => !wouldOverloadRiskGroup(s.pair, currentRiskGroups))
+    .sort((a, b) => {
+      const bScore =
+        Number(b.ultraScore || 0) * 0.60 +
+        Number(b.archiveEdgeScore || 50) * 0.25 +
+        Number(b.sessionScore || 50) * 0.15;
+
+      const aScore =
+        Number(a.ultraScore || 0) * 0.60 +
+        Number(a.archiveEdgeScore || 50) * 0.25 +
+        Number(a.sessionScore || 50) * 0.15;
+
+      return bScore - aScore;
+    });
 
   for (const scan of candidates) {
     if (currentOpenTrades.length + opened.length >= MAX_OPEN_TRADES) break;
 
+    const simulatedGroups = buildRiskGroupsFromTrades([...currentOpenTrades, ...opened]);
+
+    if (wouldOverloadRiskGroup(scan.pair, simulatedGroups)) {
+      continue;
+    }
+
     const trade = createOpenTrade(scan, false);
     await insertOpenTrade(db, trade);
+
     opened.push(trade);
     openPairs.add(scan.pair);
   }
@@ -588,7 +610,20 @@ async function openNewTrades(db, scans, currentOpenTrades) {
       .filter((s) => !openPairs.has(s.pair))
       .filter((s) => s.direction === "buy" || s.direction === "sell")
       .filter((s) => Number(s.ultraScore || 0) >= EXPLORATION_SCORE)
-      .sort((a, b) => Number(b.ultraScore || 0) - Number(a.ultraScore || 0))[0];
+      .filter((s) => Number(s.archiveEdgeScore || 50) >= 48)
+      .sort((a, b) => {
+        const bScore =
+          Number(b.ultraScore || 0) * 0.55 +
+          Number(b.archiveEdgeScore || 50) * 0.30 +
+          Number(b.sessionScore || 50) * 0.15;
+
+        const aScore =
+          Number(a.ultraScore || 0) * 0.55 +
+          Number(a.archiveEdgeScore || 50) * 0.30 +
+          Number(a.sessionScore || 50) * 0.15;
+
+        return bScore - aScore;
+      })[0];
 
     if (exploration) {
       const trade = createOpenTrade(exploration, true);
@@ -598,6 +633,52 @@ async function openNewTrades(db, scans, currentOpenTrades) {
   }
 
   return opened;
+}
+
+function buildRiskGroupsFromTrades(trades) {
+  const groups = {};
+
+  for (const trade of trades) {
+    const pair = String(trade.pair || "").toUpperCase();
+    const riskGroups = getPairRiskGroups(pair);
+
+    for (const group of riskGroups) {
+      groups[group] = (groups[group] || 0) + 1;
+    }
+  }
+
+  return groups;
+}
+
+function wouldOverloadRiskGroup(pair, currentGroups) {
+  const riskGroups = getPairRiskGroups(pair);
+
+  for (const group of riskGroups) {
+    const current = Number(currentGroups[group] || 0);
+
+    if (group === "GOLD_USD" && current >= 1) return true;
+    if (group === "USD" && current >= 2) return true;
+    if (group === "EUR" && current >= 2) return true;
+    if (group === "GBP" && current >= 2) return true;
+    if (group === "JPY" && current >= 2) return true;
+    if (group === "AUD_NZD" && current >= 2) return true;
+  }
+
+  return false;
+}
+
+function getPairRiskGroups(pair) {
+  const p = String(pair || "").toUpperCase();
+  const groups = [];
+
+  if (p.includes("USD")) groups.push("USD");
+  if (p.includes("EUR")) groups.push("EUR");
+  if (p.includes("GBP")) groups.push("GBP");
+  if (p.includes("JPY")) groups.push("JPY");
+  if (p.includes("AUD") || p.includes("NZD")) groups.push("AUD_NZD");
+  if (p === "XAUUSD") groups.push("GOLD_USD");
+
+  return groups;
 }
 
 function createOpenTrade(scan, exploration = false) {
