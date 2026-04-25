@@ -121,6 +121,15 @@ button:hover {
   background: rgba(239, 68, 68, 0.12);
 }
 
+.timeframe-select {
+  width: auto;
+  min-width: 86px;
+  border: 1px solid rgba(56, 189, 248, 0.32);
+  background: rgba(56, 189, 248, 0.08);
+  color: var(--text);
+  font-weight: 800;
+}
+
 .tabs {
   display: flex;
   gap: 10px;
@@ -537,7 +546,8 @@ textarea {
   }
 
   .header-actions button,
-  .header-actions .btn {
+  .header-actions .btn,
+  .timeframe-select {
     flex: 1;
   }
 
@@ -603,4 +613,4 @@ textarea {
   .pair-row > div:nth-child(5) {
     font-size: 12px;
   }
-                                           }
+  }
