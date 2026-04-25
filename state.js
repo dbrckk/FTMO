@@ -25,6 +25,7 @@ export const defaultState = {
 
   serverPaperSnapshot: null,
   paperHealth: null,
+  timeframeSummary: null,
 
   tradeArchive: [],
   paperTrades: [],
@@ -101,6 +102,11 @@ export function loadState() {
           ? saved.paperHealth
           : null,
 
+      timeframeSummary:
+        saved.timeframeSummary && typeof saved.timeframeSummary === "object"
+          ? saved.timeframeSummary
+          : null,
+
       correlationMatrix:
         saved.correlationMatrix && typeof saved.correlationMatrix === "object"
           ? saved.correlationMatrix
@@ -142,4 +148,4 @@ export function resetState() {
 export function setChartInstance(nextChart, nextCandleSeries) {
   chart = nextChart;
   candleSeries = nextCandleSeries;
-      }
+}
