@@ -10,6 +10,13 @@ const PAIRS = [
 const TIMEFRAMES = ["M15", "H1", "H4"];
 const CANDLE_LIMIT = 200;
 
+const TIMEFRAME_WEIGHT = {
+  M5: 0.22,
+  M15: 0.30,
+  H1: 0.35,
+  H4: 0.35
+};
+
 const MAX_CANDLE_AGE_SECONDS = {
   M5: 60 * 60,
   M15: 3 * 60 * 60,
@@ -22,10 +29,7 @@ export async function onRequestGet(context) {
     const db = context.env?.DB;
 
     if (!db) {
-      return json({
-        ok: false,
-        error: "Missing DB binding"
-      }, 500);
+      return json({ ok: false, error: "Missing DB binding" }, 500);
     }
 
     const url = new URL(context.request.url);
@@ -33,9 +37,11 @@ export async function onRequestGet(context) {
     const timeframes = includeM5 ? ["M5", ...TIMEFRAMES] : TIMEFRAMES;
 
     const summary = {};
+    const scansByTimeframe = {};
 
     for (const timeframe of timeframes) {
       const scans = await scanTimeframe(db, timeframe);
+      scansByTimeframe[timeframe] = scans;
 
       const allowed = scans
         .filter((scan) => scan.allowed)
@@ -59,11 +65,15 @@ export async function onRequestGet(context) {
       };
     }
 
+    const mtfAlignment = buildMtfAlignment(scansByTimeframe, timeframes);
+
     return json({
       ok: true,
       source: "timeframe-summary",
+      version: "mtf-alignment-v2",
       generatedAt: new Date().toISOString(),
       timeframes,
+      mtfAlignment,
       summary
     });
   } catch (error) {
@@ -90,6 +100,8 @@ async function scanTimeframe(db, timeframe) {
         allowed: false,
         ultraScore: 0,
         status: "SKIPPED",
+        signal: "WAIT",
+        direction: "wait",
         reason: candles.length ? "Not enough candles" : "Missing candles",
         candleAgeMinutes: freshness.ageMinutes
       });
@@ -105,6 +117,8 @@ async function scanTimeframe(db, timeframe) {
         allowed: false,
         ultraScore: 0,
         status: "STALE",
+        signal: "WAIT",
+        direction: "wait",
         reason: `Stale market data: ${freshness.ageMinutes} min old`,
         candleAgeMinutes: freshness.ageMinutes
       });
@@ -198,7 +212,7 @@ function buildScan(pair, timeframe, candles, freshness) {
         ? "sell"
         : "wait";
 
-  const timeframeWeight =
+  const timeframeBoost =
     timeframe === "H4" ? 1.08 :
     timeframe === "H1" ? 1.04 :
     timeframe === "M15" ? 1 :
@@ -211,7 +225,7 @@ function buildScan(pair, timeframe, candles, freshness) {
       riskScore * 0.16 +
       sessionScore * 0.12 +
       clamp(rr * 24, 1, 99) * 0.15
-    ) * timeframeWeight,
+    ) * timeframeBoost,
     1,
     99
   );
@@ -257,6 +271,121 @@ function buildScan(pair, timeframe, candles, freshness) {
     allowed,
     status: allowed ? "VALID" : "BLOCKED",
     reason: allowed ? "Multi-timeframe setup valid" : "Not enough confluence"
+  };
+}
+
+function buildMtfAlignment(scansByTimeframe, timeframes) {
+  const results = [];
+
+  for (const pair of PAIRS) {
+    const pairScans = timeframes
+      .map((timeframe) => scansByTimeframe[timeframe]?.find((scan) => scan.pair === pair))
+      .filter(Boolean)
+      .filter((scan) => scan.fresh);
+
+    if (!pairScans.length) continue;
+
+    const buy = computePairDirectionAlignment(pair, "BUY", pairScans, timeframes);
+    const sell = computePairDirectionAlignment(pair, "SELL", pairScans, timeframes);
+
+    const best = buy.score >= sell.score ? buy : sell;
+
+    if (best.score > 0) {
+      results.push(best);
+    }
+  }
+
+  const topPairs = results
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return b.averageUltraScore - a.averageUltraScore;
+    })
+    .slice(0, 10);
+
+  return {
+    best: topPairs[0] || null,
+    topPairs
+  };
+}
+
+function computePairDirectionAlignment(pair, signal, pairScans) {
+  const matching = pairScans.filter((scan) => scan.signal === signal);
+  const opposite = pairScans.filter((scan) => scan.signal !== signal && scan.signal !== "WAIT");
+
+  if (!matching.length) {
+    return {
+      pair,
+      signal,
+      direction: signal.toLowerCase(),
+      score: 0,
+      label: "No alignment",
+      timeframes: [],
+      averageUltraScore: 0,
+      allowedCount: 0,
+      oppositeCount: opposite.length
+    };
+  }
+
+  let weightedScore = 0;
+  let totalWeight = 0;
+
+  for (const scan of matching) {
+    const weight = TIMEFRAME_WEIGHT[scan.timeframe] || 0.3;
+    weightedScore += Number(scan.ultraScore || 0) * weight;
+    totalWeight += weight;
+  }
+
+  const averageUltraScore = totalWeight > 0 ? weightedScore / totalWeight : 0;
+  const agreementRatio = matching.length / Math.max(1, pairScans.length);
+  const allowedCount = matching.filter((scan) => scan.allowed).length;
+  const allowedRatio = allowedCount / Math.max(1, matching.length);
+
+  const hasH1 = matching.some((scan) => scan.timeframe === "H1");
+  const hasH4 = matching.some((scan) => scan.timeframe === "H4");
+  const higherTfBoost = (hasH1 ? 7 : 0) + (hasH4 ? 10 : 0);
+  const oppositePenalty = opposite.length * 12;
+
+  const score = Math.round(
+    clamp(
+      averageUltraScore * 0.56 +
+        agreementRatio * 24 +
+        allowedRatio * 12 +
+        higherTfBoost -
+        oppositePenalty,
+      0,
+      100
+    )
+  );
+
+  let label = "Weak alignment";
+
+  if (score >= 82 && matching.length >= 2 && (hasH1 || hasH4)) {
+    label = "Strong alignment";
+  } else if (score >= 68 && matching.length >= 2) {
+    label = "Medium alignment";
+  } else if (score >= 52) {
+    label = "Mixed alignment";
+  }
+
+  return {
+    pair,
+    signal,
+    direction: signal.toLowerCase(),
+    score,
+    label,
+    timeframes: matching.map((scan) => ({
+      timeframe: scan.timeframe,
+      ultraScore: scan.ultraScore,
+      allowed: scan.allowed,
+      current: scan.current,
+      stopLoss: scan.stopLoss,
+      takeProfit: scan.takeProfit,
+      candleAgeMinutes: scan.candleAgeMinutes
+    })),
+    averageUltraScore: round(averageUltraScore, 2),
+    allowedCount,
+    oppositeCount: opposite.length,
+    freshCount: pairScans.length
   };
 }
 
@@ -399,4 +528,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-        }
+               }
