@@ -20,7 +20,9 @@ export async function onRequest(context) {
     "/api/correlation-matrix",
     "/api/portfolio-risk",
     "/api/archive-stats",
-    "/api/paper-trades"
+    "/api/paper-trades",
+    "/api/paper-run",
+    "/api/paper-health"
   ];
 
   const isKnownApi = publicApiPaths.some((path) => url.pathname === path);
