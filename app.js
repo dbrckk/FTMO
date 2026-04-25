@@ -42,7 +42,11 @@ import { runPaperEngine } from "./paper-engine.js";
 let paperLoop = null;
 let refreshInFlight = false;
 
-document.addEventListener("DOMContentLoaded", async () => {
+const SCAN_TIMEOUT_MS = 15000;
+const API_TIMEOUT_MS = 12000;
+const SCAN_BATCH_SIZE = 3;
+
+document.addEventListener("DOMContentLoaded", () => {
   try {
     cacheEls();
     bindEvents();
@@ -57,28 +61,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       setActiveTab("dashboard");
     }
 
-    renderTabs();
-    renderTrades();
-    renderWatchlist();
-    renderPaperLab();
-    renderPaperHealth();
-    renderTimeframeSummary();
-    renderFtmoRisk();
-    renderTimeframeLabel();
-
-    await refreshAll(true);
+    renderAllSafe();
     startPaperLoop();
-  } catch (error) {
-    console.error("App init failed", error);
 
-    const pairList = document.getElementById("pairList");
-    if (pairList) {
-      pairList.innerHTML = `
-        <div class="bad" style="padding:14px;">
-          Front init error: ${String(error?.message || error)}
-        </div>
-      `;
-    }
+    refreshAll(true);
+  } catch (error) {
+    showFatalError("App init failed", error);
   }
 });
 
@@ -159,32 +147,21 @@ function cacheEls() {
 }
 
 function bindEvents() {
-  document.getElementById("timeframeSelect")?.addEventListener("change", async (event) => {
+  document.getElementById("timeframeSelect")?.addEventListener("change", (event) => {
     const nextTimeframe = String(event.target.value || "M15").toUpperCase();
 
     if (!["M5", "M15", "H1", "H4"].includes(nextTimeframe)) return;
     if (appState.timeframe === nextTimeframe) return;
 
     appState.timeframe = nextTimeframe;
-
-    appState.scans = [];
-    appState.mlScoreCache = {};
-    appState.vectorbtCache = {};
-    appState.aiDecisionCache = {};
-    appState.archiveStatsCache = {};
-    appState.serverPaperSnapshot = null;
-    appState.paperHealth = null;
+    clearScanCaches();
 
     persistState();
 
     renderTimeframeLabel();
-    renderOverview();
-    renderPairList(refreshAiDecision);
-    renderPaperLab();
-    renderPaperHealth();
-    renderTimeframeSummary();
+    renderLoadingState();
 
-    await refreshAll(true);
+    refreshAll(true);
   });
 
   document.getElementById("refreshBtn")?.addEventListener("click", () => {
@@ -213,19 +190,15 @@ function bindEvents() {
     renderTabs();
   });
 
-  document.getElementById("tabPaperBtn")?.addEventListener("click", async () => {
+  document.getElementById("tabPaperBtn")?.addEventListener("click", () => {
     setActiveTab("paper");
     renderTabs();
-
-    await Promise.allSettled([
-      fetchServerPaperSnapshot(),
-      fetchPaperHealth(),
-      fetchTimeframeSummary()
-    ]);
 
     renderPaperLab();
     renderPaperHealth();
     renderTimeframeSummary();
+
+    refreshPaperData();
   });
 
   document.getElementById("paperEngineToggleBtn")?.addEventListener("click", () => {
@@ -236,70 +209,58 @@ function bindEvents() {
 }
 
 export async function refreshAll(force = false) {
-  if (refreshInFlight) return;
+  if (refreshInFlight) {
+    return;
+  }
+
   refreshInFlight = true;
 
   try {
     renderTimeframeLabel();
 
-    await Promise.allSettled([
-      fetchArchiveStatsBatch(),
-      fetchServerPaperSnapshot(),
-      fetchPaperHealth(),
-      fetchTimeframeSummary()
-    ]);
-
-    const scans = await Promise.all(PAIRS.map((pair) => scanPair(pair)));
-
-    appState.scans = scans
-      .map((scan) => {
-        scan.hedgeScore = computeHedgeScore(scan);
-        scan.elite = isEliteTrade(scan);
-        scan.confluence = computeConfluenceScore(scan);
-        return scan;
-      })
-      .sort((a, b) => {
-        const aScore = Number(a.ultraScore || a.finalScore || 0);
-        const bScore = Number(b.ultraScore || b.finalScore || 0);
-
-        if (bScore !== aScore) return bScore - aScore;
-
-        const bConf = Number(b.confluence?.score || 0);
-        const aConf = Number(a.confluence?.score || 0);
-
-        if (bConf !== aConf) return bConf - aConf;
-
-        return Number(b.finalScore || 0) - Number(a.finalScore || 0);
-      });
-
-    if (
-      !appState.selectedPair ||
-      !appState.scans.find((scan) => scan.pair === appState.selectedPair)
-    ) {
-      appState.selectedPair = appState.scans[0]?.pair || "EURUSD";
+    if (force) {
+      appState.scans = [];
+      renderLoadingState();
     }
 
-    await fetchCorrelationMatrix();
-    await refreshAiDecision(force, renderSelectedPair);
+    await refreshMetaData();
 
-    const mtfProtectedScans = applyBrowserPaperMtfGuard(appState.scans);
-    await runPaperEngine(mtfProtectedScans);
+    const scanned = [];
+    const pairEntries = PAIRS || [];
 
-    await Promise.allSettled([
-      fetchServerPaperSnapshot(),
-      fetchPaperHealth(),
-      fetchTimeframeSummary()
-    ]);
+    for (let i = 0; i < pairEntries.length; i += SCAN_BATCH_SIZE) {
+      const batch = pairEntries.slice(i, i + SCAN_BATCH_SIZE);
 
-    renderOverview();
-    renderPairList(refreshAiDecision);
-    renderTopPriorityTrades();
-    renderTopBlockedTrades();
-    renderCorrelationMatrix();
-    renderSelectedPair();
-    renderTrades();
-    renderWatchlist();
-    renderFtmoRisk();
+      const results = await Promise.allSettled(
+        batch.map((pairEntry) => scanPairWithTimeout(pairEntry))
+      );
+
+      for (const result of results) {
+        const scan = result.status === "fulfilled"
+          ? result.value
+          : buildFallbackScan("UNKNOWN", String(result.reason || "scan failed"));
+
+        scanned.push(enrichScan(scan));
+      }
+
+      appState.scans = sortScans(scanned);
+
+      if (
+        !appState.selectedPair ||
+        !appState.scans.find((scan) => scan.pair === appState.selectedPair)
+      ) {
+        appState.selectedPair = appState.scans[0]?.pair || "EURUSD";
+      }
+
+      renderDashboardAfterScan();
+      persistState();
+
+      await sleep(40);
+    }
+
+    await refreshPostScanData(force);
+
+    renderDashboardAfterScan();
     renderPaperLab();
     renderPaperHealth();
     renderTimeframeSummary();
@@ -309,17 +270,140 @@ export async function refreshAll(force = false) {
     persistState();
   } catch (error) {
     console.error("refreshAll failed", error);
-
-    const pairList = document.getElementById("pairList");
-    if (pairList) {
-      pairList.innerHTML = `
-        <div class="bad" style="padding:14px;">
-          Refresh error: ${String(error?.message || error)}
-        </div>
-      `;
-    }
+    showPairListError("Refresh error", error);
   } finally {
     refreshInFlight = false;
+  }
+}
+
+async function refreshMetaData() {
+  await Promise.allSettled([
+    withTimeout(fetchArchiveStatsBatch(), API_TIMEOUT_MS, null),
+    withTimeout(fetchServerPaperSnapshot(), API_TIMEOUT_MS, null),
+    withTimeout(fetchPaperHealth(), API_TIMEOUT_MS, null),
+    withTimeout(fetchTimeframeSummary(), API_TIMEOUT_MS, null)
+  ]);
+
+  renderPaperLab();
+  renderPaperHealth();
+  renderTimeframeSummary();
+}
+
+async function refreshPostScanData(force) {
+  await Promise.allSettled([
+    withTimeout(fetchCorrelationMatrix(), API_TIMEOUT_MS, null),
+    withTimeout(refreshAiDecision(force, renderSelectedPair), API_TIMEOUT_MS, null)
+  ]);
+
+  const mtfProtectedScans = applyBrowserPaperMtfGuard(appState.scans);
+
+  await withTimeout(
+    runPaperEngine(mtfProtectedScans),
+    API_TIMEOUT_MS,
+    null
+  );
+
+  await Promise.allSettled([
+    withTimeout(fetchServerPaperSnapshot(), API_TIMEOUT_MS, null),
+    withTimeout(fetchPaperHealth(), API_TIMEOUT_MS, null),
+    withTimeout(fetchTimeframeSummary(), API_TIMEOUT_MS, null)
+  ]);
+}
+
+async function refreshPaperData() {
+  await Promise.allSettled([
+    withTimeout(fetchServerPaperSnapshot(), API_TIMEOUT_MS, null),
+    withTimeout(fetchPaperHealth(), API_TIMEOUT_MS, null),
+    withTimeout(fetchTimeframeSummary(), API_TIMEOUT_MS, null)
+  ]);
+
+  renderPaperLab();
+  renderPaperHealth();
+  renderTimeframeSummary();
+}
+
+async function scanPairWithTimeout(pairEntry) {
+  const symbol = getPairSymbol(pairEntry);
+
+  try {
+    return await withTimeout(
+      scanPair(pairEntry),
+      SCAN_TIMEOUT_MS,
+      buildFallbackScan(symbol, "Scan timeout")
+    );
+  } catch (error) {
+    return buildFallbackScan(symbol, String(error?.message || error || "scan error"));
+  }
+}
+
+function enrichScan(scan) {
+  const safeScan = scan || buildFallbackScan("UNKNOWN", "Invalid scan");
+
+  safeScan.hedgeScore = computeHedgeScore(safeScan);
+  safeScan.elite = isEliteTrade(safeScan);
+  safeScan.confluence = computeConfluenceScore(safeScan);
+
+  return safeScan;
+}
+
+function sortScans(scans) {
+  return [...(scans || [])].sort((a, b) => {
+    const aScore = Number(a.ultraScore || a.finalScore || 0);
+    const bScore = Number(b.ultraScore || b.finalScore || 0);
+
+    if (bScore !== aScore) return bScore - aScore;
+
+    const bConf = Number(b.confluence?.score || 0);
+    const aConf = Number(a.confluence?.score || 0);
+
+    if (bConf !== aConf) return bConf - aConf;
+
+    return Number(b.finalScore || 0) - Number(a.finalScore || 0);
+  });
+}
+
+function renderDashboardAfterScan() {
+  renderOverview();
+  renderPairList(refreshAiDecision);
+  renderTopPriorityTrades();
+  renderTopBlockedTrades();
+  renderCorrelationMatrix();
+  renderSelectedPair();
+  renderTrades();
+  renderWatchlist();
+  renderFtmoRisk();
+}
+
+function renderAllSafe() {
+  renderTabs();
+  renderOverview();
+  renderPairList(refreshAiDecision);
+  renderTopPriorityTrades();
+  renderTopBlockedTrades();
+  renderCorrelationMatrix();
+  renderSelectedPair();
+  renderTrades();
+  renderWatchlist();
+  renderFtmoRisk();
+  renderPaperLab();
+  renderPaperHealth();
+  renderTimeframeSummary();
+  renderTimeframeLabel();
+}
+
+function renderLoadingState() {
+  setTextSafe("topPairLabel", "-");
+  setTextSafe("topPairReason", "Scanning...");
+  setTextSafe("bestScore", "-");
+  setTextSafe("allowedCount", "0");
+  setTextSafe("blockedCount", "0");
+
+  if (els.pairList) {
+    els.pairList.innerHTML = `
+      <div class="muted" style="padding:14px;">
+        Scanning ${PAIRS.length} assets...
+      </div>
+    `;
   }
 }
 
@@ -393,7 +477,9 @@ function startPaperLoop() {
   const intervalMs = Number(appState.paperEngine?.refreshIntervalMs || 20000);
 
   paperLoop = setInterval(() => {
-    refreshAll(false);
+    if (!refreshInFlight) {
+      refreshAll(false);
+    }
   }, intervalMs);
 }
 
@@ -402,6 +488,134 @@ function renderTimeframeLabel() {
   if (!label) return;
 
   label.textContent = `${appState.timeframe || "M15"} primary candles`;
+}
+
+function clearScanCaches() {
+  appState.scans = [];
+  appState.mlScoreCache = {};
+  appState.vectorbtCache = {};
+  appState.aiDecisionCache = {};
+  appState.archiveStatsCache = {};
+  appState.serverPaperSnapshot = null;
+  appState.paperHealth = null;
+  appState.timeframeSummary = {
+    ok: false,
+    mtfAlignment: {
+      best: null,
+      topPairs: []
+    },
+    summary: {}
+  };
+}
+
+function buildFallbackScan(pair, reason) {
+  const symbol = String(pair || "UNKNOWN").toUpperCase();
+
+  return {
+    pair: symbol,
+    timeframe: appState.timeframe || "M15",
+    candles: [],
+    current: 0,
+    direction: "wait",
+    signal: "WAIT",
+    finalScore: 0,
+    ultraScore: 0,
+    ultraGrade: "NO DATA",
+    localScore: 0,
+    mlScore: 0,
+    vectorbtScore: 0,
+    trendScore: 0,
+    timingScore: 0,
+    riskScore: 0,
+    contextScore: 0,
+    smartMoneyScore: 0,
+    sessionScore: 0,
+    executionScore: 0,
+    archiveEdgeScore: 50,
+    archiveStats: null,
+    archiveConfidence: 0,
+    rsi14: 50,
+    macdLine: 0,
+    atr14: 0,
+    momentum: 0,
+    rr: 0,
+    stopLoss: 0,
+    takeProfit: 0,
+    tradeAllowed: false,
+    tradeStatus: "NO DATA",
+    tradeReason: reason,
+    reason,
+    reasons: [reason]
+  };
+}
+
+function getPairSymbol(pairEntry) {
+  if (typeof pairEntry === "string") {
+    return pairEntry.toUpperCase();
+  }
+
+  return String(pairEntry?.symbol || "UNKNOWN").toUpperCase();
+}
+
+function withTimeout(promise, timeoutMs, fallbackValue) {
+  return new Promise((resolve) => {
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      resolve(fallbackValue);
+    }, timeoutMs);
+
+    Promise.resolve(promise)
+      .then((value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch(() => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(fallbackValue);
+      });
+  });
+}
+
+function showFatalError(label, error) {
+  console.error(label, error);
+  showPairListError(label, error);
+}
+
+function showPairListError(label, error) {
+  const pairList = document.getElementById("pairList");
+  if (!pairList) return;
+
+  pairList.innerHTML = `
+    <div class="bad" style="padding:14px;">
+      ${escapeHtml(label)}: ${escapeHtml(String(error?.message || error))}
+    </div>
+  `;
+}
+
+function setTextSafe(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = value;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 window.__APP__ = {
