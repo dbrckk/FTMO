@@ -1,0 +1,61 @@
+name: Paper server health check
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check secrets presence
+        run: |
+          if [ -z "${{ secrets.SITE_URL }}" ]; then
+            echo "ERROR: SITE_URL missing"
+            exit 1
+          fi
+
+          echo "SITE_URL present"
+
+      - name: Check paper server health
+        run: |
+          HTTP_CODE=$(curl -sS \
+            -o health.json \
+            -w "%{http_code}" \
+            "${{ secrets.SITE_URL }}/api/paper-health?timeframe=M15")
+
+          echo "HTTP_CODE=$HTTP_CODE"
+          cat health.json || true
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "Health endpoint HTTP error"
+            exit 1
+          fi
+
+          STATUS=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('health.json','utf8')); console.log(j.status || 'UNKNOWN')")
+          HEALTHY=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('health.json','utf8')); console.log(j.healthy === true ? 'true' : 'false')")
+          FRESH=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('health.json','utf8')); console.log(j.market?.freshPairs ?? 0)")
+          STALE=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('health.json','utf8')); console.log(j.market?.stalePairs ?? 0)")
+          MISSING=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('health.json','utf8')); console.log(j.market?.missingPairs ?? 0)")
+          LAST_RUN=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('health.json','utf8')); console.log(j.paper?.lastRun?.ranAt || '')")
+
+          echo "STATUS=$STATUS"
+          echo "HEALTHY=$HEALTHY"
+          echo "FRESH_PAIRS=$FRESH"
+          echo "STALE_PAIRS=$STALE"
+          echo "MISSING_PAIRS=$MISSING"
+          echo "LAST_RUN=$LAST_RUN"
+
+          if [ "$STATUS" = "UNHEALTHY" ]; then
+            echo "Paper server is unhealthy"
+            exit 1
+          fi
+
+          if [ "$MISSING" -gt 0 ]; then
+            echo "Some pairs are missing market candles"
+            exit 1
+          fi
+
+          echo "Paper server health check passed"
