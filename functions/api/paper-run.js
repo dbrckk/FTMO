@@ -4,7 +4,7 @@ const PAIRS = [
   "GBPJPY", "GBPCHF", "GBPCAD", "GBPAUD", "GBPNZD",
   "AUDJPY", "AUDCAD", "AUDCHF", "AUDNZD",
   "NZDJPY", "NZDCAD",
-  "XAUUSD"
+  "XAUUSD", "BTCUSD"
 ];
 
 const TIMEFRAME = "M15";
@@ -14,6 +14,10 @@ const MIN_OPEN_SCORE = 72;
 const EXPLORATION_SCORE = 58;
 const DEFAULT_RISK_PERCENT = 0.25;
 const EXPLORATION_RISK_PERCENT = 0.1;
+
+const SERVER_MTF_GUARD_ENABLED = true;
+const SERVER_MTF_MIN_SCORE = 58;
+const SERVER_MTF_STRONG_OVERRIDE_SCORE = 82;
 
 const MAX_CANDLE_AGE_SECONDS = {
   M5: 60 * 60,
@@ -74,14 +78,14 @@ async function handlePaperRun(context) {
         scans.length,
         opened.length,
         closed.length,
-        "server-paper-run-with-archive-edge-correlation-guard-freshness"
+        "server-paper-run-with-archive-edge-correlation-freshness-mtf-btc"
       )
       .run();
 
     return json({
       ok: true,
       source: "server-paper-engine",
-      version: "archive-edge-v4-freshness-guard",
+      version: "archive-edge-v5-server-mtf-guard-btc",
       runId,
       timeframe,
       scannedPairs: scans.length,
@@ -89,7 +93,7 @@ async function handlePaperRun(context) {
       closed: closed.length,
       openBefore: openBefore.length,
       openAfter: openAfterClose.length + opened.length,
-      topScans: scans.slice(0, 8).map((s) => ({
+      topScans: scans.slice(0, 10).map((s) => ({
         pair: s.pair,
         direction: s.direction,
         ultraScore: s.ultraScore,
@@ -245,7 +249,8 @@ async function scanAllPairs(db, timeframe, archiveStats) {
         reason: "Not enough candles",
         ultraScore: 0,
         archiveEdgeScore: 50,
-        archiveConfidence: 0
+        archiveConfidence: 0,
+        candleAgeMinutes: null
       });
       continue;
     }
@@ -363,6 +368,7 @@ function buildScan(pair, timeframe, candles, pairArchiveStats) {
   const riskScore = clamp(
     74 -
       (pair === "XAUUSD" ? 8 : 0) -
+      (pair === "BTCUSD" ? 10 : 0) -
       (pair.startsWith("GBP") ? 2 : 0),
     1,
     99
@@ -370,9 +376,12 @@ function buildScan(pair, timeframe, candles, pairArchiveStats) {
 
   const session = inferSession(new Date());
   const hour = inferHour(new Date());
-  const sessionScore = scoreSession();
+  const sessionScore = scoreSession(pair);
 
-  const rr = pair === "XAUUSD" ? 2.2 : 2.0;
+  const rr =
+    pair === "XAUUSD" ? 2.2 :
+    pair === "BTCUSD" ? 2.1 :
+    2.0;
 
   const direction =
     trendScore >= 55 && timingScore >= 50
@@ -408,9 +417,31 @@ function buildScan(pair, timeframe, candles, pairArchiveStats) {
     );
   }
 
+  if (pair === "BTCUSD") {
+    ultraScore = clamp(
+      trendScore * 0.24 +
+        timingScore * 0.22 +
+        riskScore * 0.10 +
+        sessionScore * 0.10 +
+        archiveEdge * 0.20 +
+        clamp(rr * 26, 1, 99) * 0.14,
+      1,
+      99
+    );
+  }
+
+  const atrMultiplier =
+    pair === "XAUUSD" ? 1.55 :
+    pair === "BTCUSD" ? 1.85 :
+    1.4;
+
+  const fallbackRiskDistance =
+    pair === "BTCUSD" ? current * 0.006 :
+    current * 0.002;
+
   const riskDistance = atr14 > 0
-    ? atr14 * (pair === "XAUUSD" ? 1.55 : 1.4)
-    : current * 0.002;
+    ? atr14 * atrMultiplier
+    : fallbackRiskDistance;
 
   const stopLoss =
     direction === "sell"
@@ -451,12 +482,18 @@ function buildScan(pair, timeframe, candles, pairArchiveStats) {
     archiveDirectionWinRate: archive.directionWinRate,
     archiveDirectionExpectancy: archive.directionExpectancy,
     rsi14: round(rsi14, 2),
-    atr14,
+    atr14: roundByPair(atr14, pair),
     rr,
     stopLoss: roundByPair(stopLoss, pair),
     takeProfit: roundByPair(takeProfit, pair),
     allowed,
-    status: allowed ? (pair === "XAUUSD" ? "VALID GOLD SERVER" : "VALID SERVER") : "BLOCKED",
+    status: allowed
+      ? pair === "XAUUSD"
+        ? "VALID GOLD SERVER"
+        : pair === "BTCUSD"
+          ? "VALID BTC SERVER"
+          : "VALID SERVER"
+      : "BLOCKED",
     reason: allowed
       ? "Server setup accepted with archive edge"
       : archiveBad
@@ -647,6 +684,15 @@ async function openNewTrades(db, scans, currentOpenTrades) {
       continue;
     }
 
+    const mtfGuard = await getServerMtfGuard(db, scan);
+
+    if (!mtfGuard.allowed) {
+      continue;
+    }
+
+    scan.mtfGuardScore = mtfGuard.score;
+    scan.mtfGuardLabel = mtfGuard.label;
+
     const trade = createOpenTrade(scan, false);
     await insertOpenTrade(db, trade);
 
@@ -675,9 +721,16 @@ async function openNewTrades(db, scans, currentOpenTrades) {
       })[0];
 
     if (exploration) {
-      const trade = createOpenTrade(exploration, true);
-      await insertOpenTrade(db, trade);
-      opened.push(trade);
+      const mtfGuard = await getServerMtfGuard(db, exploration);
+
+      if (mtfGuard.allowed) {
+        exploration.mtfGuardScore = mtfGuard.score;
+        exploration.mtfGuardLabel = mtfGuard.label;
+
+        const trade = createOpenTrade(exploration, true);
+        await insertOpenTrade(db, trade);
+        opened.push(trade);
+      }
     }
   }
 
@@ -706,6 +759,7 @@ function wouldOverloadRiskGroup(pair, currentGroups) {
     const current = Number(currentGroups[group] || 0);
 
     if (group === "GOLD_USD" && current >= 1) return true;
+    if (group === "BTC_USD" && current >= 1) return true;
     if (group === "USD" && current >= 2) return true;
     if (group === "EUR" && current >= 2) return true;
     if (group === "GBP" && current >= 2) return true;
@@ -726,8 +780,183 @@ function getPairRiskGroups(pair) {
   if (p.includes("JPY")) groups.push("JPY");
   if (p.includes("AUD") || p.includes("NZD")) groups.push("AUD_NZD");
   if (p === "XAUUSD") groups.push("GOLD_USD");
+  if (p === "BTCUSD") groups.push("BTC_USD");
 
   return groups;
+}
+
+async function getServerMtfGuard(db, scan) {
+  if (!SERVER_MTF_GUARD_ENABLED) {
+    return {
+      allowed: true,
+      score: 100,
+      label: "MTF guard disabled"
+    };
+  }
+
+  const pair = String(scan.pair || "").toUpperCase();
+  const timeframe = String(scan.timeframe || "M15").toUpperCase();
+  const signal = String(scan.signal || "").toUpperCase();
+  const ultraScore = Number(scan.ultraScore || 0);
+
+  if (!pair || signal === "WAIT") {
+    return {
+      allowed: false,
+      score: 0,
+      label: "No signal for MTF guard"
+    };
+  }
+
+  const higherTimeframes = getHigherTimeframesForGuard(timeframe);
+
+  if (!higherTimeframes.length) {
+    return {
+      allowed: true,
+      score: 70,
+      label: "No higher timeframe required"
+    };
+  }
+
+  const checks = [];
+
+  for (const higherTimeframe of higherTimeframes) {
+    const candles = await getCandles(db, pair, higherTimeframe);
+
+    if (candles.length < 40) {
+      checks.push({
+        timeframe: higherTimeframe,
+        signal: "WAIT",
+        score: 0,
+        fresh: false,
+        reason: "Not enough higher timeframe candles"
+      });
+      continue;
+    }
+
+    const freshness = getCandleFreshness(candles, higherTimeframe);
+
+    if (!freshness.fresh) {
+      checks.push({
+        timeframe: higherTimeframe,
+        signal: "WAIT",
+        score: 0,
+        fresh: false,
+        reason: `Stale ${higherTimeframe} data`
+      });
+      continue;
+    }
+
+    checks.push(buildMtfSignal(pair, higherTimeframe, candles));
+  }
+
+  const freshChecks = checks.filter((check) => check.fresh);
+
+  if (!freshChecks.length) {
+    return {
+      allowed: ultraScore >= SERVER_MTF_STRONG_OVERRIDE_SCORE,
+      score: ultraScore >= SERVER_MTF_STRONG_OVERRIDE_SCORE ? 60 : 0,
+      label: ultraScore >= SERVER_MTF_STRONG_OVERRIDE_SCORE
+        ? "Strong setup override without fresh MTF"
+        : "No fresh MTF confirmation"
+    };
+  }
+
+  const same = freshChecks.filter((check) => check.signal === signal);
+  const opposite = freshChecks.filter((check) =>
+    (signal === "BUY" && check.signal === "SELL") ||
+    (signal === "SELL" && check.signal === "BUY")
+  );
+
+  const avgScore =
+    freshChecks.reduce((sum, check) => sum + Number(check.score || 0), 0) /
+    Math.max(1, freshChecks.length);
+
+  const sameRatio = same.length / Math.max(1, freshChecks.length);
+  const oppositePenalty = opposite.length * 24;
+
+  const score = Math.round(
+    clamp(
+      avgScore * 0.55 +
+        sameRatio * 35 +
+        Math.min(20, ultraScore * 0.15) -
+        oppositePenalty,
+      0,
+      100
+    )
+  );
+
+  if (opposite.length && ultraScore < SERVER_MTF_STRONG_OVERRIDE_SCORE) {
+    return {
+      allowed: false,
+      score,
+      label: `MTF opposite direction on ${opposite.map((x) => x.timeframe).join(", ")}`
+    };
+  }
+
+  if (score < SERVER_MTF_MIN_SCORE) {
+    return {
+      allowed: false,
+      score,
+      label: `MTF guard score too weak: ${score}/100`
+    };
+  }
+
+  return {
+    allowed: true,
+    score,
+    label: `MTF confirmed: ${same.map((x) => x.timeframe).join(", ") || "partial"}`
+  };
+}
+
+function getHigherTimeframesForGuard(timeframe) {
+  if (timeframe === "M5") return ["M15", "H1"];
+  if (timeframe === "M15") return ["H1", "H4"];
+  if (timeframe === "H1") return ["H4"];
+  return [];
+}
+
+function buildMtfSignal(pair, timeframe, candles) {
+  const closes = candles.map((c) => c.close);
+
+  const current = closes.at(-1);
+  const ema20Value = ema(closes, 20);
+  const ema50Value = ema(closes, 50);
+  const rsi14Value = rsi(closes, 14);
+  const momentum = computeMomentum(closes, 12);
+
+  const bullish =
+    ema20Value > ema50Value &&
+    current > ema20Value &&
+    momentum > 0 &&
+    rsi14Value >= 45;
+
+  const bearish =
+    ema20Value < ema50Value &&
+    current < ema20Value &&
+    momentum < 0 &&
+    rsi14Value <= 55;
+
+  const signal = bullish ? "BUY" : bearish ? "SELL" : "WAIT";
+
+  const score = clamp(
+    50 +
+      (ema20Value > ema50Value ? 14 : -14) +
+      (current > ema20Value ? 8 : -8) +
+      (momentum > 0 ? 8 : -8) +
+      (rsi14Value >= 43 && rsi14Value <= 67 ? 8 : -4),
+    1,
+    99
+  );
+
+  return {
+    pair,
+    timeframe,
+    signal,
+    score: Math.round(score),
+    fresh: true,
+    rsi14: round(rsi14Value, 2),
+    momentum: round(momentum, 3)
+  };
 }
 
 function createOpenTrade(scan, exploration = false) {
@@ -753,7 +982,9 @@ function createOpenTrade(scan, exploration = false) {
     archiveEdgeScore: scan.archiveEdgeScore,
     session: inferSession(now),
     hour: inferHour(now),
-    modelTag: exploration ? "SERVER_EXPLORATION" : scan.status,
+    modelTag: exploration
+      ? `SERVER_EXPLORATION_MTF_${Math.round(scan.mtfGuardScore || 0)}`
+      : `${scan.status}_MTF_${Math.round(scan.mtfGuardScore || 0)}`,
     source: "server-paper"
   };
 }
@@ -1001,8 +1232,15 @@ function computeMomentum(values, lookback = 12) {
   return ((current - past) / past) * 100;
 }
 
-function scoreSession() {
+function scoreSession(pair = "") {
   const hour = inferHour(new Date());
+  const p = String(pair || "").toUpperCase();
+
+  if (p === "BTCUSD") {
+    if (hour >= 13 && hour < 23) return 66;
+    if (hour >= 1 && hour < 8) return 58;
+    return 54;
+  }
 
   if (hour >= 14 && hour < 18) return 68;
   if (hour >= 9 && hour < 14) return 62;
@@ -1047,6 +1285,7 @@ function roundByPair(value, pair) {
   if (!Number.isFinite(n)) return 0;
 
   if (pair === "XAUUSD") return Number(n.toFixed(2));
+  if (pair === "BTCUSD") return Number(n.toFixed(2));
   if (String(pair).includes("JPY")) return Number(n.toFixed(3));
 
   return Number(n.toFixed(5));
