@@ -1,114 +1,88 @@
-const CORE_PAIRS = [
-  "XAUUSD",
-  "EURUSD",
-  "GBPUSD",
-  "USDJPY"
+const PAIRS = [
+  "EURUSD", "GBPUSD", "USDJPY", "USDCHF", "USDCAD", "AUDUSD", "NZDUSD",
+  "EURGBP", "EURJPY", "EURCHF", "EURCAD", "EURAUD", "EURNZD",
+  "GBPJPY", "GBPCHF", "GBPCAD", "GBPAUD", "GBPNZD",
+  "AUDJPY", "AUDCAD", "AUDCHF", "AUDNZD",
+  "NZDJPY", "NZDCAD",
+  "XAUUSD", "BTCUSD"
 ];
 
-const ROTATION_GROUPS = [
-  ["USDCHF", "USDCAD"],
-  ["AUDUSD", "NZDUSD"],
-  ["EURGBP", "EURJPY"],
-  ["EURCHF", "EURCAD"],
-  ["EURAUD", "EURNZD"],
-  ["GBPJPY", "GBPCHF"],
-  ["GBPCAD", "GBPAUD"],
-  ["GBPNZD", "AUDJPY"],
-  ["AUDCAD", "AUDCHF"],
-  ["AUDNZD", "NZDJPY"],
-  ["NZDCAD"]
-];
-
-const DEFAULT_TIMEFRAMES = ["M15"];
+const ROTATION_GROUPS = 11;
 const OUTPUT_SIZE = 200;
-const WRITE_CHUNK = 100;
+
+const TIMEFRAME_TO_PROVIDER_INTERVAL = {
+  M5: "5min",
+  M15: "15min",
+  H1: "1h",
+  H4: "4h"
+};
 
 export async function onRequestGet(context) {
-  return handleSync(context);
+  return handleSyncMarket(context);
 }
 
 export async function onRequestPost(context) {
-  return handleSync(context);
+  return handleSyncMarket(context);
 }
 
-async function handleSync(context) {
+async function handleSyncMarket(context) {
   try {
     const env = context.env || {};
     const db = env.DB;
-    const apiKey = env.TWELVEDATA_API_KEY || "";
-    const syncSecret = env.SYNC_SECRET || "";
+    const secret = env.SYNC_SECRET || "";
+    const apiKey =
+      env.TWELVE_DATA_API_KEY ||
+      env.TWELVEDATA_API_KEY ||
+      env.TWELVE_API_KEY ||
+      "";
 
     if (!db) {
       return json({ ok: false, error: "Missing DB binding" }, 500);
     }
 
     if (!apiKey) {
-      return json({ ok: false, error: "Missing TWELVEDATA_API_KEY" }, 500);
+      return json({ ok: false, error: "Missing Twelve Data API key" }, 500);
     }
 
-    if (!isAuthorized(context.request, syncSecret)) {
+    if (!isAuthorized(context.request, secret)) {
       return json({ ok: false, error: "Unauthorized" }, 401);
     }
 
     const url = new URL(context.request.url);
+    const body = context.request.method === "POST" ? await safeJson(context.request) : {};
 
-    const requestedPair = cleanPair(url.searchParams.get("pair"));
-    const requestedTimeframe = normalizeTimeframe(url.searchParams.get("timeframe"));
-    const requestedGroup = normalizeGroup(url.searchParams.get("group"));
-    const includeCore = String(url.searchParams.get("includeCore") || "1") !== "0";
+    const timeframe =
+      normalizeTimeframe(url.searchParams.get("timeframe") || body.timeframe) ||
+      "M15";
 
-    const timeframes = requestedTimeframe ? [requestedTimeframe] : DEFAULT_TIMEFRAMES;
-
-    let pairs = [];
-
-    if (requestedPair) {
-      pairs = [requestedPair];
-    } else {
-      const groupPairs = requestedGroup ? getPairsForGroup(requestedGroup) : getPairsForGroup(1);
-      pairs = includeCore
-        ? dedupeStrings([...CORE_PAIRS, ...groupPairs])
-        : groupPairs;
-    }
+    const group = normalizeGroup(url.searchParams.get("group") || body.group);
+    const pairs = getPairsForGroup(group);
 
     const results = [];
 
     for (const pair of pairs) {
-      for (const timeframe of timeframes) {
-        try {
-          const inserted = await syncOnePair(db, apiKey, pair, timeframe);
-          results.push({
-            pair,
-            timeframe,
-            ok: true,
-            inserted
-          });
-        } catch (error) {
-          results.push({
-            pair,
-            timeframe,
-            ok: false,
-            error: String(error?.message || error || "sync-error")
-          });
-        }
-      }
+      const result = await syncPair(db, apiKey, pair, timeframe);
+      results.push(result);
+
+      await sleep(250);
     }
 
-    const success = results.filter((r) => r.ok).length;
-    const failed = results.length - success;
-    const insertedTotal = results.reduce((sum, r) => sum + Number(r.inserted || 0), 0);
+    const inserted = results.reduce((sum, row) => sum + Number(row.inserted || 0), 0);
+    const failed = results.filter((row) => !row.ok).length;
 
     return json({
-      ok: true,
-      mode: requestedPair ? "single-pair" : "rotation-group",
-      group: requestedPair ? null : (requestedGroup || 1),
-      groupCount: ROTATION_GROUPS.length,
-      pairsSynced: pairs,
-      totalJobs: results.length,
-      success,
+      ok: failed === 0,
+      source: "sync-market",
+      version: "twelve-data-d1-btc-v2",
+      timeframe,
+      providerInterval: TIMEFRAME_TO_PROVIDER_INTERVAL[timeframe],
+      group,
+      rotationGroups: ROTATION_GROUPS,
+      requestedPairs: pairs.length,
+      inserted,
       failed,
-      insertedTotal,
       results
-    });
+    }, failed === 0 ? 200 : 207);
   } catch (error) {
     return json({
       ok: false,
@@ -117,200 +91,229 @@ async function handleSync(context) {
   }
 }
 
-async function syncOnePair(db, apiKey, pair, timeframe) {
-  const symbolMeta = mapSymbolForProvider(pair);
+async function syncPair(db, apiKey, pair, timeframe) {
+  try {
+    const providerSymbol = toProviderSymbol(pair);
+    const interval = TIMEFRAME_TO_PROVIDER_INTERVAL[timeframe] || "15min";
 
-  if (!symbolMeta) {
-    throw new Error(`Unsupported pair ${pair}`);
-  }
+    const url = new URL("https://api.twelvedata.com/time_series");
+    url.searchParams.set("symbol", providerSymbol);
+    url.searchParams.set("interval", interval);
+    url.searchParams.set("outputsize", String(OUTPUT_SIZE));
+    url.searchParams.set("apikey", apiKey);
+    url.searchParams.set("format", "JSON");
 
-  const interval = mapTimeframeToProvider(timeframe);
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        Accept: "application/json"
+      }
+    });
 
-  const apiUrl =
-    `https://api.twelvedata.com/time_series` +
-    `?symbol=${encodeURIComponent(symbolMeta.providerSymbol)}` +
-    `&interval=${encodeURIComponent(interval)}` +
-    `&outputsize=${OUTPUT_SIZE}` +
-    `&apikey=${encodeURIComponent(apiKey)}`;
+    const data = await response.json().catch(() => null);
 
-  const response = await fetch(apiUrl, {
-    method: "GET",
-    headers: {
-      Accept: "application/json"
+    if (!response.ok) {
+      return {
+        ok: false,
+        pair,
+        providerSymbol,
+        timeframe,
+        error: `Provider HTTP ${response.status}`
+      };
     }
-  });
 
-  if (!response.ok) {
-    throw new Error(`Twelve Data HTTP ${response.status}`);
-  }
+    if (!data || data.status === "error" || data.code) {
+      return {
+        ok: false,
+        pair,
+        providerSymbol,
+        timeframe,
+        error: data?.message || data?.status || "Provider error"
+      };
+    }
 
-  const data = await response.json();
+    const values = Array.isArray(data.values) ? data.values : [];
 
-  if (data.status === "error") {
-    throw new Error(data.message || "Twelve Data error");
-  }
+    if (!values.length) {
+      return {
+        ok: false,
+        pair,
+        providerSymbol,
+        timeframe,
+        error: "No candles returned"
+      };
+    }
 
-  if (!Array.isArray(data.values) || !data.values.length) {
-    throw new Error("No candle values returned");
-  }
+    const candles = values
+      .map((row) => normalizeProviderCandle(row))
+      .filter(Boolean)
+      .sort((a, b) => a.ts - b.ts);
 
-  const candles = data.values
-    .map((row) => ({
+    let inserted = 0;
+
+    for (const candle of candles) {
+      await db
+        .prepare(`
+          INSERT OR REPLACE INTO market_candles (
+            pair,
+            timeframe,
+            ts,
+            open,
+            high,
+            low,
+            close
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        `)
+        .bind(
+          pair,
+          timeframe,
+          candle.ts,
+          candle.open,
+          candle.high,
+          candle.low,
+          candle.close
+        )
+        .run();
+
+      inserted += 1;
+    }
+
+    const last = candles.at(-1) || null;
+
+    return {
+      ok: true,
+      pair,
+      providerSymbol,
+      timeframe,
+      inserted,
+      firstTs: candles[0]?.ts || null,
+      lastTs: last?.ts || null,
+      lastClose: last?.close || null
+    };
+  } catch (error) {
+    return {
+      ok: false,
       pair,
       timeframe,
-      ts: toUnixSeconds(row.datetime),
-      open: roundPrice(Number(row.open), pair),
-      high: roundPrice(Number(row.high), pair),
-      low: roundPrice(Number(row.low), pair),
-      close: roundPrice(Number(row.close), pair),
-      source: "twelvedata-live"
-    }))
-    .filter((c) =>
-      Number.isFinite(c.ts) &&
-      Number.isFinite(c.open) &&
-      Number.isFinite(c.high) &&
-      Number.isFinite(c.low) &&
-      Number.isFinite(c.close) &&
-      c.ts > 0
-    )
-    .sort((a, b) => a.ts - b.ts);
-
-  if (!candles.length) {
-    throw new Error("No valid candles parsed");
+      error: String(error?.message || error || "sync-pair-error")
+    };
   }
-
-  let inserted = 0;
-
-  for (let i = 0; i < candles.length; i += WRITE_CHUNK) {
-    const chunk = candles.slice(i, i + WRITE_CHUNK);
-
-    const statements = chunk.map((candle) =>
-      db.prepare(`
-        INSERT OR REPLACE INTO market_candles
-        (pair, timeframe, ts, open, high, low, close, source)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(
-        candle.pair,
-        candle.timeframe,
-        candle.ts,
-        candle.open,
-        candle.high,
-        candle.low,
-        candle.close,
-        candle.source
-      )
-    );
-
-    await db.batch(statements);
-    inserted += chunk.length;
-  }
-
-  return inserted;
 }
 
-function getPairsForGroup(groupNumber) {
-  const index = groupNumber - 1;
-  return ROTATION_GROUPS[index] || [];
+function normalizeProviderCandle(row) {
+  const ts = parseProviderTimestamp(row.datetime || row.date || row.timestamp);
+
+  const open = Number(row.open);
+  const high = Number(row.high);
+  const low = Number(row.low);
+  const close = Number(row.close);
+
+  if (
+    !Number.isFinite(ts) ||
+    !Number.isFinite(open) ||
+    !Number.isFinite(high) ||
+    !Number.isFinite(low) ||
+    !Number.isFinite(close) ||
+    close <= 0
+  ) {
+    return null;
+  }
+
+  return {
+    ts,
+    open,
+    high,
+    low,
+    close
+  };
+}
+
+function parseProviderTimestamp(value) {
+  if (!value) return 0;
+
+  if (typeof value === "number") {
+    return value > 1000000000000 ? Math.floor(value / 1000) : Math.floor(value);
+  }
+
+  const raw = String(value).trim();
+
+  if (/^\d+$/.test(raw)) {
+    const n = Number(raw);
+    return n > 1000000000000 ? Math.floor(n / 1000) : Math.floor(n);
+  }
+
+  const isoLike = raw.includes("T") ? raw : raw.replace(" ", "T");
+  const hasZone = /Z$|[+-]\d{2}:\d{2}$/.test(isoLike);
+  const ms = Date.parse(hasZone ? isoLike : `${isoLike}Z`);
+
+  if (!Number.isFinite(ms)) return 0;
+
+  return Math.floor(ms / 1000);
+}
+
+function getPairsForGroup(group) {
+  const g = Number(group || 1);
+
+  return PAIRS.filter((_, index) => {
+    return index % ROTATION_GROUPS === g - 1;
+  });
 }
 
 function normalizeGroup(value) {
-  const n = Number(value);
-  if (!Number.isInteger(n)) return 0;
-  if (n < 1 || n > ROTATION_GROUPS.length) return 0;
-  return n;
-}
+  const n = Number(value || 1);
 
-function dedupeStrings(values) {
-  return [...new Set(values.map((v) => String(v).trim()).filter(Boolean))];
-}
+  if (!Number.isFinite(n)) return 1;
+  if (n < 1) return 1;
+  if (n > ROTATION_GROUPS) return ROTATION_GROUPS;
 
-function isAuthorized(request, syncSecret) {
-  if (!syncSecret) return true;
-
-  const auth = request.headers.get("authorization") || "";
-  const bearer = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-  const url = new URL(request.url);
-  const queryToken = String(url.searchParams.get("token") || "").trim();
-
-  return bearer === syncSecret || queryToken === syncSecret;
-}
-
-function mapSymbolForProvider(pair) {
-  const map = {
-    EURUSD: "EUR/USD",
-    GBPUSD: "GBP/USD",
-    USDJPY: "USD/JPY",
-    USDCHF: "USD/CHF",
-    USDCAD: "USD/CAD",
-    AUDUSD: "AUD/USD",
-    NZDUSD: "NZD/USD",
-
-    EURGBP: "EUR/GBP",
-    EURJPY: "EUR/JPY",
-    EURCHF: "EUR/CHF",
-    EURCAD: "EUR/CAD",
-    EURAUD: "EUR/AUD",
-    EURNZD: "EUR/NZD",
-
-    GBPJPY: "GBP/JPY",
-    GBPCHF: "GBP/CHF",
-    GBPCAD: "GBP/CAD",
-    GBPAUD: "GBP/AUD",
-    GBPNZD: "GBP/NZD",
-
-    AUDJPY: "AUD/JPY",
-    AUDCAD: "AUD/CAD",
-    AUDCHF: "AUD/CHF",
-    AUDNZD: "AUD/NZD",
-
-    NZDJPY: "NZD/JPY",
-    NZDCAD: "NZD/CAD",
-
-    XAUUSD: "XAU/USD"
-  };
-
-  const providerSymbol = map[pair];
-  if (!providerSymbol) return null;
-
-  return {
-    localPair: pair,
-    providerSymbol
-  };
-}
-
-function mapTimeframeToProvider(tf) {
-  if (tf === "M5") return "5min";
-  if (tf === "M15") return "15min";
-  if (tf === "H1") return "1h";
-  if (tf === "H4") return "4h";
-
-  throw new Error(`Unsupported timeframe ${tf}`);
-}
-
-function toUnixSeconds(datetimeValue) {
-  const ms = Date.parse(String(datetimeValue).trim());
-  return Number.isFinite(ms) ? Math.floor(ms / 1000) : 0;
-}
-
-function roundPrice(value, symbol) {
-  if (!Number.isFinite(value)) return 0;
-  if (symbol === "XAUUSD") return Number(value.toFixed(2));
-  if (symbol.includes("JPY")) return Number(value.toFixed(3));
-  return Number(value.toFixed(5));
-}
-
-function cleanPair(value) {
-  const v = String(value || "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "")
-    .trim();
-
-  return v || "";
+  return Math.round(n);
 }
 
 function normalizeTimeframe(value) {
   const tf = String(value || "").toUpperCase().trim();
   return ["M5", "M15", "H1", "H4"].includes(tf) ? tf : "";
+}
+
+function toProviderSymbol(pair) {
+  const p = String(pair || "").toUpperCase().trim();
+
+  if (p === "BTCUSD") return "BTC/USD";
+  if (p === "XAUUSD") return "XAU/USD";
+
+  if (p.length === 6) {
+    return `${p.slice(0, 3)}/${p.slice(3)}`;
+  }
+
+  return p;
+}
+
+function isAuthorized(request, secret) {
+  if (!secret) return true;
+
+  const url = new URL(request.url);
+  const token = String(url.searchParams.get("token") || "").trim();
+  const auth = request.headers.get("authorization") || "";
+  const bearer = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+
+  return token === secret || bearer === secret;
+}
+
+async function safeJson(request) {
+  try {
+    const contentType = request.headers.get("content-type") || "";
+
+    if (!contentType.toLowerCase().includes("application/json")) {
+      return {};
+    }
+
+    return await request.json();
+  } catch {
+    return {};
+  }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function json(data, status = 200) {
@@ -321,4 +324,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-      }
+        }
