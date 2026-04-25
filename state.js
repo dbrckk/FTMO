@@ -6,6 +6,7 @@ export let chart = null;
 export let candleSeries = null;
 
 export const defaultState = {
+  paperHealth: null,
   timeframe: "M15",
   selectedPair: "EURUSD",
   scans: [],
