@@ -1,119 +1,93 @@
 export function clamp(value, min = 0, max = 100) {
   const n = Number(value);
-  if (!Number.isFinite(n)) return min;
+
+  if (!Number.isFinite(n)) {
+    return min;
+  }
+
   return Math.max(min, Math.min(max, n));
 }
 
-export function sanitizeDecision(value) {
-  const v = String(value || "").trim().toUpperCase();
+export function round(value, digits = 2) {
+  const n = Number(value);
 
-  if (["TRADE", "BUY", "SELL", "EXECUTE", "GO"].includes(v)) return "TRADE";
-  if (["NO TRADE", "BLOCK", "BLOCKED", "AVOID"].includes(v)) return "NO TRADE";
-  if (["WAIT", "HOLD", "NEUTRAL"].includes(v)) return "WAIT";
-
-  return v || "WAIT";
-}
-
-export function normalizeCandles(candles = []) {
-  return candles
-    .map((c, index) => ({
-      time: normalizeCandleTime(c.time ?? c.ts ?? c.datetime ?? index + 1),
-      open: Number(c.open || 0),
-      high: Number(c.high || 0),
-      low: Number(c.low || 0),
-      close: Number(c.close || 0)
-    }))
-    .filter((c) =>
-      Number.isFinite(c.time) &&
-      Number.isFinite(c.open) &&
-      Number.isFinite(c.high) &&
-      Number.isFinite(c.low) &&
-      Number.isFinite(c.close) &&
-      c.time > 0
-    )
-    .sort((a, b) => a.time - b.time);
-}
-
-export function normalizeCandleTime(value) {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    if (value > 1e12) return Math.floor(value / 1000);
-    return Math.floor(value);
+  if (!Number.isFinite(n)) {
+    return 0;
   }
 
-  const parsed = Date.parse(String(value).trim());
-  if (Number.isFinite(parsed)) {
-    return Math.floor(parsed / 1000);
-  }
-
-  return 0;
-}
-
-export function setText(id, value) {
-  const el = typeof id === "string" ? document.getElementById(id) : id;
-  if (!el) return;
-  el.textContent = value == null ? "" : String(value);
-}
-
-export function setHTML(id, value) {
-  const el = typeof id === "string" ? document.getElementById(id) : id;
-  if (!el) return;
-  el.innerHTML = value == null ? "" : String(value);
-}
-
-export function setValue(id, value) {
-  const el = typeof id === "string" ? document.getElementById(id) : id;
-  if (!el) return;
-  el.value = value == null ? "" : String(value);
+  return Number(n.toFixed(digits));
 }
 
 export function formatPrice(value, pair = "") {
   const n = Number(value);
-  if (!Number.isFinite(n)) return "-";
 
-  if (pair === "XAUUSD") return n.toFixed(2);
-  if (String(pair).includes("JPY")) return n.toFixed(3);
-  if (Math.abs(n) >= 1000) return n.toFixed(2);
+  if (!Number.isFinite(n)) {
+    return "-";
+  }
+
+  const p = String(pair || "").toUpperCase();
+
+  if (p === "XAUUSD") {
+    return n.toFixed(2);
+  }
+
+  if (p === "BTCUSD") {
+    return n.toFixed(2);
+  }
+
+  if (p.includes("JPY")) {
+    return n.toFixed(3);
+  }
+
   return n.toFixed(5);
 }
 
-export function formatPercent(value, digits = 0) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return "-";
-  return `${n.toFixed(digits)}%`;
+export function setText(id, value) {
+  const el = document.getElementById(id);
+
+  if (!el) return;
+
+  el.textContent = value ?? "";
 }
 
-export function formatNumber(value, digits = 0) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return "-";
-  return n.toFixed(digits);
+export function setValue(id, value) {
+  const el = document.getElementById(id);
+
+  if (!el) return;
+
+  el.value = value ?? "";
 }
 
 export function metricCard(label, value, hint = "") {
   return `
     <div class="metric-card">
       <div class="metric-label">${escapeHtml(label)}</div>
-      <div class="metric-value">${escapeHtml(String(value))}</div>
-      <div class="metric-hint">${escapeHtml(String(hint || ""))}</div>
+      <div class="metric-value">${escapeHtml(value)}</div>
+      <div class="metric-hint">${escapeHtml(hint)}</div>
     </div>
   `;
 }
 
-export function uid(prefix = "id") {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
+export function sanitizeDecision(value) {
+  const raw = String(value || "").trim().toUpperCase();
 
-export function safeArray(value) {
-  return Array.isArray(value) ? value : [];
-}
+  if (
+    raw === "TRADE" ||
+    raw === "BUY" ||
+    raw === "SELL" ||
+    raw === "WAIT" ||
+    raw === "NO TRADE" ||
+    raw === "BLOCKED"
+  ) {
+    return raw;
+  }
 
-export function sum(values = []) {
-  return safeArray(values).reduce((acc, v) => acc + Number(v || 0), 0);
-}
+  if (raw.includes("BUY")) return "BUY";
+  if (raw.includes("SELL")) return "SELL";
+  if (raw.includes("TRADE")) return "TRADE";
+  if (raw.includes("BLOCK")) return "BLOCKED";
 
-export function average(values = [], fallback = 0) {
-  const arr = safeArray(values).map((v) => Number(v)).filter((v) => Number.isFinite(v));
-  if (!arr.length) return fallback;
-  return sum(arr) / arr.length;
+  return "WAIT";
 }
 
 export function escapeHtml(value) {
@@ -123,4 +97,39 @@ export function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
-            }
+}
+
+export function downloadJson(filename, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json"
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  URL.revokeObjectURL(url);
+}
+
+export function safeNumber(value, fallback = 0) {
+  const n = Number(value);
+
+  return Number.isFinite(n) ? n : fallback;
+}
+
+export function average(values) {
+  const nums = values.map(Number).filter(Number.isFinite);
+
+  if (!nums.length) return 0;
+
+  return nums.reduce((sum, value) => sum + value, 0) / nums.length;
+}
+
+export function nowIso() {
+  return new Date().toISOString();
+  }
