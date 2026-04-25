@@ -1,16 +1,17 @@
-name: Sync market candles to D1
+name: Sync market candles
 
 on:
   workflow_dispatch:
     inputs:
-      group:
-        description: "Rotation group number 1-11. Leave empty for auto rotation."
-        required: false
-        default: ""
       timeframe:
         description: "M5, M15, H1, H4, or AUTO"
         required: false
         default: "AUTO"
+      group:
+        description: "1 to 11, or AUTO"
+        required: false
+        default: "AUTO"
+
   schedule:
     - cron: "*/15 * * * *"
 
@@ -34,51 +35,72 @@ jobs:
           echo "SITE_URL present"
           echo "SYNC_SECRET present"
 
-      - name: Compute rotation group and timeframe
+      - name: Compute sync timeframe and group
         id: vars
         shell: bash
         run: |
-          MANUAL_GROUP="${{ github.event.inputs.group }}"
           MANUAL_TIMEFRAME="${{ github.event.inputs.timeframe }}"
+          MANUAL_GROUP="${{ github.event.inputs.group }}"
 
           SLOT=$(( $(date -u +%s) / 900 ))
-
-          if [ -n "$MANUAL_GROUP" ]; then
-            GROUP="$MANUAL_GROUP"
-          else
-            GROUP=$(( (SLOT % 11) + 1 ))
-          fi
 
           if [ -n "$MANUAL_TIMEFRAME" ] && [ "$MANUAL_TIMEFRAME" != "AUTO" ]; then
             TIMEFRAME="$MANUAL_TIMEFRAME"
           else
-            MOD=$(( SLOT % 12 ))
+            MOD=$(( SLOT % 16 ))
 
             if [ "$MOD" -eq 0 ]; then
               TIMEFRAME="H4"
-            elif [ "$MOD" -eq 4 ] || [ "$MOD" -eq 8 ]; then
+            elif [ "$MOD" -eq 4 ] || [ "$MOD" -eq 8 ] || [ "$MOD" -eq 12 ]; then
               TIMEFRAME="H1"
             else
               TIMEFRAME="M15"
             fi
           fi
 
-          echo "group=$GROUP" >> "$GITHUB_OUTPUT"
+          if [ -n "$MANUAL_GROUP" ] && [ "$MANUAL_GROUP" != "AUTO" ]; then
+            GROUP="$MANUAL_GROUP"
+          else
+            GROUP=$(( (SLOT % 11) + 1 ))
+          fi
+
           echo "timeframe=$TIMEFRAME" >> "$GITHUB_OUTPUT"
+          echo "group=$GROUP" >> "$GITHUB_OUTPUT"
 
-          echo "Using group $GROUP"
           echo "Using timeframe $TIMEFRAME"
+          echo "Using group $GROUP"
 
-      - name: Call Cloudflare sync endpoint
+      - name: Sync market group
         run: |
           HTTP_CODE=$(curl -sS \
             -o response.json \
             -w "%{http_code}" \
-            "${{ secrets.SITE_URL }}/api/sync-market?token=${{ secrets.SYNC_SECRET }}&group=${{ steps.vars.outputs.group }}&timeframe=${{ steps.vars.outputs.timeframe }}")
+            "${{ secrets.SITE_URL }}/api/sync-market?token=${{ secrets.SYNC_SECRET }}&timeframe=${{ steps.vars.outputs.timeframe }}&group=${{ steps.vars.outputs.group }}")
 
           echo "HTTP_CODE=$HTTP_CODE"
           cat response.json || true
 
           if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "sync-market HTTP error"
+            exit 1
+          fi
+
+          OK=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('response.json','utf8')); console.log(j.ok === true ? 'true' : 'false')")
+          INSERTED=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('response.json','utf8')); console.log(j.inserted ?? 0)")
+          FAILED=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('response.json','utf8')); console.log(j.failed ?? 0)")
+          REQUESTED=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('response.json','utf8')); console.log(j.requestedPairs ?? 0)")
+
+          echo "OK=$OK"
+          echo "INSERTED=$INSERTED"
+          echo "FAILED=$FAILED"
+          echo "REQUESTED_PAIRS=$REQUESTED"
+
+          if [ "$OK" != "true" ]; then
+            echo "sync-market returned ok=false"
+            exit 1
+          fi
+
+          if [ "$INSERTED" -le 0 ]; then
+            echo "No candles inserted"
             exit 1
           fi
