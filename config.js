@@ -36,7 +36,6 @@ export const PAIRS = [
 ];
 
 export const API = {
-  paperHealth: "/api/paper-health"
   market: "/api/market-data",
   ml: "/api/ml-score",
   vectorbt: "/api/vectorbt-score",
@@ -45,5 +44,6 @@ export const API = {
   correlation: "/api/correlation-matrix",
   portfolio: "/api/portfolio-risk",
   archiveStats: "/api/archive-stats",
-  paperTrades: "/api/paper-trades"
+  paperTrades: "/api/paper-trades",
+  paperHealth: "/api/paper-health"
 };
