@@ -45,5 +45,6 @@ export const API = {
   portfolio: "/api/portfolio-risk",
   archiveStats: "/api/archive-stats",
   paperTrades: "/api/paper-trades",
-  paperHealth: "/api/paper-health"
+  paperHealth: "/api/paper-health",
+  timeframeSummary: "/api/timeframe-summary"
 };
