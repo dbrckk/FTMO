@@ -41,12 +41,16 @@ import { runPaperEngine } from "./paper-engine.js";
 
 let paperLoop = null;
 let refreshInFlight = false;
+let appStarted = false;
 
 const SCAN_TIMEOUT_MS = 15000;
 const API_TIMEOUT_MS = 12000;
 const SCAN_BATCH_SIZE = 3;
 
-document.addEventListener("DOMContentLoaded", () => {
+function startApp() {
+  if (appStarted) return;
+  appStarted = true;
+
   try {
     cacheEls();
     bindEvents();
@@ -68,7 +72,15 @@ document.addEventListener("DOMContentLoaded", () => {
   } catch (error) {
     showFatalError("App init failed", error);
   }
-});
+}
+
+function bootstrapApp() {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", startApp, { once: true });
+  } else {
+    startApp();
+  }
+}
 
 function setupChartSafe() {
   try {
@@ -620,5 +632,8 @@ function escapeHtml(value) {
 
 window.__APP__ = {
   refreshAll,
+  startApp,
   state: appState
 };
+
+bootstrapApp();
