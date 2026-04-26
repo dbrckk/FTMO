@@ -1,0 +1,108 @@
+name: Setup alerts
+
+on:
+  workflow_dispatch:
+    inputs:
+      timeframe:
+        description: "M15, H1, H4"
+        required: false
+        default: "M15"
+      dryRun:
+        description: "1 = test sans Telegram, 0 = envoie Telegram"
+        required: false
+        default: "1"
+
+  schedule:
+    - cron: "3,18,33,48 * * * *"
+
+jobs:
+  setup-alerts:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check secrets presence
+        run: |
+          if [ -z "${{ secrets.SITE_URL }}" ]; then
+            echo "ERROR: SITE_URL missing"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.SYNC_SECRET }}" ]; then
+            echo "ERROR: SYNC_SECRET missing"
+            exit 1
+          fi
+
+          echo "SITE_URL present"
+          echo "SYNC_SECRET present"
+
+      - name: Prepare variables
+        id: vars
+        shell: bash
+        run: |
+          SITE_URL="${{ secrets.SITE_URL }}"
+          SITE_URL="${SITE_URL%/}"
+
+          TIMEFRAME="${{ github.event.inputs.timeframe }}"
+          DRY_RUN="${{ github.event.inputs.dryRun }}"
+
+          if [ -z "$TIMEFRAME" ]; then
+            TIMEFRAME="M15"
+          fi
+
+          if [ -z "$DRY_RUN" ]; then
+            DRY_RUN="1"
+          fi
+
+          echo "site_url=$SITE_URL" >> "$GITHUB_OUTPUT"
+          echo "timeframe=$TIMEFRAME" >> "$GITHUB_OUTPUT"
+          echo "dry_run=$DRY_RUN" >> "$GITHUB_OUTPUT"
+
+          echo "SITE_URL=$SITE_URL"
+          echo "TIMEFRAME=$TIMEFRAME"
+          echo "DRY_RUN=$DRY_RUN"
+
+      - name: Run setup alerts
+        shell: bash
+        run: |
+          URL="${{ steps.vars.outputs.site_url }}/api/setup-alerts?token=${{ secrets.SYNC_SECRET }}&timeframe=${{ steps.vars.outputs.timeframe }}&dryRun=${{ steps.vars.outputs.dry_run }}"
+
+          HTTP_CODE=$(curl -sS \
+            -o setup_alerts.json \
+            -w "%{http_code}" \
+            "$URL")
+
+          echo "HTTP_CODE=$HTTP_CODE"
+          cat setup_alerts.json || true
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "setup-alerts HTTP error"
+            exit 1
+          fi
+
+          OK=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('setup_alerts.json','utf8')); console.log(j.ok === true ? 'true' : 'false')")
+          SCANNED=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('setup_alerts.json','utf8')); console.log(j.scannedPairs ?? 0)")
+          CANDIDATES=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('setup_alerts.json','utf8')); console.log(j.candidates ?? 0)")
+          SENT=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('setup_alerts.json','utf8')); console.log(j.sent ?? 0)")
+
+          echo "OK=$OK"
+          echo "SCANNED=$SCANNED"
+          echo "CANDIDATES=$CANDIDATES"
+          echo "SENT=$SENT"
+
+          if [ "$OK" != "true" ]; then
+            echo "setup-alerts returned ok=false"
+            exit 1
+          fi
+
+          if [ "$SCANNED" -le 0 ]; then
+            echo "No pairs scanned"
+            exit 1
+          fi
+
+      - name: Summary
+        run: |
+          echo "======================================"
+          echo "SETUP ALERTS DONE"
+          echo "Timeframe: ${{ steps.vars.outputs.timeframe }}"
+          echo "Dry run: ${{ steps.vars.outputs.dry_run }}"
+          echo "======================================"
