@@ -1,6 +1,7 @@
 import { API } from "./config.js";
 import { appState } from "./state.js";
 import { fetchMlScore, fetchVectorbtScore } from "./api.js";
+import { classifySetup } from "./setup-classifier.js";
 
 const MARKET_TIMEOUT_MS = 12000;
 const MIN_CANDLES = 60;
@@ -20,21 +21,28 @@ export async function scanPair(pairEntry) {
     const archive = getArchiveStats(pair);
     const archivePack = applyArchiveLearning(local, archive);
 
-    const ml = await fetchMlScore({
+    const preEnriched = {
       ...local,
-      ...archivePack,
+      ...archivePack
+    };
+
+    const setup = classifySetup(preEnriched);
+
+    const ml = await fetchMlScore({
+      ...preEnriched,
+      ...setup,
       candles
     });
 
     const vectorbt = await fetchVectorbtScore({
-      ...local,
-      ...archivePack,
+      ...preEnriched,
+      ...setup,
       candles
     });
 
     const enriched = {
-      ...local,
-      ...archivePack,
+      ...preEnriched,
+      ...setup,
       mlScore: Number(ml?.mlScore || 50),
       mlConfidenceBand: ml?.confidenceBand || "medium",
       mlNotes: Array.isArray(ml?.notes) ? ml.notes : [],
@@ -45,6 +53,7 @@ export async function scanPair(pairEntry) {
     };
 
     const ultraScore = computeUltraScore(enriched);
+
     const entryQuality = computeEntryQualityScore({
       ...enriched,
       ultraScore
@@ -56,10 +65,7 @@ export async function scanPair(pairEntry) {
       entryQualityScore: entryQuality.score
     });
 
-    const lateEntry = isLateEntry({
-      ...enriched,
-      ultraScore
-    });
+    const lateEntry = Boolean(enriched.lateImpulse || isLateEntry(enriched));
 
     const paperScore = computePaperScore({
       ...enriched,
@@ -102,7 +108,11 @@ export async function scanPair(pairEntry) {
 
       reasons: [
         ...enriched.reasons,
+        ...(enriched.blockers || []).map((reason) => `Blocker: ${reason}`),
+        ...(enriched.setupReasons || []),
         ...entryQuality.reasons.map((reason) => `Entry: ${reason}`),
+        `Setup: ${enriched.setupLabel || enriched.setupType || "-"}`,
+        `Setup quality: ${enriched.setupQualityScore || 0}/100`,
         `Exit pressure: ${exitPressure.score}/100`,
         `Paper score: ${Math.round(paperScore)}/100`,
         decision.reason
@@ -202,6 +212,7 @@ function buildLocalScan(pair, timeframe, candles) {
   const sessionScore = computeSessionScore(pair);
   const executionScore = computeExecutionScore(candles, direction, atr14);
   const smartMoneyScore = computeSmartMoneyScore(candles, direction);
+
   const contextScore = computeContextScore({
     pair,
     timeframe,
@@ -224,14 +235,19 @@ function buildLocalScan(pair, timeframe, candles) {
       ? current - riskDistance * rr
       : current + riskDistance * rr;
 
+  const tp1 =
+    direction === "sell"
+      ? current - riskDistance * 1.05
+      : current + riskDistance * 1.05;
+
   const localScore = clamp(
-    trendScore * 0.25 +
-      timingScore * 0.20 +
+    trendScore * 0.24 +
+      timingScore * 0.18 +
       riskScore * 0.14 +
-      executionScore * 0.15 +
-      smartMoneyScore * 0.10 +
+      executionScore * 0.16 +
+      smartMoneyScore * 0.11 +
       contextScore * 0.08 +
-      sessionScore * 0.08,
+      sessionScore * 0.09,
     1,
     99
   );
@@ -240,6 +256,7 @@ function buildLocalScan(pair, timeframe, candles) {
     pair,
     timeframe,
     candles,
+    candleTime: Number(candles.at(-1)?.time || 0),
     current: roundByPair(current, pair),
     previous: roundByPair(previous, pair),
 
@@ -266,6 +283,7 @@ function buildLocalScan(pair, timeframe, candles) {
     rr,
     stopLoss: roundByPair(stopLoss, pair),
     takeProfit: roundByPair(takeProfit, pair),
+    tp1: roundByPair(tp1, pair),
 
     reasons: buildBaseReasons({
       signal,
@@ -317,24 +335,36 @@ function applyArchiveLearning(scan, archive) {
 
 function computeUltraScore(scan) {
   let score = clamp(
-    Number(scan.localScore || 50) * 0.22 +
-      Number(scan.mlScore || 50) * 0.18 +
-      Number(scan.vectorbtScore || 55) * 0.16 +
-      Number(scan.trendScore || 50) * 0.12 +
-      Number(scan.timingScore || 50) * 0.10 +
+    Number(scan.localScore || 50) * 0.18 +
+      Number(scan.mlScore || 50) * 0.16 +
+      Number(scan.vectorbtScore || 55) * 0.14 +
+      Number(scan.trendScore || 50) * 0.10 +
+      Number(scan.timingScore || 50) * 0.09 +
       Number(scan.executionScore || 50) * 0.10 +
       Number(scan.riskScore || 50) * 0.06 +
-      Number(scan.archiveEdgeScore || 50) * 0.06,
+      Number(scan.archiveEdgeScore || 50) * 0.07 +
+      Number(scan.setupQualityScore || 50) * 0.10,
     1,
     99
   );
 
   if (scan.signal === "WAIT") score -= 16;
   if (scan.archivePenalty) score -= 10;
+  if (scan.lateImpulse) score -= 14;
+
+  if (scan.setupType === "trend-pullback") score += 5;
+  if (scan.setupType === "breakout-continuation") score += 3;
+  if (scan.setupType === "liquidity-rejection") score += 3;
+  if (scan.setupType === "range-signal") score -= 8;
+  if (scan.setupType === "weak-signal") score -= 10;
+  if (scan.setupType === "late-impulse") score -= 18;
+
+  if (scan.volatilityRegime === "normal") score += 3;
+  if (scan.volatilityRegime === "elevated") score -= 6;
+  if (scan.volatilityRegime === "extreme") score -= 15;
 
   if (scan.pair === "BTCUSD") {
     score -= 3;
-
     if (scan.timeframe === "H1" || scan.timeframe === "H4") score += 3;
     if (scan.volatility >= 0.003 && scan.volatility <= 0.02) score += 4;
     if (scan.volatility > 0.04) score -= 12;
@@ -360,21 +390,44 @@ function computeEntryQualityScore(scan) {
   let score = 50;
   const reasons = [];
 
-  score += (Number(scan.ultraScore || 0) - 70) * 0.22;
-  score += (Number(scan.trendScore || 50) - 50) * 0.16;
-  score += (Number(scan.timingScore || 50) - 50) * 0.17;
-  score += (Number(scan.executionScore || 50) - 50) * 0.18;
-  score += (Number(scan.smartMoneyScore || 50) - 50) * 0.10;
-  score += (Number(scan.archiveEdgeScore || 50) - 50) * 0.10;
-  score += (Number(scan.riskScore || 50) - 50) * 0.07;
+  score += (Number(scan.ultraScore || 0) - 70) * 0.18;
+  score += (Number(scan.setupQualityScore || 50) - 50) * 0.22;
+  score += (Number(scan.trendScore || 50) - 50) * 0.12;
+  score += (Number(scan.timingScore || 50) - 50) * 0.14;
+  score += (Number(scan.executionScore || 50) - 50) * 0.15;
+  score += (Number(scan.smartMoneyScore || 50) - 50) * 0.09;
+  score += (Number(scan.archiveEdgeScore || 50) - 50) * 0.06;
+  score += (Number(scan.riskScore || 50) - 50) * 0.04;
 
-  const trigger = computeCandleTriggerScore(scan.candles, scan.direction);
-  score += trigger.score;
-  reasons.push(...trigger.reasons);
+  if (scan.setupType === "trend-pullback") {
+    score += 8;
+    reasons.push("Best setup type: trend pullback");
+  }
 
-  const extension = computeLateEntryPenalty(scan);
-  score -= extension.penalty;
-  reasons.push(...extension.reasons);
+  if (scan.setupType === "breakout-continuation") {
+    score += 5;
+    reasons.push("Valid breakout continuation");
+  }
+
+  if (scan.setupType === "liquidity-rejection") {
+    score += 5;
+    reasons.push("Valid liquidity rejection");
+  }
+
+  if (scan.setupType === "momentum-continuation") {
+    score += 2;
+    reasons.push("Momentum continuation");
+  }
+
+  if (scan.setupType === "range-signal") {
+    score -= 8;
+    reasons.push("Range signal discount");
+  }
+
+  if (scan.setupType === "late-impulse") {
+    score -= 22;
+    reasons.push("Late impulse blocked");
+  }
 
   if (scan.signal === "BUY" || scan.signal === "SELL") {
     score += 4;
@@ -394,6 +447,16 @@ function computeEntryQualityScore(scan) {
   if (scan.archivePenalty) {
     score -= 8;
     reasons.push("Archive negative expectancy");
+  }
+
+  if (scan.wickRiskScore >= 65) {
+    score -= 8;
+    reasons.push("Opposite wick risk");
+  }
+
+  if (scan.distanceEma20Atr > 2.2) {
+    score -= 7;
+    reasons.push("Far from EMA20");
   }
 
   if (scan.pair === "BTCUSD") {
@@ -421,15 +484,21 @@ function computeEntryQualityScore(scan) {
 function computeExitPressureScore(scan) {
   let score = 28;
 
-  score += weakness(scan.trendScore, 50) * 0.20;
-  score += weakness(scan.timingScore, 48) * 0.18;
-  score += weakness(scan.executionScore, 48) * 0.18;
-  score += weakness(scan.smartMoneyScore, 48) * 0.12;
-  score += weakness(scan.riskScore, 44) * 0.12;
+  score += weakness(scan.trendScore, 50) * 0.18;
+  score += weakness(scan.timingScore, 48) * 0.16;
+  score += weakness(scan.executionScore, 48) * 0.16;
+  score += weakness(scan.smartMoneyScore, 48) * 0.10;
+  score += weakness(scan.riskScore, 44) * 0.10;
   score += weakness(scan.archiveEdgeScore, 45) * 0.08;
 
   if (scan.signal === "WAIT") score += 10;
   if (scan.archivePenalty) score += 8;
+  if (scan.lateImpulse) score += 14;
+  if (scan.setupType === "late-impulse") score += 12;
+  if (scan.setupType === "range-signal") score += 8;
+  if (scan.volatilityRegime === "elevated") score += 6;
+  if (scan.volatilityRegime === "extreme") score += 16;
+  if (scan.wickRiskScore >= 65) score += 8;
 
   if (scan.pair === "BTCUSD") {
     if (scan.volatility > 0.035) score += 12;
@@ -441,7 +510,7 @@ function computeExitPressureScore(scan) {
     if (Math.abs(scan.momentum) > 3.2) score += 6;
   }
 
-  if (scan.ultraScore >= 82 && scan.executionScore >= 62) {
+  if (scan.ultraScore >= 82 && scan.executionScore >= 62 && scan.setupQualityScore >= 76) {
     score -= 8;
   }
 
@@ -459,34 +528,21 @@ function computeExitPressureScore(scan) {
 
 function computePaperScore(scan) {
   return clamp(
-    Number(scan.ultraScore || 0) * 0.30 +
-      Number(scan.entryQualityScore || 0) * 0.25 +
-      Number(scan.archiveEdgeScore || 50) * 0.14 +
-      Number(scan.executionScore || 50) * 0.10 +
-      Number(scan.smartMoneyScore || 50) * 0.08 +
-      Number(scan.riskScore || 50) * 0.06 +
-      Number(scan.sessionScore || 50) * 0.03 +
-      (100 - Number(scan.exitPressureScore || 50)) * 0.04,
+    Number(scan.ultraScore || 0) * 0.25 +
+      Number(scan.entryQualityScore || 0) * 0.22 +
+      Number(scan.setupQualityScore || 50) * 0.18 +
+      Number(scan.archiveEdgeScore || 50) * 0.10 +
+      Number(scan.executionScore || 50) * 0.09 +
+      Number(scan.smartMoneyScore || 50) * 0.06 +
+      Number(scan.riskScore || 50) * 0.05 +
+      (100 - Number(scan.exitPressureScore || 50)) * 0.05,
     1,
     99
   );
 }
 
 function buildTradeDecision(scan) {
-  const minUltra =
-    scan.pair === "BTCUSD" ? 74 :
-    scan.pair === "XAUUSD" ? 72 :
-    70;
-
-  const minEntry =
-    scan.pair === "BTCUSD" ? 70 :
-    scan.pair === "XAUUSD" ? 68 :
-    66;
-
-  const minRisk =
-    scan.pair === "BTCUSD" ? 44 :
-    scan.pair === "XAUUSD" ? 43 :
-    42;
+  const profile = getTradeProfile(scan.pair);
 
   if (scan.signal === "WAIT") {
     return {
@@ -496,7 +552,31 @@ function buildTradeDecision(scan) {
     };
   }
 
-  if (scan.ultraScore < minUltra) {
+  if (scan.setupType === "late-impulse") {
+    return {
+      allowed: false,
+      status: "BLOCKED LATE",
+      reason: "Entry is too late after impulse."
+    };
+  }
+
+  if (scan.setupType === "weak-signal") {
+    return {
+      allowed: false,
+      status: "BLOCKED WEAK",
+      reason: "Setup classifier detected weak signal."
+    };
+  }
+
+  if (scan.setupType === "range-signal" && scan.entryQualityScore < 82) {
+    return {
+      allowed: false,
+      status: "BLOCKED RANGE",
+      reason: "Range signal requires sniper-level entry quality."
+    };
+  }
+
+  if (scan.ultraScore < profile.minUltra) {
     return {
       allowed: false,
       status: "BLOCKED SCORE",
@@ -504,7 +584,7 @@ function buildTradeDecision(scan) {
     };
   }
 
-  if (scan.entryQualityScore < minEntry) {
+  if (scan.entryQualityScore < profile.minEntry) {
     return {
       allowed: false,
       status: "BLOCKED ENTRY",
@@ -512,7 +592,15 @@ function buildTradeDecision(scan) {
     };
   }
 
-  if (scan.exitPressureScore >= 68) {
+  if (scan.setupQualityScore < profile.minSetup) {
+    return {
+      allowed: false,
+      status: "BLOCKED SETUP",
+      reason: `Setup quality too weak: ${Math.round(scan.setupQualityScore)}/100.`
+    };
+  }
+
+  if (scan.exitPressureScore >= profile.maxExitPressure) {
     return {
       allowed: false,
       status: "BLOCKED EXIT",
@@ -528,7 +616,7 @@ function buildTradeDecision(scan) {
     };
   }
 
-  if (scan.riskScore < minRisk) {
+  if (scan.riskScore < profile.minRisk) {
     return {
       allowed: false,
       status: "BLOCKED RISK",
@@ -544,15 +632,53 @@ function buildTradeDecision(scan) {
     };
   }
 
+  if (scan.volatilityRegime === "extreme") {
+    return {
+      allowed: false,
+      status: "BLOCKED VOL",
+      reason: "Volatility regime is extreme."
+    };
+  }
+
   return {
     allowed: true,
     status:
       scan.pair === "BTCUSD"
-        ? "VALID BTC V4"
+        ? "VALID BTC V6"
         : scan.pair === "XAUUSD"
-          ? "VALID GOLD V4"
-          : "VALID V4",
-    reason: "Entry quality, score, risk and exit pressure accepted."
+          ? "VALID GOLD V6"
+          : "VALID V6",
+    reason: `${scan.setupLabel || scan.setupType} validated: score, entry, setup, risk and exit pressure accepted.`
+  };
+}
+
+function getTradeProfile(pair) {
+  if (pair === "BTCUSD") {
+    return {
+      minUltra: 78,
+      minEntry: 74,
+      minSetup: 72,
+      maxExitPressure: 62,
+      minRisk: 44
+    };
+  }
+
+  if (pair === "XAUUSD") {
+    return {
+      minUltra: 76,
+      minEntry: 72,
+      minSetup: 70,
+      maxExitPressure: 64,
+      minRisk: 43
+    };
+  }
+
+  return {
+    minUltra: 74,
+    minEntry: 70,
+    minSetup: 68,
+    maxExitPressure: 65,
+    minRisk: 42
   };
 }
 
@@ -735,126 +861,8 @@ function computeSessionScore(pair = "") {
   return 44;
 }
 
-function computeCandleTriggerScore(candles, direction) {
-  const last = candles.at(-1);
-  const prev = candles.at(-2);
-  const recent = candles.slice(-14);
-
-  const avgRange = average(recent.map((c) => Number(c.high || 0) - Number(c.low || 0)));
-  const range = Math.max(0.0000001, Number(last.high || 0) - Number(last.low || 0));
-  const body = Math.abs(Number(last.close || 0) - Number(last.open || 0));
-  const bodyRatio = body / range;
-
-  let score = 0;
-  const reasons = [];
-
-  if (direction === "buy") {
-    if (last.close > last.open) {
-      score += 5;
-      reasons.push("Bull candle");
-    }
-
-    if (last.close > prev.high) {
-      score += 8;
-      reasons.push("Buy breakout");
-    }
-
-    if (last.close > last.low + range * 0.68) {
-      score += 5;
-      reasons.push("Close near high");
-    }
-
-    if (last.low >= prev.low) {
-      score += 3;
-      reasons.push("Higher low");
-    }
-  }
-
-  if (direction === "sell") {
-    if (last.close < last.open) {
-      score += 5;
-      reasons.push("Bear candle");
-    }
-
-    if (last.close < prev.low) {
-      score += 8;
-      reasons.push("Sell breakdown");
-    }
-
-    if (last.close < last.high - range * 0.68) {
-      score += 5;
-      reasons.push("Close near low");
-    }
-
-    if (last.high <= prev.high) {
-      score += 3;
-      reasons.push("Lower high");
-    }
-  }
-
-  if (bodyRatio >= 0.52 && bodyRatio <= 0.82) {
-    score += 5;
-    reasons.push("Healthy impulse");
-  }
-
-  if (avgRange > 0 && range > avgRange * 2.4) {
-    score -= 12;
-    reasons.push("Impulse too large");
-  }
-
-  return {
-    score,
-    reasons
-  };
-}
-
-function computeLateEntryPenalty(scan) {
-  const candles = scan.candles || [];
-  const closes = candles.map((c) => Number(c.close || 0)).filter(Number.isFinite);
-  const highs = candles.map((c) => Number(c.high || 0)).filter(Number.isFinite);
-  const lows = candles.map((c) => Number(c.low || 0)).filter(Number.isFinite);
-
-  const current = Number(scan.current || closes.at(-1) || 0);
-  const ema20Value = ema(closes, 20);
-  const atrValue = Number(scan.atr14 || atr(highs, lows, closes, 14));
-
-  if (!current || !ema20Value || !atrValue) {
-    return {
-      penalty: 0,
-      reasons: []
-    };
-  }
-
-  const distance = Math.abs(current - ema20Value);
-
-  const maxDistance =
-    scan.pair === "BTCUSD" ? atrValue * 2.8 :
-    scan.pair === "XAUUSD" ? atrValue * 2.4 :
-    atrValue * 2.1;
-
-  if (distance > maxDistance) {
-    return {
-      penalty: 14,
-      reasons: ["Late entry distance"]
-    };
-  }
-
-  if (distance > maxDistance * 0.75) {
-    return {
-      penalty: 6,
-      reasons: ["Entry slightly extended"]
-    };
-  }
-
-  return {
-    penalty: 0,
-    reasons: []
-  };
-}
-
 function isLateEntry(scan) {
-  const late = computeLateEntryPenalty(scan);
-  return late.penalty >= 14;
+  return Boolean(scan.lateImpulse || Number(scan.distanceEma20Atr || 0) > 2.8);
 }
 
 function computeRiskDistance(pair, current, atr14) {
@@ -933,12 +941,13 @@ function getDirectionArchive(archive, direction) {
 
 export function computeConfluenceScore(scan) {
   const score = clamp(
-    Number(scan.ultraScore || scan.finalScore || 0) * 0.35 +
-      Number(scan.entryQualityScore || 0) * 0.22 +
-      Number(scan.trendScore || 0) * 0.14 +
-      Number(scan.timingScore || 0) * 0.12 +
-      Number(scan.archiveEdgeScore || 50) * 0.10 +
-      Number(scan.executionScore || 50) * 0.07,
+    Number(scan.ultraScore || scan.finalScore || 0) * 0.28 +
+      Number(scan.entryQualityScore || 0) * 0.18 +
+      Number(scan.setupQualityScore || 0) * 0.18 +
+      Number(scan.trendScore || 0) * 0.12 +
+      Number(scan.timingScore || 0) * 0.10 +
+      Number(scan.archiveEdgeScore || 50) * 0.08 +
+      Number(scan.executionScore || 50) * 0.06,
     1,
     99
   );
@@ -963,6 +972,8 @@ export function computeHedgeScore(scan) {
   if (pair.includes("JPY")) score -= 2;
   if (Number(scan?.riskScore || 50) >= 60) score += 8;
   if (Number(scan?.exitPressureScore || 0) >= 68) score -= 10;
+  if (scan?.setupType === "trend-pullback") score += 5;
+  if (scan?.setupType === "late-impulse") score -= 12;
 
   return Math.round(clamp(score, 1, 99));
 }
@@ -972,8 +983,11 @@ export function isEliteTrade(scan) {
     scan?.tradeAllowed &&
     Number(scan?.ultraScore || 0) >= 82 &&
     Number(scan?.entryQualityScore || 0) >= 76 &&
+    Number(scan?.setupQualityScore || 0) >= 76 &&
     Number(scan?.exitPressureScore || 99) < 58 &&
-    Number(scan?.riskScore || 0) >= 48
+    Number(scan?.riskScore || 0) >= 48 &&
+    scan?.setupType !== "late-impulse" &&
+    scan?.setupType !== "weak-signal"
   );
 }
 
@@ -1002,6 +1016,18 @@ function buildFallbackScan(pair, timeframe, candles = [], reason = "No data") {
     executionScore: 0,
     archiveEdgeScore: 50,
 
+    setupType: "weak-signal",
+    setupLabel: "Weak signal",
+    setupQualityScore: 0,
+    setupStrength: "blocked",
+    volatilityRegime: "unknown",
+    trendRegime: "unknown",
+    triggerType: "none",
+    entryModel: "none",
+    distanceEma20Atr: 0,
+    wickRiskScore: 50,
+    lateImpulse: false,
+
     entryQualityScore: 0,
     entryQualityLabel: "no-data",
     entryQualityReasons: [reason],
@@ -1018,6 +1044,7 @@ function buildFallbackScan(pair, timeframe, candles = [], reason = "No data") {
     rr: getDefaultRr(pair),
     stopLoss: 0,
     takeProfit: 0,
+    tp1: 0,
 
     tradeAllowed: false,
     tradeStatus: "NO DATA",
@@ -1091,10 +1118,10 @@ function getUltraGrade(score) {
 function getDefaultRr(pair) {
   const p = String(pair || "").toUpperCase();
 
-  if (p === "BTCUSD") return 2.1;
-  if (p === "XAUUSD") return 2.2;
+  if (p === "BTCUSD") return 1.45;
+  if (p === "XAUUSD") return 1.5;
 
-  return 2;
+  return 1.35;
 }
 
 function scoreWinRate(winRate) {
