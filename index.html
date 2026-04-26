@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FTMO Edge AI</title>
 
-  <link rel="stylesheet" href="./styles.css?v=btc-fix-4" />
+  <link rel="stylesheet" href="./styles.css?v=btc-fix-5" />
 
   <script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
 </head>
@@ -384,6 +384,61 @@
     </main>
   </div>
 
-  <script type="module" src="./app.js?v=btc-fix-4"></script>
+  <script>
+    window.__BOOT_ERROR__ = null;
+
+    function showBootError(label, error) {
+      const msg = String((error && (error.message || error.reason || error.stack)) || error || "Unknown error");
+      window.__BOOT_ERROR__ = msg;
+
+      const pairList = document.getElementById("pairList");
+      if (pairList) {
+        pairList.innerHTML = `
+          <div class="bad" style="padding:14px; white-space:pre-wrap;">
+            ${label}: ${msg.replace(/</g, "&lt;").replace(/>/g, "&gt;")}
+          </div>
+        `;
+      }
+    }
+
+    function fallbackTabs() {
+      const dashboard = document.getElementById("dashboardTab");
+      const paper = document.getElementById("paperTab");
+      const btnDashboard = document.getElementById("tabDashboardBtn");
+      const btnPaper = document.getElementById("tabPaperBtn");
+
+      if (!dashboard || !paper || !btnDashboard || !btnPaper) return;
+
+      btnDashboard.addEventListener("click", function () {
+        dashboard.style.display = "";
+        paper.style.display = "none";
+        btnDashboard.classList.add("active-tab");
+        btnPaper.classList.remove("active-tab");
+      });
+
+      btnPaper.addEventListener("click", function () {
+        dashboard.style.display = "none";
+        paper.style.display = "";
+        btnPaper.classList.add("active-tab");
+        btnDashboard.classList.remove("active-tab");
+      });
+    }
+
+    window.addEventListener("error", function (event) {
+      showBootError("Window error", event.error || event.message);
+    });
+
+    window.addEventListener("unhandledrejection", function (event) {
+      showBootError("Promise error", event.reason);
+    });
+
+    document.addEventListener("DOMContentLoaded", fallbackTabs);
+  </script>
+
+  <script type="module">
+    import("./app.js?v=btc-fix-5").catch((error) => {
+      showBootError("Module import error", error);
+    });
+  </script>
 </body>
-                  </html>
+  </html>
