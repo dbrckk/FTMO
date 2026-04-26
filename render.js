@@ -54,16 +54,27 @@ export function renderPairList(refreshAiDecision) {
 
   const list = appState.scans || [];
 
+  if (!list.length) {
+    els.pairList.innerHTML = `<div class="muted" style="padding:14px;">Waiting scanner...</div>`;
+    return;
+  }
+
   list.forEach((scan) => {
+    const entryQuality = Number(scan.entryQualityScore || scan.entrySniper?.score || 0);
+    const exitPressure = Number(scan.exitPressureScore || 0);
+
     const row = document.createElement("div");
     row.className = "pair-row";
     row.dataset.pair = scan.pair;
 
     row.innerHTML = `
-      <div><strong>${esc(scan.pair)}</strong></div>
+      <div>
+        <strong>${esc(scan.pair)}</strong>
+        <small class="row-sub">${esc(scan.entryQualityLabel || scan.tradeReason || "")}</small>
+      </div>
       <div>${Math.round(scan.ultraScore || scan.finalScore || 0)}</div>
-      <div>${Math.round(scan.mlScore || 0)}</div>
-      <div>${Math.round(scan.vectorbtScore || 0)}</div>
+      <div>${entryQuality ? Math.round(entryQuality) : Math.round(scan.mlScore || 0)}</div>
+      <div>${exitPressure ? Math.round(exitPressure) : Math.round(scan.vectorbtScore || 0)}</div>
       <div class="${scan.tradeAllowed ? "ok" : "bad"}">${esc(scan.tradeStatus || "WAIT")}</div>
     `;
 
@@ -87,7 +98,11 @@ export function renderTopPriorityTrades() {
 
   const top = [...(appState.scans || [])]
     .filter((scan) => scan.tradeAllowed && Number(scan.ultraScore || 0) >= 68)
-    .sort((a, b) => Number(b.ultraScore || 0) - Number(a.ultraScore || 0))
+    .sort((a, b) => {
+      const bScore = Number(b.paperScore || 0) || weightedPaperScore(b);
+      const aScore = Number(a.paperScore || 0) || weightedPaperScore(a);
+      return bScore - aScore;
+    })
     .slice(0, 6);
 
   wrap.innerHTML = top.length
@@ -95,6 +110,7 @@ export function renderTopPriorityTrades() {
       <div class="top-row">
         <strong>${esc(scan.pair)}</strong>
         <span>ULTRA ${Math.round(scan.ultraScore || 0)}</span>
+        <span>ENTRY ${Math.round(scan.entryQualityScore || scan.entrySniper?.score || 0)}</span>
         <span>${esc(scan.tradeStatus || "VALID")}</span>
       </div>
     `).join("")
@@ -115,6 +131,7 @@ export function renderTopBlockedTrades() {
       <div class="top-row blocked">
         <strong>${esc(scan.pair)}</strong>
         <span>ULTRA ${Math.round(scan.ultraScore || scan.finalScore || 0)}</span>
+        <span>ENTRY ${Math.round(scan.entryQualityScore || scan.entrySniper?.score || 0)}</span>
         <span>${esc(scan.tradeReason || "Blocked")}</span>
       </div>
     `).join("")
@@ -193,6 +210,8 @@ export function renderSelectedPair() {
   };
 
   const mtf = getMtfForPair(pair);
+  const entryQuality = Number(scan.entryQualityScore || scan.entrySniper?.score || 0);
+  const exitPressure = Number(scan.exitPressureScore || scan.exitSniper?.score || 0);
 
   setText("selectedPairName", scan.pair);
   setText("trendMini", Math.round(scan.trendScore || 0));
@@ -214,15 +233,15 @@ export function renderSelectedPair() {
       metricCard("Prix", formatPrice(scan.current, scan.pair), "marché"),
       metricCard("Final", Math.round(scan.finalScore || 0), "global"),
       metricCard("ULTRA", Math.round(scan.ultraScore || 0), scan.ultraGrade || "-"),
+      metricCard("Entry", entryQuality ? Math.round(entryQuality) : "-", scan.entryQualityLabel || "quality"),
+      metricCard("Exit", exitPressure ? Math.round(exitPressure) : "-", scan.exitPressureLabel || "pressure"),
       metricCard("MTF", mtf ? Math.round(mtf.score || 0) : "-", mtf?.label || "alignment"),
       metricCard("Trend", Math.round(scan.trendScore || 0), "direction"),
       metricCard("Timing", Math.round(scan.timingScore || 0), "timing"),
       metricCard("Risk", Math.round(scan.riskScore || 0), "risk"),
       metricCard("Smart", Math.round(scan.smartMoneyScore || 0), "flow"),
       metricCard("Exec", Math.round(scan.executionScore || 0), "execution"),
-      metricCard("Archive", Math.round(scan.archiveEdgeScore || 0), "archive"),
-      metricCard("ML", Math.round(scan.mlScore || 0), scan.mlConfidenceBand || "model"),
-      metricCard("VBT", Math.round(scan.vectorbtScore || 0), scan.vectorbtConfidenceBand || "backtest")
+      metricCard("Archive", Math.round(scan.archiveEdgeScore || 0), "archive")
     ].join("");
   }
 
@@ -231,7 +250,16 @@ export function renderSelectedPair() {
   if (reasonList) {
     reasonList.innerHTML = "";
 
-    (scan.reasons || []).forEach((reason) => {
+    const reasons = [
+      ...(scan.reasons || []),
+      ...(scan.entryQualityReasons || []).map((r) => `Entry: ${r}`)
+    ];
+
+    if (!reasons.length && scan.tradeReason) {
+      reasons.push(scan.tradeReason);
+    }
+
+    reasons.forEach((reason) => {
       const li = document.createElement("li");
       li.textContent = reason;
       reasonList.appendChild(li);
@@ -248,22 +276,15 @@ export function renderSelectedPair() {
     els.tradeSuggestionBox.innerHTML = `
       <strong>${esc(scan.tradeStatus || ai.decision || scan.signal || "WAIT")}</strong><br>
       Ultra Score: ${Math.round(scan.ultraScore || 0)} (${esc(scan.ultraGrade || "-")})<br>
+      Entry Quality: ${entryQuality ? Math.round(entryQuality) : "-"} ${scan.entryQualityLabel ? `· ${esc(scan.entryQualityLabel)}` : ""}<br>
+      Exit Pressure: ${exitPressure ? Math.round(exitPressure) : "-"} ${scan.exitPressureLabel ? `· ${esc(scan.exitPressureLabel)}` : ""}<br>
+      Paper Score: ${Math.round(scan.paperScore || weightedPaperScore(scan))}<br>
       MTF Score: ${mtf ? Math.round(mtf.score || 0) : "-"}<br>
       MTF Direction: ${mtf ? esc(mtf.signal || "WAIT") : "-"}<br>
       MTF TF: ${mtf ? formatAlignedTimeframes(mtf.timeframes) : "-"}<br>
       Entry: ${formatPrice(scan.current, scan.pair)}<br>
       Stop: ${formatPrice(scan.stopLoss || scan.current * 0.995, scan.pair)}<br>
       Target: ${formatPrice(scan.takeProfit || scan.current * 1.01, scan.pair)}<br>
-      ML: ${Math.round(scan.mlScore || 0)}<br>
-      VectorBT: ${Math.round(scan.vectorbtScore || 0)}<br>
-      Smart Money: ${Math.round(scan.smartMoneyScore || 0)}<br>
-      Session: ${Math.round(scan.sessionScore || 0)}<br>
-      Execution: ${Math.round(scan.executionScore || 0)}<br>
-      Archive Edge: ${Math.round(scan.archiveEdgeScore || 0)}<br>
-      Archive WR: ${Math.round(scan.archiveStats?.pairWinRate || 50)}%<br>
-      Archive Expectancy: ${(Number(scan.archiveStats?.pairExpectancy || 0)).toFixed(2)}R<br>
-      Same Direction WR: ${Math.round(scan.archiveStats?.sameDirectionWinRate || 50)}%<br>
-      Same Direction Exp: ${(Number(scan.archiveStats?.sameDirectionExpectancy || 0)).toFixed(2)}R<br>
       Risk conseillé: ${riskPct}%<br>
       Position size: ${sizing.quantity}<br>
       Profile: ${esc(sizing.leverageLabel)}<br>
@@ -274,7 +295,7 @@ export function renderSelectedPair() {
   if (els.exitSuggestionBox) {
     els.exitSuggestionBox.innerHTML = `
       Exit logic: HOLD<br>
-      Exit score: 50<br>
+      Exit pressure: ${exitPressure ? Math.round(exitPressure) : 50}<br>
       Comment: No exit signal
     `;
   }
@@ -408,41 +429,59 @@ export function renderPaperLab() {
 
   if (status) {
     const lastRun = serverRuns[0];
+    const bestCandidate = getBestPaperCandidate();
 
     status.innerHTML = `
-      <strong>Status:</strong> Server + Browser<br>
-      Server open trades: ${serverOpen.length}<br>
-      Server closed trades: ${closedCount}<br>
-      Browser open trades: ${localAnalytics.openTradesCount}<br>
-      Browser closed trades: ${localAnalytics.totalClosedTrades}<br>
-      Win rate: ${winRate.toFixed(1)}%<br>
-      Expectancy: ${expectancy.toFixed(3)}R<br>
-      Net PnL: ${netPnl.toFixed(2)}$<br>
-      Last server run: ${lastRun ? esc(formatDateShort(lastRun.ranAt)) : "-"}<br>
-      Last run opened/closed: ${lastRun ? `${Number(lastRun.opened || 0)} / ${Number(lastRun.closed || 0)}` : "-"}
+      <div class="paper-status-grid">
+        <div class="paper-status-card">
+          <small>Status</small>
+          <strong>Server + Browser v4</strong>
+          <span>${appState.paperEngine?.enabled ? "Browser active" : "Browser disabled"}</span>
+        </div>
+        <div class="paper-status-card">
+          <small>Open</small>
+          <strong>${openCount}</strong>
+          <span>${serverOpen.length} server · ${localAnalytics.openTradesCount} browser</span>
+        </div>
+        <div class="paper-status-card">
+          <small>Closed</small>
+          <strong>${closedCount}</strong>
+          <span>${winRate.toFixed(1)}% WR</span>
+        </div>
+        <div class="paper-status-card">
+          <small>Expectancy</small>
+          <strong>${expectancy.toFixed(3)}R</strong>
+          <span>${netPnl.toFixed(2)}$ net</span>
+        </div>
+      </div>
+
+      <div class="paper-v4-box">
+        <strong>Best current candidate</strong><br>
+        ${bestCandidate ? `
+          ${esc(bestCandidate.pair)} · ${esc(bestCandidate.signal || "WAIT")}<br>
+          Ultra ${Math.round(bestCandidate.ultraScore || 0)} · Entry ${Math.round(bestCandidate.entryQualityScore || bestCandidate.entrySniper?.score || 0)} · Exit ${Math.round(bestCandidate.exitPressureScore || 0)} · Paper ${Math.round(bestCandidate.paperScore || weightedPaperScore(bestCandidate))}<br>
+          ${esc(bestCandidate.tradeReason || "-")}
+        ` : `
+          No current candidate.
+        `}
+      </div>
+
+      <div class="paper-v4-box">
+        <strong>Last server run</strong><br>
+        ${lastRun ? esc(formatDateShort(lastRun.ranAt)) : "-"}<br>
+        ${lastRun ? `${Number(lastRun.scannedPairs || 0)} scanned · +${Number(lastRun.opened || 0)} opened · -${Number(lastRun.closed || 0)} closed` : "No server run yet."}
+      </div>
     `;
   }
 
   if (openBox) {
-    if (serverOpen.length) {
-      openBox.innerHTML = serverOpen.map((trade) => `
-        <div class="top-row">
-          <strong>${esc(trade.pair)}</strong>
-          <span>${esc(trade.direction)}</span>
-          <span>ULTRA ${Math.round(trade.ultraScore || 0)}</span>
-          <span>${Number(trade.pnlRLive || 0).toFixed(2)}R live</span>
-          <span>${Number(trade.barsHeld || 0)} bars</span>
-        </div>
-      `).join("");
-    } else if ((appState.paperTrades || []).length) {
-      openBox.innerHTML = (appState.paperTrades || []).map((trade) => `
-        <div class="top-row">
-          <strong>${esc(trade.pair)}</strong>
-          <span>${esc(trade.direction)}</span>
-          <span>${Number(trade.entryUltraScore || 0)}</span>
-          <span>${Number(trade.barsHeld || 0)} bars</span>
-        </div>
-      `).join("");
+    const browserOpen = Array.isArray(appState.paperTrades) ? appState.paperTrades : [];
+
+    if (serverOpen.length || browserOpen.length) {
+      openBox.innerHTML = [
+        ...serverOpen.map((trade) => renderOpenPaperTrade(trade, "SERVER")),
+        ...browserOpen.map((trade) => renderOpenPaperTrade(trade, "BROWSER"))
+      ].join("");
     } else {
       openBox.innerHTML = `<div class="muted">No open paper trades.</div>`;
     }
@@ -488,14 +527,7 @@ export function renderPaperLab() {
     const recentRows = serverRecent.length ? serverRecent : localAnalytics.recentTrades || [];
 
     recentBox.innerHTML = recentRows.length
-      ? recentRows.map((trade) => `
-        <div class="top-row ${Number(trade.pnlR || 0) > 0 ? "ok" : "blocked"}">
-          <strong>${esc(trade.pair)}</strong>
-          <span>${esc(trade.direction)}</span>
-          <span>${Number(trade.pnlR || 0).toFixed(2)}R</span>
-          <span>${esc(trade.closeReason || trade.close_reason || "-")}</span>
-        </div>
-      `).join("")
+      ? recentRows.slice(0, 18).map((trade) => renderClosedPaperTrade(trade)).join("")
       : `<div class="muted">No recent paper trades.</div>`;
   }
 
@@ -506,6 +538,7 @@ export function renderPaperLab() {
           <strong>${esc(formatDateShort(run.ranAt))}</strong>
           <span>${Number(run.scannedPairs || 0)} scanned</span>
           <span>+${Number(run.opened || 0)} / -${Number(run.closed || 0)}</span>
+          <span>${esc(run.notes || "")}</span>
         </div>
       `).join("")
       : `<div class="muted">No server run yet.</div>`;
@@ -696,6 +729,108 @@ export function renderTimeframeSummary() {
       }
     });
   });
+}
+
+function renderOpenPaperTrade(trade, sourceLabel) {
+  const pair = String(trade.pair || "").toUpperCase();
+  const entry = Number(trade.entry || 0);
+  const current = Number(trade.currentPrice || trade.current_price || entry);
+  const stop = Number(trade.activeStopLoss || trade.stopLoss || trade.stop_loss || 0);
+  const target = Number(trade.takeProfit || trade.take_profit || 0);
+  const pnlR = Number(trade.pnlRLive ?? trade.livePnlR ?? computeLiveR(trade));
+  const entryQuality = Number(trade.entryQualityScore || parseEqFromModelTag(trade.modelTag) || 0);
+
+  const pnlClass = pnlR > 0 ? "ok" : pnlR < 0 ? "bad" : "muted";
+
+  return `
+    <div class="paper-trade-card">
+      <div class="paper-trade-head">
+        <strong>${esc(pair)}</strong>
+        <span class="status-pill">${esc(sourceLabel)}</span>
+        <span class="${pnlClass}">${pnlR.toFixed(2)}R</span>
+      </div>
+
+      <div class="paper-trade-grid">
+        <div><small>Direction</small><strong>${esc(trade.direction || "-")}</strong></div>
+        <div><small>Entry</small><strong>${formatPrice(entry, pair)}</strong></div>
+        <div><small>Current</small><strong>${formatPrice(current, pair)}</strong></div>
+        <div><small>Stop actif</small><strong>${formatPrice(stop, pair)}</strong></div>
+        <div><small>Target</small><strong>${formatPrice(target, pair)}</strong></div>
+        <div><small>Bars</small><strong>${Number(trade.barsHeld || trade.bars_held || 0)}/${Number(trade.maxBarsHold || trade.max_bars_hold || 0)}</strong></div>
+        <div><small>Ultra</small><strong>${Math.round(trade.ultraScore || trade.ultra_score || 0)}</strong></div>
+        <div><small>Entry Q</small><strong>${entryQuality || "-"}</strong></div>
+      </div>
+
+      <div class="paper-trade-foot">
+        ${esc(trade.modelTag || trade.model_tag || trade.source || "-")}
+      </div>
+    </div>
+  `;
+}
+
+function renderClosedPaperTrade(trade) {
+  const pair = String(trade.pair || "").toUpperCase();
+  const pnlR = Number(trade.pnlR || trade.pnl_r || 0);
+  const pnl = Number(trade.pnl || 0);
+  const cls = pnlR > 0 ? "ok" : "bad";
+
+  return `
+    <div class="paper-trade-card closed">
+      <div class="paper-trade-head">
+        <strong>${esc(pair)}</strong>
+        <span>${esc(trade.direction || "-")}</span>
+        <span class="${cls}">${pnlR.toFixed(2)}R</span>
+      </div>
+
+      <div class="paper-trade-grid">
+        <div><small>Entry</small><strong>${formatPrice(trade.entry, pair)}</strong></div>
+        <div><small>Exit</small><strong>${formatPrice(trade.exitPrice || trade.exit, pair)}</strong></div>
+        <div><small>PnL</small><strong class="${cls}">${pnl.toFixed(2)}$</strong></div>
+        <div><small>Reason</small><strong>${esc(trade.closeReason || trade.close_reason || "-")}</strong></div>
+        <div><small>Ultra</small><strong>${Math.round(trade.ultraScore || trade.ultra_score || 0)}</strong></div>
+        <div><small>Archive</small><strong>${Math.round(trade.archiveEdgeScore || trade.archive_edge_score || 0)}</strong></div>
+      </div>
+    </div>
+  `;
+}
+
+function getBestPaperCandidate() {
+  return [...(appState.scans || [])]
+    .sort((a, b) => weightedPaperScore(b) - weightedPaperScore(a))[0] || null;
+}
+
+function weightedPaperScore(scan) {
+  return (
+    Number(scan.ultraScore || 0) * 0.30 +
+    Number(scan.entryQualityScore || scan.entrySniper?.score || 0) * 0.25 +
+    Number(scan.archiveEdgeScore || 50) * 0.15 +
+    Number(scan.mtfScore || 60) * 0.10 +
+    Number(scan.executionScore || 50) * 0.08 +
+    Number(scan.riskScore || 50) * 0.05 +
+    (100 - Number(scan.exitPressureScore || 50)) * 0.07
+  );
+}
+
+function computeLiveR(trade) {
+  const entry = Number(trade.entry || 0);
+  const current = Number(trade.currentPrice || trade.current_price || entry);
+  const stop = Number(trade.stopLoss || trade.stop_loss || 0);
+  const direction = String(trade.direction || "buy").toLowerCase();
+  const risk = Math.abs(entry - stop);
+
+  if (!entry || !current || !risk) return 0;
+
+  const pnlR =
+    direction === "sell"
+      ? (entry - current) / risk
+      : (current - entry) / risk;
+
+  return Number(pnlR.toFixed(3));
+}
+
+function parseEqFromModelTag(tag) {
+  const match = String(tag || "").match(/EQ(\d+)/i);
+  return match ? Number(match[1]) : 0;
 }
 
 function getMtfForPair(pair) {
