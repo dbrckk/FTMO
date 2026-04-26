@@ -1,15 +1,16 @@
-import { setChartInstance, chart, candleSeries } from "./state.js";
-
+let chart = null;
+let candleSeries = null;
 let resizeObserver = null;
 
 export function setupChart() {
-  const container = document.getElementById("chart");
-  if (!container) return;
+  const chartContainer = document.getElementById("chart");
 
-  container.innerHTML = "";
+  if (!chartContainer) {
+    return;
+  }
 
   if (!window.LightweightCharts) {
-    container.innerHTML = `
+    chartContainer.innerHTML = `
       <div class="muted" style="padding:16px;">
         Chart library unavailable.
       </div>
@@ -17,19 +18,25 @@ export function setupChart() {
     return;
   }
 
-  const chartInstance = window.LightweightCharts.createChart(container, {
-    width: container.clientWidth || 600,
-    height: Math.max(320, Math.round((container.clientWidth || 600) * 0.48)),
+  cleanupChart();
+
+  chart = window.LightweightCharts.createChart(chartContainer, {
+    width: chartContainer.clientWidth || 600,
+    height: Math.max(300, chartContainer.clientHeight || 340),
     layout: {
-      background: { color: "transparent" },
-      textColor: "rgba(237,244,255,0.75)"
+      background: {
+        type: "solid",
+        color: "transparent"
+      },
+      textColor: "#92a4bb"
     },
     grid: {
-      vertLines: { color: "rgba(255,255,255,0.04)" },
-      horzLines: { color: "rgba(255,255,255,0.04)" }
-    },
-    crosshair: {
-      mode: 1
+      vertLines: {
+        color: "rgba(255,255,255,0.04)"
+      },
+      horzLines: {
+        color: "rgba(255,255,255,0.04)"
+      }
     },
     rightPriceScale: {
       borderColor: "rgba(255,255,255,0.08)"
@@ -38,10 +45,13 @@ export function setupChart() {
       borderColor: "rgba(255,255,255,0.08)",
       timeVisible: true,
       secondsVisible: false
+    },
+    crosshair: {
+      mode: window.LightweightCharts.CrosshairMode.Normal
     }
   });
 
-  const series = chartInstance.addCandlestickSeries({
+  candleSeries = chart.addCandlestickSeries({
     upColor: "#22c55e",
     downColor: "#ef4444",
     borderUpColor: "#22c55e",
@@ -50,81 +60,120 @@ export function setupChart() {
     wickDownColor: "#ef4444"
   });
 
-  setChartInstance(chartInstance, series);
-
-  if (resizeObserver) {
-    resizeObserver.disconnect();
-  }
-
   resizeObserver = new ResizeObserver(() => {
-    if (!chartInstance || !container) return;
+    if (!chart || !chartContainer) return;
 
-    chartInstance.applyOptions({
-      width: container.clientWidth || 600,
-      height: Math.max(320, Math.round((container.clientWidth || 600) * 0.48))
+    chart.applyOptions({
+      width: chartContainer.clientWidth || 600,
+      height: Math.max(300, chartContainer.clientHeight || 340)
     });
-
-    chartInstance.timeScale().fitContent();
   });
 
-  resizeObserver.observe(container);
+  resizeObserver.observe(chartContainer);
 }
 
 export function updateChart(candles = []) {
-  const container = document.getElementById("chart");
-  if (!container) return;
+  const chartContainer = document.getElementById("chart");
 
-  if (!candleSeries || !chart) {
-    setupChart();
+  if (!chartContainer) return;
+
+  if (!chart || !candleSeries) {
+    try {
+      setupChart();
+    } catch {
+      return;
+    }
   }
 
-  if (!candleSeries) return;
+  if (!chart || !candleSeries) return;
 
-  const data = normalizeChartCandles(candles);
+  const data = normalizeCandles(candles);
 
   if (!data.length) {
-    container.innerHTML = `
+    chartContainer.innerHTML = `
       <div class="muted" style="padding:16px;">
-        Aucune donnée graphique disponible.
+        No chart candles available.
       </div>
     `;
+    cleanupChart(false);
     return;
   }
 
   candleSeries.setData(data);
-  chart?.timeScale?.().fitContent?.();
+  chart.timeScale().fitContent();
 }
 
-function normalizeChartCandles(candles) {
-  return (Array.isArray(candles) ? candles : [])
-    .map((c, index) => ({
-      time: normalizeTime(c.time ?? c.ts ?? c.datetime ?? index + 1),
-      open: Number(c.open || 0),
-      high: Number(c.high || 0),
-      low: Number(c.low || 0),
-      close: Number(c.close || 0)
-    }))
-    .filter((c) =>
-      Number.isFinite(c.time) &&
-      Number.isFinite(c.open) &&
-      Number.isFinite(c.high) &&
-      Number.isFinite(c.low) &&
-      Number.isFinite(c.close) &&
-      c.time > 0
-    )
+function normalizeCandles(candles) {
+  if (!Array.isArray(candles)) return [];
+
+  return candles
+    .map((candle) => {
+      const time = normalizeTime(candle.time ?? candle.ts ?? candle.timestamp);
+      const open = Number(candle.open);
+      const high = Number(candle.high);
+      const low = Number(candle.low);
+      const close = Number(candle.close);
+
+      if (
+        !Number.isFinite(time) ||
+        !Number.isFinite(open) ||
+        !Number.isFinite(high) ||
+        !Number.isFinite(low) ||
+        !Number.isFinite(close) ||
+        close <= 0
+      ) {
+        return null;
+      }
+
+      return {
+        time,
+        open,
+        high,
+        low,
+        close
+      };
+    })
+    .filter(Boolean)
     .sort((a, b) => a.time - b.time);
 }
 
 function normalizeTime(value) {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    if (value > 1e12) return Math.floor(value / 1000);
-    return Math.floor(value);
+  if (typeof value === "number") {
+    return value > 1000000000000 ? Math.floor(value / 1000) : Math.floor(value);
   }
 
-  const ms = Date.parse(String(value || "").trim());
-  if (Number.isFinite(ms)) {
-    return Math.floor(ms / 1000);
+  const raw = String(value || "").trim();
+
+  if (!raw) return 0;
+
+  if (/^\d+$/.test(raw)) {
+    const n = Number(raw);
+    return n > 1000000000000 ? Math.floor(n / 1000) : Math.floor(n);
   }
 
-  return 0;
+  const ms = Date.parse(raw);
+
+  if (!Number.isFinite(ms)) return 0;
+
+  return Math.floor(ms / 1000);
+}
+
+function cleanupChart(clearContainer = true) {
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+    resizeObserver = null;
+  }
+
+  if (chart) {
+    chart.remove();
+    chart = null;
+    candleSeries = null;
+  }
+
+  if (clearContainer) {
+    const chartContainer = document.getElementById("chart");
+    if (chartContainer) {
+      chartContainer.innerHTML = "";
+    }
+  }
 }
