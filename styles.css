@@ -524,6 +524,102 @@ textarea {
   background: rgba(56, 189, 248, 0.16);
 }
 
+.row-sub {
+  display: block;
+  color: var(--muted-2);
+  font-size: 11px;
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.paper-status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.paper-status-card {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 12px;
+}
+
+.paper-status-card small,
+.paper-trade-grid small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+
+.paper-status-card strong {
+  display: block;
+  font-size: 20px;
+  letter-spacing: -0.03em;
+}
+
+.paper-status-card span {
+  color: var(--muted-2);
+  font-size: 12px;
+}
+
+.paper-v4-box {
+  background: rgba(56, 189, 248, 0.055);
+  border: 1px solid rgba(56, 189, 248, 0.16);
+  border-radius: 16px;
+  padding: 12px;
+  margin-top: 10px;
+  line-height: 1.55;
+}
+
+.paper-trade-card {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 13px;
+  margin-bottom: 12px;
+}
+
+.paper-trade-card.closed {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.paper-trade-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.paper-trade-head strong {
+  font-size: 18px;
+}
+
+.paper-trade-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.paper-trade-grid strong {
+  display: block;
+  font-size: 14px;
+}
+
+.paper-trade-foot {
+  margin-top: 10px;
+  color: var(--muted-2);
+  font-size: 12px;
+  word-break: break-word;
+}
+
 ::-webkit-scrollbar {
   width: 9px;
   height: 9px;
@@ -564,6 +660,13 @@ textarea {
 
   .top-row {
     grid-template-columns: 1fr auto auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .paper-status-grid,
+  .paper-trade-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -624,6 +727,18 @@ textarea {
 
   #chart {
     min-height: 310px;
+  }
+}
+
+@media (max-width: 520px) {
+  .paper-status-grid,
+  .paper-trade-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .paper-trade-head {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 
