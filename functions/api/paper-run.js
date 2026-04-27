@@ -7,6 +7,10 @@ import {
   applyFtmoGuardianToScans
 } from "../_shared/ftmo-guardian.js";
 
+import {
+  applyNewsFilterToScans
+} from "../_shared/news-filter.js";
+
 const PAIRS = [
   "EURUSD", "GBPUSD", "USDJPY", "USDCHF", "USDCAD", "AUDUSD", "NZDUSD",
   "EURGBP", "EURJPY", "EURCHF", "EURCAD", "EURAUD", "EURNZD",
@@ -16,7 +20,7 @@ const PAIRS = [
   "XAUUSD", "BTCUSD"
 ];
 
-const MODEL_VERSION = "server-paper-v8-ftmo-guardian";
+const MODEL_VERSION = "server-paper-v9-news-ftmo-guardian";
 const DEFAULT_TIMEFRAME = "M15";
 const CANDLE_LIMIT = 260;
 const MAX_OPEN_TRADES = 4;
@@ -105,7 +109,13 @@ async function handlePaperRun(context) {
       })
     );
 
-    const marketScans = await applyFtmoGuardianToScans(db, historicalScans, {
+    const newsFilteredScans = await applyNewsFilterToScans(db, historicalScans, {
+      env,
+      timeframe,
+      mode: "paper"
+    });
+
+    const marketScans = await applyFtmoGuardianToScans(db, newsFilteredScans, {
       env,
       timeframe,
       mode: "paper"
@@ -182,6 +192,10 @@ async function handlePaperRun(context) {
           setupLabel: scan.setupLabel,
           volatilityRegime: scan.volatilityRegime,
           trendRegime: scan.trendRegime,
+
+          newsAllowed: scan.newsAllowed,
+          newsRiskLevel: scan.newsRiskLevel,
+          newsReason: scan.newsReason,
 
           tradeAllowed: scan.tradeAllowed,
           tradeStatus: scan.tradeStatus,
@@ -851,30 +865,60 @@ function manageOpenTrade(trade, scan) {
 
   if (direction === "buy") {
     if (price <= activeStop) {
-      return { close: true, reason: "active-stop", exitPrice: activeStop, pnlR: computePnlR(trade, activeStop) };
+      return {
+        close: true,
+        reason: "active-stop",
+        exitPrice: activeStop,
+        pnlR: computePnlR(trade, activeStop)
+      };
     }
 
     if (price >= target) {
-      return { close: true, reason: "take-profit", exitPrice: target, pnlR: computePnlR(trade, target) };
+      return {
+        close: true,
+        reason: "take-profit",
+        exitPrice: target,
+        pnlR: computePnlR(trade, target)
+      };
     }
   }
 
   if (direction === "sell") {
     if (price >= activeStop) {
-      return { close: true, reason: "active-stop", exitPrice: activeStop, pnlR: computePnlR(trade, activeStop) };
+      return {
+        close: true,
+        reason: "active-stop",
+        exitPrice: activeStop,
+        pnlR: computePnlR(trade, activeStop)
+      };
     }
 
     if (price <= target) {
-      return { close: true, reason: "take-profit", exitPrice: target, pnlR: computePnlR(trade, target) };
+      return {
+        close: true,
+        reason: "take-profit",
+        exitPrice: target,
+        pnlR: computePnlR(trade, target)
+      };
     }
   }
 
   if (trade.barsHeld >= trade.maxBarsHold) {
-    return { close: true, reason: "time-exit", exitPrice: price, pnlR: computePnlR(trade, price) };
+    return {
+      close: true,
+      reason: "time-exit",
+      exitPrice: price,
+      pnlR: computePnlR(trade, price)
+    };
   }
 
   if (Number(scan.ultraScore || 0) < 50 && livePnlR < 0.35) {
-    return { close: true, reason: "signal-decay", exitPrice: price, pnlR: computePnlR(trade, price) };
+    return {
+      close: true,
+      reason: "signal-decay",
+      exitPrice: price,
+      pnlR: computePnlR(trade, price)
+    };
   }
 
   const tradeSignal = direction === "sell" ? "SELL" : "BUY";
@@ -887,11 +931,21 @@ function manageOpenTrade(trade, scan) {
       (tradeSignal === "SELL" && scanSignal === "BUY")
     )
   ) {
-    return { close: true, reason: "opposite-signal", exitPrice: price, pnlR: computePnlR(trade, price) };
+    return {
+      close: true,
+      reason: "opposite-signal",
+      exitPrice: price,
+      pnlR: computePnlR(trade, price)
+    };
   }
 
   if (Number(exitPressure.score || 0) >= 84) {
-    return { close: true, reason: "exit-pressure", exitPrice: price, pnlR: computePnlR(trade, price) };
+    return {
+      close: true,
+      reason: "exit-pressure",
+      exitPrice: price,
+      pnlR: computePnlR(trade, price)
+    };
   }
 
   let nextStopLoss = activeStop;
@@ -939,6 +993,7 @@ async function openNewTrades(db, timeframe, openTrades, scans) {
 
   const candidates = scans
     .filter((scan) => scan.tradeAllowed)
+    .filter((scan) => scan.newsAllowed !== false)
     .filter((scan) => scan.ftmoAllowed !== false)
     .filter((scan) => scan.direction === "buy" || scan.direction === "sell")
     .filter((scan) => !openPairs.has(scan.pair))
@@ -968,6 +1023,7 @@ async function openNewTrades(db, timeframe, openTrades, scans) {
   if (!opened.length && openTrades.length === 0) {
     const exploration = scans
       .filter((scan) => !openPairs.has(scan.pair))
+      .filter((scan) => scan.newsAllowed !== false)
       .filter((scan) => scan.ftmoAllowed !== false)
       .filter((scan) => scan.direction === "buy" || scan.direction === "sell")
       .filter((scan) => Number(scan.ultraScore || 0) >= EXPLORATION_MIN_ULTRA_SCORE)
@@ -1035,10 +1091,10 @@ function createOpenTrade(scan, exploration = false) {
     hour: inferHour(now),
 
     modelTag: exploration
-      ? `SERVER_EXPLORATION_V8_${scan.pair}_${scan.setupType}_EQ${scan.entryQualityScore}`
-      : `SERVER_V8_${scan.pair}_${scan.setupType}_EQ${scan.entryQualityScore}`,
+      ? `SERVER_EXPLORATION_V9_${scan.pair}_${scan.setupType}_EQ${scan.entryQualityScore}`
+      : `SERVER_V9_${scan.pair}_${scan.setupType}_EQ${scan.entryQualityScore}`,
 
-    source: exploration ? "server-paper-exploration-v8-ftmo" : "server-paper-v8-ftmo"
+    source: exploration ? "server-paper-exploration-v9-news-ftmo" : "server-paper-v9-news-ftmo"
   };
 }
 
@@ -1168,7 +1224,7 @@ function buildClosedTrade(trade, scan, management) {
     sniperScore: Number(scan?.paperScore || trade.sniperScore || 0),
     modelTag: trade.modelTag || "",
     closeReason: management.reason,
-    source: trade.source || "server-paper-v8-ftmo"
+    source: trade.source || "server-paper-v9-news-ftmo"
   };
 }
 
