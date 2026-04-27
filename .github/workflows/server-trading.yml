@@ -1,0 +1,85 @@
+name: Server Trading Engine
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: "Run without opening paper trades or sending Telegram alerts"
+        required: false
+        default: "0"
+      timeframes:
+        description: "Comma-separated timeframes"
+        required: false
+        default: "M15"
+
+concurrency:
+  group: server-trading-engine
+  cancel-in-progress: false
+
+jobs:
+  server-trading:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Validate secrets
+        run: |
+          if [ -z "${{ secrets.SITE_URL }}" ]; then
+            echo "Missing SITE_URL secret"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.SYNC_SECRET }}" ]; then
+            echo "Missing SYNC_SECRET secret"
+            exit 1
+          fi
+
+      - name: Run server trading engine
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          SYNC_SECRET: ${{ secrets.SYNC_SECRET }}
+          DRY_RUN: ${{ github.event.inputs.dryRun || '0' }}
+          TIMEFRAMES: ${{ github.event.inputs.timeframes || 'M15' }}
+        run: |
+          set -e
+
+          BASE_URL="${SITE_URL%/}"
+          URL="$BASE_URL/api/server-trading?token=$SYNC_SECRET&timeframes=$TIMEFRAMES&dryRun=$DRY_RUN&paper=1&alerts=1"
+
+          echo "Calling server trading engine..."
+          echo "$BASE_URL/api/server-trading?timeframes=$TIMEFRAMES&dryRun=$DRY_RUN&paper=1&alerts=1"
+
+          RESPONSE=$(curl -sS --fail-with-body "$URL")
+
+          echo "$RESPONSE" > server-trading-response.json
+
+          node - <<'NODE'
+          const fs = require("fs");
+
+          const data = JSON.parse(fs.readFileSync("server-trading-response.json", "utf8"));
+
+          console.log(JSON.stringify({
+            ok: data.ok,
+            source: data.source,
+            version: data.version,
+            dryRun: data.dryRun,
+            timeframes: data.timeframes,
+            durationMs: data.durationMs,
+            summary: data.summary
+          }, null, 2));
+
+          if (!data.ok) {
+            console.error("Server trading failed");
+            process.exit(1);
+          }
+          NODE
+
+      - name: Upload response artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-trading-response
+          path: server-trading-response.json
+          retention-days: 7
