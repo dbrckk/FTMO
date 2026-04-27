@@ -1,3 +1,5 @@
+const MODEL_VERSION = "paper-health-v2-market-aware";
+
 const PAIRS = [
   "EURUSD", "GBPUSD", "USDJPY", "USDCHF", "USDCAD", "AUDUSD", "NZDUSD",
   "EURGBP", "EURJPY", "EURCHF", "EURCAD", "EURAUD", "EURNZD",
@@ -7,14 +9,28 @@ const PAIRS = [
   "XAUUSD", "BTCUSD"
 ];
 
-const MAX_CANDLE_AGE_SECONDS = {
+const DEFAULT_TIMEFRAME = "M15";
+
+const FRESHNESS_SECONDS = {
   M5: 60 * 60,
   M15: 3 * 60 * 60,
   H1: 8 * 60 * 60,
   H4: 24 * 60 * 60
 };
 
+const MIN_FRESH_PAIRS_MARKET_OPEN = 16;
+const MIN_FRESH_PAIRS_MARKET_CLOSED = 1;
+const MAX_MISSING_PAIRS = 2;
+
 export async function onRequestGet(context) {
+  return handlePaperHealth(context);
+}
+
+export async function onRequestPost(context) {
+  return handlePaperHealth(context);
+}
+
+async function handlePaperHealth(context) {
   try {
     const env = context.env || {};
     const db = env.DB;
@@ -23,196 +39,321 @@ export async function onRequestGet(context) {
       return json({
         ok: false,
         healthy: false,
-        status: "DB_MISSING",
+        source: "paper-health",
+        version: MODEL_VERSION,
         error: "Missing DB binding"
       }, 500);
     }
 
+    if (!isAuthorized(context.request, env.SYNC_SECRET || "")) {
+      return json({
+        ok: false,
+        healthy: false,
+        source: "paper-health",
+        version: MODEL_VERSION,
+        error: "Unauthorized"
+      }, 401);
+    }
+
     const url = new URL(context.request.url);
-    const timeframe = normalizeTimeframe(url.searchParams.get("timeframe")) || "M15";
 
-    const market = await getMarketHealth(db, timeframe);
-    const openTrades = await getOpenTradesCount(db, timeframe);
-    const closedSummary = await getClosedSummary(db, timeframe);
-    const lastRun = await getLastRun(db, timeframe);
+    const timeframe =
+      normalizeTimeframe(url.searchParams.get("timeframe")) ||
+      DEFAULT_TIMEFRAME;
 
-    const freshPairs = market.filter((row) => row.fresh).length;
-    const stalePairs = market.filter((row) => !row.fresh && row.rows > 0).length;
-    const missingPairs = market.filter((row) => row.rows === 0).length;
+    const strict = readBool(url, "strict", false);
+    const marketAware = readBool(url, "marketAware", true);
+
+    const minFreshPairs = Number(
+      url.searchParams.get("minFreshPairs") ||
+      env.PAPER_HEALTH_MIN_FRESH_PAIRS ||
+      MIN_FRESH_PAIRS_MARKET_OPEN
+    );
+
+    const maxMissingPairs = Number(
+      url.searchParams.get("maxMissingPairs") ||
+      env.PAPER_HEALTH_MAX_MISSING_PAIRS ||
+      MAX_MISSING_PAIRS
+    );
+
+    const market = getMarketStatus(new Date());
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const maxAge = getMaxAgeSeconds(timeframe, market);
+
+    const checks = [];
+
+    for (const pair of PAIRS) {
+      checks.push(await checkPair(db, pair, timeframe, nowSeconds, maxAge));
+    }
+
+    const freshPairs = checks.filter((item) => item.status === "fresh");
+    const stalePairs = checks.filter((item) => item.status === "stale");
+    const missingPairs = checks.filter((item) => item.status === "missing");
+
+    const latestTs = Math.max(
+      0,
+      ...checks.map((item) => Number(item.lastTs || 0))
+    );
+
+    const lastRun = latestTs
+      ? new Date(latestTs * 1000).toISOString()
+      : null;
+
+    const effectiveMinFresh = marketAware && !market.isTradingWindow
+      ? MIN_FRESH_PAIRS_MARKET_CLOSED
+      : minFreshPairs;
 
     const healthy =
-      freshPairs >= 21 &&
-      missingPairs === 0 &&
-      Boolean(lastRun);
+      missingPairs.length <= maxMissingPairs &&
+      freshPairs.length >= effectiveMinFresh;
 
-    const status =
-      healthy ? "HEALTHY" :
-      freshPairs >= 16 ? "WARNING" :
-      "UNHEALTHY";
+    const degraded =
+      !healthy &&
+      missingPairs.length <= maxMissingPairs &&
+      freshPairs.length > 0;
 
-    return json({
-      ok: true,
+    const shouldFail =
+      strict
+        ? !healthy
+        : marketAware && !market.isTradingWindow
+          ? false
+          : !healthy;
+
+    const payload = {
+      ok: !shouldFail,
       healthy,
-      status,
+      degraded,
+      source: "paper-health",
+      version: MODEL_VERSION,
+      generatedAt: new Date().toISOString(),
+
       timeframe,
-      market: {
-        totalPairs: PAIRS.length,
-        freshPairs,
-        stalePairs,
-        missingPairs,
-        maxAgeAllowedMinutes: Math.round((MAX_CANDLE_AGE_SECONDS[timeframe] || MAX_CANDLE_AGE_SECONDS.M15) / 60),
-        pairs: market
-      },
-      paper: {
-        openTrades,
-        closedTrades: closedSummary.trades,
-        winRate: closedSummary.winRate,
-        expectancy: closedSummary.expectancy,
-        pnl: closedSummary.pnl,
-        lastRun
+      strict,
+      marketAware,
+      market,
+
+      totalPairs: PAIRS.length,
+      freshPairs: freshPairs.length,
+      stalePairs: stalePairs.length,
+      missingPairs: missingPairs.length,
+
+      minFreshPairs: effectiveMinFresh,
+      maxMissingPairs,
+      maxAgeSeconds: maxAge,
+
+      lastRun,
+
+      statusText: buildStatusText({
+        healthy,
+        degraded,
+        market,
+        freshPairs: freshPairs.length,
+        stalePairs: stalePairs.length,
+        missingPairs: missingPairs.length
+      }),
+
+      pairs: checks,
+
+      groups: {
+        fresh: freshPairs.map((item) => item.pair),
+        stale: stalePairs.map((item) => ({
+          pair: item.pair,
+          ageMinutes: item.ageMinutes,
+          lastCandle: item.lastCandle
+        })),
+        missing: missingPairs.map((item) => item.pair)
       }
-    });
+    };
+
+    return json(payload, shouldFail ? 503 : 200);
   } catch (error) {
     return json({
       ok: false,
       healthy: false,
-      status: "ERROR",
+      source: "paper-health",
+      version: MODEL_VERSION,
       error: String(error?.message || error || "paper-health-error")
     }, 500);
   }
 }
 
-async function getMarketHealth(db, timeframe) {
-  const now = Math.floor(Date.now() / 1000);
-  const maxAge = MAX_CANDLE_AGE_SECONDS[timeframe] || MAX_CANDLE_AGE_SECONDS.M15;
+async function checkPair(db, pair, timeframe, nowSeconds, maxAgeSeconds) {
+  try {
+    const row = await db.prepare(`
+      SELECT
+        ts,
+        close
+      FROM market_candles
+      WHERE pair = ?
+        AND timeframe = ?
+      ORDER BY ts DESC
+      LIMIT 1
+    `).bind(pair, timeframe).first();
 
-  const out = [];
+    if (!row || !row.ts) {
+      return {
+        pair,
+        timeframe,
+        status: "missing",
+        lastTs: 0,
+        lastCandle: null,
+        ageSeconds: null,
+        ageMinutes: null,
+        close: null
+      };
+    }
 
-  for (const pair of PAIRS) {
-    const row = await db
-      .prepare(`
-        SELECT
-          COUNT(*) AS rows,
-          MAX(ts) AS last_ts
-        FROM market_candles
-        WHERE pair = ? AND timeframe = ?
-      `)
-      .bind(pair, timeframe)
-      .first();
-
-    const rows = Number(row?.rows || 0);
-    const lastTs = Number(row?.last_ts || 0);
-    const ageSeconds = lastTs ? Math.max(0, now - lastTs) : 999999999;
+    const lastTs = Number(row.ts || 0);
+    const ageSeconds = Math.max(0, nowSeconds - lastTs);
     const ageMinutes = Math.round(ageSeconds / 60);
-    const fresh = rows >= 40 && ageSeconds <= maxAge;
 
-    out.push({
+    return {
       pair,
-      rows,
+      timeframe,
+      status: ageSeconds <= maxAgeSeconds ? "fresh" : "stale",
       lastTs,
+      lastCandle: new Date(lastTs * 1000).toISOString(),
+      ageSeconds,
       ageMinutes,
-      fresh,
-      status: rows === 0 ? "MISSING" : fresh ? "FRESH" : "STALE"
-    });
-  }
-
-  return out;
-}
-
-async function getOpenTradesCount(db, timeframe) {
-  try {
-    const row = await db
-      .prepare(`
-        SELECT COUNT(*) AS count
-        FROM paper_open_trades
-        WHERE timeframe = ?
-      `)
-      .bind(timeframe)
-      .first();
-
-    return Number(row?.count || 0);
-  } catch {
-    return 0;
-  }
-}
-
-async function getClosedSummary(db, timeframe) {
-  try {
-    const row = await db
-      .prepare(`
-        SELECT
-          COUNT(*) AS trades,
-          SUM(CASE WHEN win = 1 THEN 1 ELSE 0 END) AS wins,
-          ROUND(AVG(pnl_r), 4) AS expectancy,
-          ROUND(SUM(pnl), 2) AS pnl
-        FROM paper_trades
-        WHERE timeframe = ?
-      `)
-      .bind(timeframe)
-      .first();
-
-    const trades = Number(row?.trades || 0);
-    const wins = Number(row?.wins || 0);
-
-    return {
-      trades,
-      wins,
-      losses: Math.max(0, trades - wins),
-      winRate: trades ? Number(((wins / trades) * 100).toFixed(2)) : 0,
-      expectancy: Number(row?.expectancy || 0),
-      pnl: Number(row?.pnl || 0)
+      close: Number(row.close || 0)
     };
-  } catch {
+  } catch (error) {
     return {
-      trades: 0,
-      wins: 0,
-      losses: 0,
-      winRate: 0,
-      expectancy: 0,
-      pnl: 0
+      pair,
+      timeframe,
+      status: "missing",
+      lastTs: 0,
+      lastCandle: null,
+      ageSeconds: null,
+      ageMinutes: null,
+      close: null,
+      error: String(error?.message || error || "pair-check-error")
     };
   }
 }
 
-async function getLastRun(db, timeframe) {
-  try {
-    const row = await db
-      .prepare(`
-        SELECT
-          id,
-          ran_at,
-          timeframe,
-          scanned_pairs,
-          opened,
-          closed,
-          notes
-        FROM paper_runs
-        WHERE timeframe = ?
-        ORDER BY ran_at DESC
-        LIMIT 1
-      `)
-      .bind(timeframe)
-      .first();
+function getMaxAgeSeconds(timeframe, market) {
+  const base = FRESHNESS_SECONDS[timeframe] || FRESHNESS_SECONDS.M15;
 
-    if (!row) return null;
-
-    return {
-      id: row.id,
-      ranAt: row.ran_at,
-      timeframe: row.timeframe,
-      scannedPairs: Number(row.scanned_pairs || 0),
-      opened: Number(row.opened || 0),
-      closed: Number(row.closed || 0),
-      notes: row.notes || ""
-    };
-  } catch {
-    return null;
+  if (!market.isTradingWindow) {
+    return Math.max(base, 72 * 60 * 60);
   }
+
+  if (market.isRolloverWindow) {
+    return Math.max(base, 8 * 60 * 60);
+  }
+
+  return base;
+}
+
+function getMarketStatus(date = new Date()) {
+  const paris = getParisParts(date);
+  const day = paris.day;
+  const hour = paris.hour;
+  const minute = paris.minute;
+
+  const isSaturday = day === 6;
+  const isSunday = day === 0;
+  const isMonday = day === 1;
+  const isFriday = day === 5;
+
+  const isWeekend =
+    isSaturday ||
+    isSunday ||
+    (isFriday && hour >= 23) ||
+    (isMonday && hour < 1);
+
+  const isRolloverWindow =
+    hour === 22 ||
+    hour === 23 ||
+    (hour === 0 && minute <= 30);
+
+  return {
+    timezone: "Europe/Paris",
+    day,
+    hour,
+    minute,
+    isWeekend,
+    isRolloverWindow,
+    isTradingWindow: !isWeekend,
+    label:
+      isWeekend ? "market-closed" :
+      isRolloverWindow ? "rollover" :
+      "market-open"
+  };
+}
+
+function getParisParts(date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Paris",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).formatToParts(date);
+
+  const weekday = parts.find((part) => part.type === "weekday")?.value || "Mon";
+  const hour = Number(parts.find((part) => part.type === "hour")?.value || 0);
+  const minute = Number(parts.find((part) => part.type === "minute")?.value || 0);
+
+  const map = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6
+  };
+
+  return {
+    day: map[weekday] ?? 1,
+    hour,
+    minute
+  };
+}
+
+function buildStatusText(data) {
+  if (data.healthy) {
+    return `Healthy: ${data.freshPairs} fresh, ${data.stalePairs} stale, ${data.missingPairs} missing.`;
+  }
+
+  if (data.degraded && !data.market.isTradingWindow) {
+    return `Degraded but tolerated: market is closed, ${data.freshPairs} fresh, ${data.stalePairs} stale.`;
+  }
+
+  if (data.degraded) {
+    return `Degraded: ${data.freshPairs} fresh, ${data.stalePairs} stale, ${data.missingPairs} missing.`;
+  }
+
+  return `Unhealthy: ${data.freshPairs} fresh, ${data.stalePairs} stale, ${data.missingPairs} missing.`;
 }
 
 function normalizeTimeframe(value) {
-  const tf = String(value || "").toUpperCase().trim();
-  return ["M5", "M15", "H1", "H4"].includes(tf) ? tf : "";
+  const timeframe = String(value || "").toUpperCase().trim();
+
+  return ["M5", "M15", "H1", "H4"].includes(timeframe) ? timeframe : "";
+}
+
+function readBool(url, key, fallback = false) {
+  const value = url.searchParams.get(key);
+
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+
+  return String(value) === "1" || String(value).toLowerCase() === "true";
+}
+
+function isAuthorized(request, secret) {
+  if (!secret) return true;
+
+  const url = new URL(request.url);
+  const token = String(url.searchParams.get("token") || "").trim();
+  const auth = request.headers.get("authorization") || "";
+  const bearer = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+
+  return token === secret || bearer === secret;
 }
 
 function json(data, status = 200) {
@@ -223,4 +364,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-                               }
+}
