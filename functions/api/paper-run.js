@@ -3,6 +3,10 @@ import {
   ensureArchiveColumns
 } from "../_shared/archive-intelligence.js";
 
+import {
+  applyFtmoGuardianToScans
+} from "../_shared/ftmo-guardian.js";
+
 const PAIRS = [
   "EURUSD", "GBPUSD", "USDJPY", "USDCHF", "USDCAD", "AUDUSD", "NZDUSD",
   "EURGBP", "EURJPY", "EURCHF", "EURCAD", "EURAUD", "EURNZD",
@@ -12,7 +16,7 @@ const PAIRS = [
   "XAUUSD", "BTCUSD"
 ];
 
-const MODEL_VERSION = "server-paper-v7-archive-intelligence";
+const MODEL_VERSION = "server-paper-v8-ftmo-guardian";
 const DEFAULT_TIMEFRAME = "M15";
 const CANDLE_LIMIT = 260;
 const MAX_OPEN_TRADES = 4;
@@ -55,7 +59,7 @@ async function handlePaperRun(context) {
 
     await ensurePaperTables(db);
     await ensureArchiveColumns(db);
-    await ensurePaperOpenColumns(db);
+    await ensurePaperColumns(db);
 
     const url = new URL(context.request.url);
     const body = context.request.method === "POST" ? await safeJson(context.request) : {};
@@ -68,7 +72,7 @@ async function handlePaperRun(context) {
 
     const rawMarketScans = await scanAllPairs(db, timeframe);
 
-    const marketScans = await Promise.all(
+    const historicalScans = await Promise.all(
       rawMarketScans.map(async (scan) => {
         if (!scan || scan.signal === "WAIT") return scan;
 
@@ -100,6 +104,12 @@ async function handlePaperRun(context) {
         };
       })
     );
+
+    const marketScans = await applyFtmoGuardianToScans(db, historicalScans, {
+      env,
+      timeframe,
+      mode: "paper"
+    });
 
     const openBefore = await getOpenTrades(db, timeframe);
 
@@ -142,21 +152,46 @@ async function handlePaperRun(context) {
       topCandidates: marketScans
         .slice()
         .sort((a, b) => Number(b.paperScore || 0) - Number(a.paperScore || 0))
-        .slice(0, 8)
+        .slice(0, 12)
         .map((scan) => ({
           pair: scan.pair,
+          timeframe: scan.timeframe,
           signal: scan.signal,
+          direction: scan.direction,
+          current: scan.current,
+          stopLoss: scan.stopLoss,
+          takeProfit: scan.takeProfit,
+          tp1: scan.tp1,
+          rr: scan.rr,
+
           ultraScore: scan.ultraScore,
+          trendScore: scan.trendScore,
+          timingScore: scan.timingScore,
+          riskScore: scan.riskScore,
+          executionScore: scan.executionScore,
+          smartMoneyScore: scan.smartMoneyScore,
           entryQualityScore: scan.entryQualityScore,
           setupQualityScore: scan.setupQualityScore,
           exitPressureScore: scan.exitPressureScore,
           paperScore: scan.paperScore,
+
           historicalEdgeScore: scan.historicalEdgeScore,
           historicalConfidence: scan.historicalConfidence,
+
           setupType: scan.setupType,
+          setupLabel: scan.setupLabel,
+          volatilityRegime: scan.volatilityRegime,
+          trendRegime: scan.trendRegime,
+
           tradeAllowed: scan.tradeAllowed,
           tradeStatus: scan.tradeStatus,
-          tradeReason: scan.tradeReason
+          tradeReason: scan.tradeReason,
+
+          ftmoAllowed: scan.ftmoAllowed,
+          ftmoStatus: scan.ftmoStatus,
+          ftmoRecommendedRiskPercent: scan.ftmoRecommendedRiskPercent,
+          ftmoRecommendedRiskAmount: scan.ftmoRecommendedRiskAmount,
+          ftmoReason: scan.ftmoReason
         })),
       opened,
       closed
@@ -236,8 +271,8 @@ async function ensurePaperTables(db) {
   `).run();
 }
 
-async function ensurePaperOpenColumns(db) {
-  const columns = [
+async function ensurePaperColumns(db) {
+  const openColumns = [
     ["setup_type", "TEXT"],
     ["setup_quality_score", "REAL"],
     ["entry_quality_score", "REAL"],
@@ -247,12 +282,36 @@ async function ensurePaperOpenColumns(db) {
     ["sniper_score", "REAL"]
   ];
 
-  for (const [name, type] of columns) {
-    try {
-      await db.prepare(`ALTER TABLE paper_open_trades ADD COLUMN ${name} ${type}`).run();
-    } catch {
-      // Column already exists.
-    }
+  const closedColumns = [
+    ["setup_type", "TEXT"],
+    ["setup_quality_score", "REAL"],
+    ["entry_quality_score", "REAL"],
+    ["exit_pressure_score", "REAL"],
+    ["volatility_regime", "TEXT"],
+    ["trend_regime", "TEXT"],
+    ["model_tag", "TEXT"],
+    ["sniper_score", "REAL"],
+    ["close_reason", "TEXT"],
+    ["source", "TEXT"],
+    ["archive_edge_score", "REAL"],
+    ["vectorbt_score", "REAL"],
+    ["ml_score", "REAL"]
+  ];
+
+  for (const [name, type] of openColumns) {
+    await addColumnIfMissing(db, "paper_open_trades", name, type);
+  }
+
+  for (const [name, type] of closedColumns) {
+    await addColumnIfMissing(db, "paper_trades", name, type);
+  }
+}
+
+async function addColumnIfMissing(db, table, column, type) {
+  try {
+    await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`).run();
+  } catch {
+    // Column already exists.
   }
 }
 
@@ -483,15 +542,11 @@ function buildScan(pair, timeframe, candles, archive, freshness) {
 
   const setup = classifySetup({
     pair,
-    timeframe,
     candles,
     current,
     direction,
-    signal,
     atr14,
-    volatility,
-    momentum,
-    rsi14
+    volatility
   });
 
   const rr = getDefaultRr(pair);
@@ -527,8 +582,6 @@ function buildScan(pair, timeframe, candles, archive, freshness) {
 
   const entry = computeEntryQualityScore({
     pair,
-    timeframe,
-    candles,
     current,
     direction,
     signal,
@@ -544,10 +597,7 @@ function buildScan(pair, timeframe, candles, archive, freshness) {
     wickRiskScore: setup.wickRiskScore,
     distanceEma20Atr: setup.distanceEma20Atr,
     lateImpulse: setup.lateImpulse,
-    rsi14,
-    momentum,
-    atr14,
-    volatility
+    rsi14
   });
 
   const exitPressure = computeExitPressureScore({
@@ -564,7 +614,6 @@ function buildScan(pair, timeframe, candles, archive, freshness) {
     volatilityRegime: setup.volatilityRegime,
     wickRiskScore: setup.wickRiskScore,
     lateImpulse: setup.lateImpulse,
-    rsi14,
     momentum,
     volatility
   });
@@ -652,13 +701,7 @@ function buildScan(pair, timeframe, candles, archive, freshness) {
     tp1: roundByPair(tp1, pair),
 
     tradeAllowed,
-    tradeStatus: tradeAllowed
-      ? pair === "BTCUSD"
-        ? "VALID BTC V7"
-        : pair === "XAUUSD"
-          ? "VALID GOLD V7"
-          : "VALID V7"
-      : "BLOCKED V7",
+    tradeStatus: tradeAllowed ? "VALID FTMO-CANDIDATE" : "BLOCKED",
     tradeReason: tradeAllowed
       ? `${setup.setupLabel} accepted by paper gate.`
       : buildBlockReason({
@@ -746,7 +789,6 @@ function normalizeOpenTrade(row) {
     hour: Number(row.hour || 0),
     modelTag: row.model_tag || "",
     source: row.source || "server-paper",
-
     setupType: row.setup_type || extractSetupTypeFromTag(row.model_tag),
     setupQualityScore: Number(row.setup_quality_score || 0),
     entryQualityScore: Number(row.entry_quality_score || 0),
@@ -809,60 +851,30 @@ function manageOpenTrade(trade, scan) {
 
   if (direction === "buy") {
     if (price <= activeStop) {
-      return {
-        close: true,
-        reason: "active-stop",
-        exitPrice: activeStop,
-        pnlR: computePnlR(trade, activeStop)
-      };
+      return { close: true, reason: "active-stop", exitPrice: activeStop, pnlR: computePnlR(trade, activeStop) };
     }
 
     if (price >= target) {
-      return {
-        close: true,
-        reason: "take-profit",
-        exitPrice: target,
-        pnlR: computePnlR(trade, target)
-      };
+      return { close: true, reason: "take-profit", exitPrice: target, pnlR: computePnlR(trade, target) };
     }
   }
 
   if (direction === "sell") {
     if (price >= activeStop) {
-      return {
-        close: true,
-        reason: "active-stop",
-        exitPrice: activeStop,
-        pnlR: computePnlR(trade, activeStop)
-      };
+      return { close: true, reason: "active-stop", exitPrice: activeStop, pnlR: computePnlR(trade, activeStop) };
     }
 
     if (price <= target) {
-      return {
-        close: true,
-        reason: "take-profit",
-        exitPrice: target,
-        pnlR: computePnlR(trade, target)
-      };
+      return { close: true, reason: "take-profit", exitPrice: target, pnlR: computePnlR(trade, target) };
     }
   }
 
   if (trade.barsHeld >= trade.maxBarsHold) {
-    return {
-      close: true,
-      reason: "time-exit",
-      exitPrice: price,
-      pnlR: computePnlR(trade, price)
-    };
+    return { close: true, reason: "time-exit", exitPrice: price, pnlR: computePnlR(trade, price) };
   }
 
   if (Number(scan.ultraScore || 0) < 50 && livePnlR < 0.35) {
-    return {
-      close: true,
-      reason: "signal-decay",
-      exitPrice: price,
-      pnlR: computePnlR(trade, price)
-    };
+    return { close: true, reason: "signal-decay", exitPrice: price, pnlR: computePnlR(trade, price) };
   }
 
   const tradeSignal = direction === "sell" ? "SELL" : "BUY";
@@ -875,21 +887,11 @@ function manageOpenTrade(trade, scan) {
       (tradeSignal === "SELL" && scanSignal === "BUY")
     )
   ) {
-    return {
-      close: true,
-      reason: "opposite-signal",
-      exitPrice: price,
-      pnlR: computePnlR(trade, price)
-    };
+    return { close: true, reason: "opposite-signal", exitPrice: price, pnlR: computePnlR(trade, price) };
   }
 
   if (Number(exitPressure.score || 0) >= 84) {
-    return {
-      close: true,
-      reason: "exit-pressure",
-      exitPrice: price,
-      pnlR: computePnlR(trade, price)
-    };
+    return { close: true, reason: "exit-pressure", exitPrice: price, pnlR: computePnlR(trade, price) };
   }
 
   let nextStopLoss = activeStop;
@@ -937,6 +939,7 @@ async function openNewTrades(db, timeframe, openTrades, scans) {
 
   const candidates = scans
     .filter((scan) => scan.tradeAllowed)
+    .filter((scan) => scan.ftmoAllowed !== false)
     .filter((scan) => scan.direction === "buy" || scan.direction === "sell")
     .filter((scan) => !openPairs.has(scan.pair))
     .filter((scan) => !wouldOverloadRiskGroup(scan.pair, currentRiskGroups))
@@ -965,6 +968,7 @@ async function openNewTrades(db, timeframe, openTrades, scans) {
   if (!opened.length && openTrades.length === 0) {
     const exploration = scans
       .filter((scan) => !openPairs.has(scan.pair))
+      .filter((scan) => scan.ftmoAllowed !== false)
       .filter((scan) => scan.direction === "buy" || scan.direction === "sell")
       .filter((scan) => Number(scan.ultraScore || 0) >= EXPLORATION_MIN_ULTRA_SCORE)
       .filter((scan) => Number(scan.entryQualityScore || 0) >= EXPLORATION_MIN_ENTRY_QUALITY)
@@ -990,7 +994,12 @@ async function openNewTrades(db, timeframe, openTrades, scans) {
 
 function createOpenTrade(scan, exploration = false) {
   const now = new Date();
-  const riskPercent = exploration ? 0.08 : computeRiskPercent(scan);
+  const guardianRisk = Number(scan.ftmoRecommendedRiskPercent || 0);
+  const baseRisk = computeRiskPercent(scan);
+  const riskPercent = exploration
+    ? Math.min(0.08, guardianRisk || 0.08)
+    : Math.min(baseRisk, guardianRisk || baseRisk);
+
   const maxBarsHold = getMaxBarsHold(scan, exploration);
 
   return {
@@ -1026,10 +1035,10 @@ function createOpenTrade(scan, exploration = false) {
     hour: inferHour(now),
 
     modelTag: exploration
-      ? `SERVER_EXPLORATION_V7_${scan.pair}_${scan.setupType}_EQ${scan.entryQualityScore}`
-      : `SERVER_V7_${scan.pair}_${scan.setupType}_EQ${scan.entryQualityScore}`,
+      ? `SERVER_EXPLORATION_V8_${scan.pair}_${scan.setupType}_EQ${scan.entryQualityScore}`
+      : `SERVER_V8_${scan.pair}_${scan.setupType}_EQ${scan.entryQualityScore}`,
 
-    source: exploration ? "server-paper-exploration-v7" : "server-paper-v7"
+    source: exploration ? "server-paper-exploration-v8-ftmo" : "server-paper-v8-ftmo"
   };
 }
 
@@ -1122,13 +1131,7 @@ async function updateOpenTrade(db, trade) {
 }
 
 async function deleteOpenTrade(db, id) {
-  await db
-    .prepare(`
-      DELETE FROM paper_open_trades
-      WHERE id = ?
-    `)
-    .bind(id)
-    .run();
+  await db.prepare(`DELETE FROM paper_open_trades WHERE id = ?`).bind(id).run();
 }
 
 function buildClosedTrade(trade, scan, management) {
@@ -1141,27 +1144,21 @@ function buildClosedTrade(trade, scan, management) {
     pair: trade.pair,
     timeframe: trade.timeframe,
     direction: trade.direction,
-
     openedAt: trade.openedAt,
     closedAt: new Date().toISOString(),
-
     entry: roundByPair(trade.entry, trade.pair),
     exitPrice: roundByPair(management.exitPrice, trade.pair),
     stopLoss: roundByPair(trade.stopLoss, trade.pair),
     takeProfit: roundByPair(trade.takeProfit, trade.pair),
-
     pnl: round(pnl, 2),
     pnlR: round(pnlR, 3),
     win: pnlR > 0 ? 1 : 0,
-
     session: trade.session || inferSession(new Date()),
     hour: Number(trade.hour || inferHour(new Date())),
-
     ultraScore: Number(scan?.ultraScore || trade.ultraScore || 0),
     mlScore: Number(trade.mlScore || scan?.ultraScore || 50),
     vectorbtScore: Number(scan?.ultraScore || 50),
     archiveEdgeScore: Number(scan?.archiveEdgeScore || trade.archiveEdgeScore || 50),
-
     setupType: scan?.setupType || trade.setupType || extractSetupTypeFromTag(trade.modelTag),
     setupQualityScore: Number(scan?.setupQualityScore || trade.setupQualityScore || 0),
     entryQualityScore: Number(scan?.entryQualityScore || trade.entryQualityScore || 0),
@@ -1170,9 +1167,8 @@ function buildClosedTrade(trade, scan, management) {
     trendRegime: scan?.trendRegime || trade.trendRegime || "unknown",
     sniperScore: Number(scan?.paperScore || trade.sniperScore || 0),
     modelTag: trade.modelTag || "",
-
     closeReason: management.reason,
-    source: trade.source || "server-paper-v7"
+    source: trade.source || "server-paper-v8-ftmo"
   };
 }
 
@@ -1270,7 +1266,7 @@ async function insertPaperRun(db, run) {
       )
       .run();
   } catch {
-    // paper_runs is optional.
+    // Optional.
   }
 }
 
@@ -1289,7 +1285,6 @@ function getDirection(data) {
 
   if (bullish) return "buy";
   if (bearish) return "sell";
-
   return "wait";
 }
 
@@ -1443,11 +1438,7 @@ function getDirectionArchive(archive, direction) {
 
 function computeEntryQualityScore(data) {
   if (data.direction !== "buy" && data.direction !== "sell") {
-    return {
-      score: 0,
-      label: "no-direction",
-      reasons: ["No direction"]
-    };
+    return { score: 0, label: "no-direction", reasons: ["No direction"] };
   }
 
   let score = 50;
@@ -1467,64 +1458,20 @@ function computeEntryQualityScore(data) {
     reasons.push("Best setup type: trend pullback");
   }
 
-  if (data.setupType === "breakout-continuation") {
-    score += 5;
-    reasons.push("Valid breakout continuation");
-  }
+  if (data.setupType === "breakout-continuation") score += 5;
+  if (data.setupType === "liquidity-rejection") score += 5;
+  if (data.setupType === "momentum-continuation") score += 2;
+  if (data.setupType === "range-signal") score -= 8;
+  if (data.setupType === "late-impulse") score -= 22;
 
-  if (data.setupType === "liquidity-rejection") {
-    score += 5;
-    reasons.push("Valid liquidity rejection");
-  }
+  if (data.signal === "BUY" || data.signal === "SELL") score += 4;
 
-  if (data.setupType === "momentum-continuation") {
-    score += 2;
-    reasons.push("Momentum continuation");
-  }
-
-  if (data.setupType === "range-signal") {
-    score -= 8;
-    reasons.push("Range signal discount");
-  }
-
-  if (data.setupType === "late-impulse") {
-    score -= 22;
-    reasons.push("Late impulse blocked");
-  }
-
-  if (data.signal === "BUY" || data.signal === "SELL") {
-    score += 4;
-    reasons.push("Directional signal active");
-  }
-
-  if (data.rsi14 > 74 && data.direction === "buy") {
-    score -= data.pair === "BTCUSD" ? 10 : 7;
-    reasons.push("RSI buy extended");
-  }
-
-  if (data.rsi14 < 26 && data.direction === "sell") {
-    score -= data.pair === "BTCUSD" ? 10 : 7;
-    reasons.push("RSI sell extended");
-  }
-
-  if (data.wickRiskScore >= 65) {
-    score -= 8;
-    reasons.push("Opposite wick risk");
-  }
-
-  if (data.distanceEma20Atr > 2.2) {
-    score -= 7;
-    reasons.push("Far from EMA20");
-  }
-
-  if (data.pair === "BTCUSD") {
-    score -= 3;
-    reasons.push("BTC risk discount");
-  }
-
-  if (data.pair === "XAUUSD") {
-    score -= 1;
-  }
+  if (data.rsi14 > 74 && data.direction === "buy") score -= data.pair === "BTCUSD" ? 10 : 7;
+  if (data.rsi14 < 26 && data.direction === "sell") score -= data.pair === "BTCUSD" ? 10 : 7;
+  if (data.wickRiskScore >= 65) score -= 8;
+  if (data.distanceEma20Atr > 2.2) score -= 7;
+  if (data.pair === "BTCUSD") score -= 3;
+  if (data.pair === "XAUUSD") score -= 1;
 
   const finalScore = clamp(score, 1, 99);
 
