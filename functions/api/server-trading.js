@@ -1,4 +1,4 @@
-const MODEL_VERSION = "server-trading-v4-full-orchestrator";
+const MODEL_VERSION = "server-trading-v5-operational-safe-orchestrator";
 
 const DEFAULT_TIMEFRAME = "M15";
 
@@ -143,10 +143,10 @@ async function handleServerTrading(context) {
       durationMs: Date.now() - startedAt
     });
 
-    const ok = summary.failed === 0;
+    const status = summary.technicalFailures > 0 ? 207 : 200;
 
     return json({
-      ok,
+      ok: summary.technicalFailures === 0,
       source: "server-trading",
       version: MODEL_VERSION,
       generatedAt: new Date().toISOString(),
@@ -155,7 +155,7 @@ async function handleServerTrading(context) {
       dryRun,
       summary,
       results
-    }, ok ? 200 : 207);
+    }, status);
   } catch (error) {
     return json({
       ok: false,
@@ -194,17 +194,21 @@ async function callEndpoint(origin, path, token, params = {}) {
 
     return {
       ok: response.ok && data.ok !== false,
+      httpOk: response.ok,
       status: response.status,
       path,
       durationMs: Date.now() - startedAt,
-      data
+      data,
+      error: data.error || null
     };
   } catch (error) {
     return {
       ok: false,
+      httpOk: false,
       status: 0,
       path,
       durationMs: Date.now() - startedAt,
+      data: null,
       error: String(error?.message || error || "endpoint-call-error")
     };
   }
@@ -220,7 +224,11 @@ function buildSummary(results, options) {
     results.analytics
   ].filter(Boolean);
 
-  const failed = calls.filter((item) => !item.ok).length;
+  const classifications = calls.map(classifyCall);
+
+  const technicalFailures = classifications.filter((item) => item.level === "technical_failure").length;
+  const operationalWarnings = classifications.filter((item) => item.level === "operational_warning").length;
+  const safetyLocks = classifications.filter((item) => item.level === "safety_lock").length;
 
   const opened = results.paper.reduce((sum, item) => {
     return sum + Number(item?.data?.opened || 0);
@@ -256,10 +264,49 @@ function buildSummary(results, options) {
     decision: item?.data?.decision || null
   }));
 
+  const ftmoLocked = ftmoStatuses.some((item) => {
+    const status = item.status || {};
+    const decision = item.decision || {};
+
+    return (
+      status.locked === true ||
+      String(status.label || "").toUpperCase() === "LOCKED" ||
+      decision.canTrade === false ||
+      decision.canOpenNewTrade === false
+    );
+  });
+
+  const tradingState =
+    technicalFailures > 0 ? "TECHNICAL_FAILURE" :
+    ftmoLocked ? "SAFETY_LOCKED" :
+    opened > 0 ? "ACTIVE" :
+    alertsEligible > 0 ? "ALERT_READY" :
+    "WAITING";
+
+  const failed = technicalFailures;
+
   return {
-    ok: failed === 0,
+    ok: technicalFailures === 0,
     failed,
+    technicalFailures,
+    operationalWarnings,
+    safetyLocks,
     calls: calls.length,
+
+    tradingState,
+    message: buildSummaryMessage({
+      technicalFailures,
+      operationalWarnings,
+      safetyLocks,
+      ftmoLocked,
+      opened,
+      closed,
+      alertsEligible,
+      alertsSent,
+      healthFresh,
+      healthStale,
+      healthMissing
+    }),
 
     dryRun: options.dryRun,
     timeframes: options.timeframes,
@@ -285,8 +332,136 @@ function buildSummary(results, options) {
       missingPairs: healthMissing
     },
 
-    ftmoStatuses
+    ftmoLocked,
+    ftmoStatuses,
+    classifications
   };
+}
+
+function classifyCall(call) {
+  const path = call?.path || "";
+  const data = call?.data || {};
+  const status = Number(call?.status || 0);
+
+  if (!call) {
+    return {
+      path: "unknown",
+      level: "technical_failure",
+      reason: "Missing call result"
+    };
+  }
+
+  if (status === 401 || String(data.error || "").toLowerCase().includes("unauthorized")) {
+    return {
+      path,
+      level: "technical_failure",
+      reason: "Unauthorized"
+    };
+  }
+
+  if (String(data.error || "").toLowerCase().includes("missing db")) {
+    return {
+      path,
+      level: "technical_failure",
+      reason: "Missing DB binding"
+    };
+  }
+
+  if (path.includes("/api/sync-market") && call.ok !== true) {
+    return {
+      path,
+      level: "technical_failure",
+      reason: data.error || call.error || "Market sync failed"
+    };
+  }
+
+  if (path.includes("/api/paper-health") && call.ok !== true) {
+    return {
+      path,
+      level: "operational_warning",
+      reason: data.statusText || data.error || "Market data is stale or degraded"
+    };
+  }
+
+  if (path.includes("/api/ftmo-status")) {
+    const statusObject = data.status || {};
+    const decision = data.decision || {};
+
+    if (
+      statusObject.locked === true ||
+      String(statusObject.label || "").toUpperCase() === "LOCKED" ||
+      decision.canTrade === false ||
+      decision.canOpenNewTrade === false
+    ) {
+      return {
+        path,
+        level: "safety_lock",
+        reason: decision.reason || statusObject.reason || "FTMO safety lock active"
+      };
+    }
+  }
+
+  if (path.includes("/api/paper-run") && call.ok !== true) {
+    return {
+      path,
+      level: "technical_failure",
+      reason: data.error || call.error || "Paper run failed"
+    };
+  }
+
+  if (path.includes("/api/setup-alerts") && call.ok !== true) {
+    return {
+      path,
+      level: "operational_warning",
+      reason: data.error || call.error || "Setup alerts unavailable"
+    };
+  }
+
+  if (path.includes("/api/analytics-engine") && call.ok !== true) {
+    return {
+      path,
+      level: "operational_warning",
+      reason: data.error || call.error || "Analytics unavailable"
+    };
+  }
+
+  if (call.ok !== true && status >= 500) {
+    return {
+      path,
+      level: "technical_failure",
+      reason: data.error || call.error || "Server error"
+    };
+  }
+
+  return {
+    path,
+    level: "ok",
+    reason: "ok"
+  };
+}
+
+function buildSummaryMessage(data) {
+  if (data.technicalFailures > 0) {
+    return `Technical failure: ${data.technicalFailures} module(s) failed.`;
+  }
+
+  if (data.ftmoLocked) {
+    return "Trading safely locked by FTMO guard. Workflow is technically healthy.";
+  }
+
+  if (data.opened > 0) {
+    return `Trading active: ${data.opened} paper trade(s) opened.`;
+  }
+
+  if (data.alertsEligible > 0) {
+    return `Alert-ready: ${data.alertsEligible} setup(s) eligible, ${data.alertsSent} sent.`;
+  }
+
+  if (data.healthStale > data.healthFresh) {
+    return `Waiting: market data partially stale (${data.healthFresh} fresh, ${data.healthStale} stale).`;
+  }
+
+  return "Waiting: no high-quality setup found.";
 }
 
 async function insertServerTradingRun(db, data) {
@@ -402,4 +577,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-}
+      }
