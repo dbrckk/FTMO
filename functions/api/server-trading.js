@@ -1,4 +1,6 @@
-const MODEL_VERSION = "server-trading-orchestrator-v1";
+const MODEL_VERSION = "server-trading-v4-full-orchestrator";
+
+const DEFAULT_TIMEFRAME = "M15";
 
 export async function onRequestGet(context) {
   return handleServerTrading(context);
@@ -13,9 +15,18 @@ async function handleServerTrading(context) {
 
   try {
     const env = context.env || {};
-    const secret = env.SYNC_SECRET || "";
+    const db = env.DB;
 
-    if (!isAuthorized(context.request, secret)) {
+    if (!db) {
+      return json({
+        ok: false,
+        source: "server-trading",
+        version: MODEL_VERSION,
+        error: "Missing DB binding"
+      }, 500);
+    }
+
+    if (!isAuthorized(context.request, env.SYNC_SECRET || "")) {
       return json({
         ok: false,
         source: "server-trading",
@@ -27,70 +38,124 @@ async function handleServerTrading(context) {
     const url = new URL(context.request.url);
     const body = context.request.method === "POST" ? await safeJson(context.request) : {};
 
-    const dryRun = readBool(url, body, "dryRun", false);
-    const alerts = readBool(url, body, "alerts", true);
-    const runPaper = readBool(url, body, "paper", true);
-    const forceAlerts = readBool(url, body, "forceAlerts", false);
+    const origin = url.origin;
+    const token = env.SYNC_SECRET || "";
 
     const timeframes = parseTimeframes(
       url.searchParams.get("timeframes") ||
+      url.searchParams.get("timeframe") ||
       body.timeframes ||
-      "M15"
+      body.timeframe ||
+      DEFAULT_TIMEFRAME
     );
 
-    const results = [];
+    const dryRun = readBool(url, body, "dryRun", false);
+    const runSync = readBool(url, body, "sync", true);
+    const runHealth = readBool(url, body, "health", true);
+    const runPaper = readBool(url, body, "paper", true);
+    const runAlerts = readBool(url, body, "alerts", true);
+    const runAnalytics = readBool(url, body, "analytics", true);
+    const forceAlerts = readBool(url, body, "forceAlerts", false);
+    const telegram = readBool(url, body, "telegram", true);
+
+    const results = {
+      sync: [],
+      health: [],
+      ftmo: [],
+      paper: [],
+      alerts: null,
+      analytics: null
+    };
+
+    if (runSync) {
+      for (const timeframe of timeframes) {
+        results.sync.push(
+          await callEndpoint(origin, "/api/sync-market", token, {
+            timeframe
+          })
+        );
+      }
+    }
+
+    if (runHealth) {
+      for (const timeframe of timeframes) {
+        results.health.push(
+          await callEndpoint(origin, "/api/paper-health", token, {
+            timeframe,
+            marketAware: "1",
+            strict: "0"
+          })
+        );
+      }
+    }
 
     for (const timeframe of timeframes) {
-      const ftmo = await callInternalApi(context.request, env, "/api/ftmo-status", {
-        timeframe
-      });
+      results.ftmo.push(
+        await callEndpoint(origin, "/api/ftmo-status", token, {
+          timeframe
+        })
+      );
+    }
 
-      let paper = null;
-      let setupAlerts = null;
-
-      if (runPaper) {
-        paper = await callInternalApi(context.request, env, "/api/paper-run", {
-          timeframe,
-          dryRun: dryRun ? "1" : "0"
-        });
+    if (runPaper) {
+      for (const timeframe of timeframes) {
+        results.paper.push(
+          await callEndpoint(origin, "/api/paper-run", token, {
+            timeframe,
+            dryRun: dryRun ? "1" : "0"
+          })
+        );
       }
+    }
 
-      if (alerts) {
-        setupAlerts = await callInternalApi(context.request, env, "/api/setup-alerts", {
-          timeframe,
-          dryRun: dryRun ? "1" : "0",
-          force: forceAlerts ? "1" : "0"
-        });
-      }
-
-      results.push({
-        timeframe,
-        ftmo: summarizeFtmo(ftmo),
-        paper: summarizePaper(paper),
-        alerts: summarizeAlerts(setupAlerts),
-        raw: {
-          ftmo,
-          paper,
-          setupAlerts
-        }
+    if (runAlerts) {
+      results.alerts = await callEndpoint(origin, "/api/setup-alerts", token, {
+        timeframes: timeframes.join(","),
+        dryRun: dryRun ? "1" : "0",
+        forceAlerts: forceAlerts ? "1" : "0",
+        telegram: telegram ? "1" : "0",
+        alerts: "1",
+        refreshAnalytics: runAnalytics ? "1" : "0"
       });
     }
 
-    const durationMs = Date.now() - startedAt;
+    if (runAnalytics && !runAlerts) {
+      results.analytics = await callEndpoint(origin, "/api/analytics-engine", token, {
+        minTrades: "8"
+      });
+    }
+
+    const summary = buildSummary(results, {
+      timeframes,
+      dryRun,
+      runSync,
+      runHealth,
+      runPaper,
+      runAlerts,
+      runAnalytics,
+      forceAlerts,
+      telegram
+    });
+
+    await insertServerTradingRun(db, {
+      summary,
+      results,
+      durationMs: Date.now() - startedAt
+    });
+
+    const ok = summary.failed === 0;
 
     return json({
-      ok: true,
+      ok,
       source: "server-trading",
       version: MODEL_VERSION,
       generatedAt: new Date().toISOString(),
-      dryRun,
-      alerts,
-      paper: runPaper,
+      durationMs: Date.now() - startedAt,
       timeframes,
-      durationMs,
-      summary: buildSummary(results),
+      dryRun,
+      summary,
       results
-    });
+    }, ok ? 200 : 207);
   } catch (error) {
     return json({
       ok: false,
@@ -101,21 +166,23 @@ async function handleServerTrading(context) {
   }
 }
 
-async function callInternalApi(request, env, pathname, params = {}) {
-  const target = new URL(pathname, request.url);
-
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== "") {
-      target.searchParams.set(key, String(value));
-    }
-  }
-
-  if (env.SYNC_SECRET) {
-    target.searchParams.set("token", env.SYNC_SECRET);
-  }
+async function callEndpoint(origin, path, token, params = {}) {
+  const startedAt = Date.now();
 
   try {
-    const response = await fetch(target.toString(), {
+    const endpoint = new URL(`${origin}${path}`);
+
+    if (token) {
+      endpoint.searchParams.set("token", token);
+    }
+
+    for (const [key, value] of Object.entries(params || {})) {
+      if (value !== undefined && value !== null && value !== "") {
+        endpoint.searchParams.set(key, String(value));
+      }
+    }
+
+    const response = await fetch(endpoint.toString(), {
       method: "GET",
       headers: {
         "Accept": "application/json",
@@ -123,163 +190,175 @@ async function callInternalApi(request, env, pathname, params = {}) {
       }
     });
 
-    const data = await response.json().catch(() => ({
-      ok: false,
-      error: "Invalid JSON response"
-    }));
+    const data = await safeResponseJson(response);
 
     return {
       ok: response.ok && data.ok !== false,
       status: response.status,
-      ...data
+      path,
+      durationMs: Date.now() - startedAt,
+      data
     };
   } catch (error) {
     return {
       ok: false,
       status: 0,
-      source: pathname,
-      error: String(error?.message || error || "internal-api-error")
+      path,
+      durationMs: Date.now() - startedAt,
+      error: String(error?.message || error || "endpoint-call-error")
     };
   }
 }
 
-function summarizeFtmo(ftmo) {
-  if (!ftmo) return null;
+function buildSummary(results, options) {
+  const calls = [
+    ...results.sync,
+    ...results.health,
+    ...results.ftmo,
+    ...results.paper,
+    results.alerts,
+    results.analytics
+  ].filter(Boolean);
+
+  const failed = calls.filter((item) => !item.ok).length;
+
+  const opened = results.paper.reduce((sum, item) => {
+    return sum + Number(item?.data?.opened || 0);
+  }, 0);
+
+  const closed = results.paper.reduce((sum, item) => {
+    return sum + Number(item?.data?.closed || 0);
+  }, 0);
+
+  const scannedPairs = results.paper.reduce((sum, item) => {
+    return sum + Number(item?.data?.scannedPairs || 0);
+  }, 0);
+
+  const alertsSent = Number(results.alerts?.data?.summary?.sent || 0);
+  const alertsEligible = Number(results.alerts?.data?.summary?.eligible || 0);
+
+  const healthFresh = results.health.reduce((sum, item) => {
+    return sum + Number(item?.data?.freshPairs || 0);
+  }, 0);
+
+  const healthStale = results.health.reduce((sum, item) => {
+    return sum + Number(item?.data?.stalePairs || 0);
+  }, 0);
+
+  const healthMissing = results.health.reduce((sum, item) => {
+    return sum + Number(item?.data?.missingPairs || 0);
+  }, 0);
+
+  const ftmoStatuses = results.ftmo.map((item) => ({
+    timeframe: item?.data?.timeframe || null,
+    ok: item?.ok === true,
+    status: item?.data?.status || item?.data?.ftmoStatus || null,
+    decision: item?.data?.decision || null
+  }));
 
   return {
-    ok: ftmo.ok,
-    status: ftmo.status?.level || ftmo.status?.label || "unknown",
-    locked: Boolean(ftmo.status?.locked),
-    healthScore: ftmo.status?.healthScore ?? null,
-    canTrade: Boolean(ftmo.decision?.canTrade),
-    canOpenNewTrade: Boolean(ftmo.decision?.canOpenNewTrade),
-    recommendedMaxRiskPercent: ftmo.decision?.recommendedMaxRiskPercent ?? 0,
-    equity: ftmo.metrics?.equity ?? 0,
-    balance: ftmo.metrics?.balance ?? 0,
-    dailyLossRemaining: ftmo.metrics?.dailyLossRemaining ?? 0,
-    totalLossRemaining: ftmo.metrics?.totalLossRemaining ?? 0,
-    openRisk: ftmo.metrics?.openRisk ?? 0,
-    dailyTrades: ftmo.metrics?.dailyTrades ?? 0,
-    dailyLosses: ftmo.metrics?.dailyLosses ?? 0,
-    reason: ftmo.decision?.reason || ftmo.status?.reason || ""
+    ok: failed === 0,
+    failed,
+    calls: calls.length,
+
+    dryRun: options.dryRun,
+    timeframes: options.timeframes,
+
+    syncEnabled: options.runSync,
+    healthEnabled: options.runHealth,
+    paperEnabled: options.runPaper,
+    alertsEnabled: options.runAlerts,
+    analyticsEnabled: options.runAnalytics,
+    telegramEnabled: options.telegram,
+    forceAlerts: options.forceAlerts,
+
+    scannedPairs,
+    opened,
+    closed,
+
+    alertsEligible,
+    alertsSent,
+
+    health: {
+      freshPairs: healthFresh,
+      stalePairs: healthStale,
+      missingPairs: healthMissing
+    },
+
+    ftmoStatuses
   };
 }
 
-function summarizePaper(paper) {
-  if (!paper) return null;
+async function insertServerTradingRun(db, data) {
+  try {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS server_trading_runs (
+        id TEXT PRIMARY KEY,
+        created_at TEXT NOT NULL,
+        version TEXT,
+        ok INTEGER,
+        duration_ms INTEGER,
+        summary_json TEXT,
+        payload_json TEXT
+      )
+    `).run();
 
-  const candidates = Array.isArray(paper.topCandidates) ? paper.topCandidates : [];
-  const valid = candidates.filter((item) => item?.tradeAllowed === true);
-  const ftmoValid = valid.filter((item) => item?.ftmoAllowed !== false);
-
-  return {
-    ok: paper.ok,
-    dryRun: Boolean(paper.dryRun),
-    scannedPairs: paper.scannedPairs || 0,
-    opened: paper.opened || 0,
-    closed: paper.closed || 0,
-    openBefore: paper.openBefore || 0,
-    openAfter: paper.openAfter || 0,
-    validCandidates: valid.length,
-    ftmoValidCandidates: ftmoValid.length,
-    bestCandidate: candidates[0]
-      ? {
-          pair: candidates[0].pair,
-          signal: candidates[0].signal,
-          paperScore: candidates[0].paperScore,
-          ultraScore: candidates[0].ultraScore,
-          entryQualityScore: candidates[0].entryQualityScore,
-          ftmoAllowed: candidates[0].ftmoAllowed,
-          ftmoRisk: candidates[0].ftmoRecommendedRiskPercent,
-          reason: candidates[0].ftmoReason || candidates[0].tradeReason
-        }
-      : null
-  };
-}
-
-function summarizeAlerts(alerts) {
-  if (!alerts) return null;
-
-  return {
-    ok: alerts.ok,
-    dryRun: Boolean(alerts.dryRun),
-    candidates: alerts.candidates || 0,
-    validCandidates: alerts.validCandidates || 0,
-    sent: alerts.sent || 0,
-    skipped: alerts.skipped || 0,
-    results: Array.isArray(alerts.results)
-      ? alerts.results.map((item) => ({
-          pair: item.pair,
-          signal: item.signal,
-          status: item.status,
-          reason: item.reason || ""
-        }))
-      : []
-  };
-}
-
-function buildSummary(results) {
-  const summary = {
-    totalTimeframes: results.length,
-    ftmoLocked: 0,
-    paperOpened: 0,
-    paperClosed: 0,
-    alertsSent: 0,
-    bestCandidates: []
-  };
-
-  for (const result of results) {
-    if (result.ftmo?.locked) summary.ftmoLocked += 1;
-    summary.paperOpened += Number(result.paper?.opened || 0);
-    summary.paperClosed += Number(result.paper?.closed || 0);
-    summary.alertsSent += Number(result.alerts?.sent || 0);
-
-    if (result.paper?.bestCandidate) {
-      summary.bestCandidates.push({
-        timeframe: result.timeframe,
-        ...result.paper.bestCandidate
-      });
-    }
+    await db.prepare(`
+      INSERT INTO server_trading_runs (
+        id,
+        created_at,
+        version,
+        ok,
+        duration_ms,
+        summary_json,
+        payload_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      `server_trading_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      new Date().toISOString(),
+      MODEL_VERSION,
+      data.summary?.ok ? 1 : 0,
+      Number(data.durationMs || 0),
+      JSON.stringify(data.summary || {}),
+      JSON.stringify(data.results || {})
+    ).run();
+  } catch {
+    // Optional log table.
   }
-
-  return summary;
 }
 
 function parseTimeframes(value) {
-  const raw = Array.isArray(value)
-    ? value
-    : String(value || "")
-        .split(",")
-        .map((item) => item.trim());
+  const raw = Array.isArray(value) ? value.join(",") : String(value || DEFAULT_TIMEFRAME);
 
-  const allowed = new Set(["M5", "M15", "H1", "H4"]);
+  const timeframes = raw
+    .split(",")
+    .map((item) => normalizeTimeframe(item))
+    .filter(Boolean);
 
-  const result = raw
-    .map((item) => String(item || "").toUpperCase())
-    .filter((item) => allowed.has(item));
+  return [...new Set(timeframes.length ? timeframes : [DEFAULT_TIMEFRAME])];
+}
 
-  return result.length ? [...new Set(result)] : ["M15"];
+function normalizeTimeframe(value) {
+  const tf = String(value || "").toUpperCase().trim();
+
+  return ["M5", "M15", "H1", "H4"].includes(tf) ? tf : "";
 }
 
 function readBool(url, body, key, fallback = false) {
-  const value = url.searchParams.get(key) ?? body?.[key];
+  const queryValue = url.searchParams.get(key);
 
-  if (value === undefined || value === null || value === "") {
-    return fallback;
+  if (queryValue !== null && queryValue !== undefined && queryValue !== "") {
+    return queryValue === "1" || queryValue.toLowerCase() === "true";
   }
 
-  return String(value) === "1" || String(value).toLowerCase() === "true";
-}
+  const bodyValue = body?.[key];
 
-function isAuthorized(request, secret) {
-  if (!secret) return true;
+  if (bodyValue !== null && bodyValue !== undefined && bodyValue !== "") {
+    if (typeof bodyValue === "boolean") return bodyValue;
+    return String(bodyValue) === "1" || String(bodyValue).toLowerCase() === "true";
+  }
 
-  const url = new URL(request.url);
-  const token = String(url.searchParams.get("token") || "").trim();
-  const auth = request.headers.get("authorization") || "";
-  const bearer = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-
-  return token === secret || bearer === secret;
+  return fallback;
 }
 
 async function safeJson(request) {
@@ -296,6 +375,25 @@ async function safeJson(request) {
   }
 }
 
+async function safeResponseJson(response) {
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
+}
+
+function isAuthorized(request, secret) {
+  if (!secret) return true;
+
+  const url = new URL(request.url);
+  const token = String(url.searchParams.get("token") || "").trim();
+  const auth = request.headers.get("authorization") || "";
+  const bearer = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+
+  return token === secret || bearer === secret;
+}
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -304,4 +402,4 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
-      }
+}
