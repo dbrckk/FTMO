@@ -7,21 +7,45 @@ on:
   workflow_dispatch:
     inputs:
       dryRun:
-        description: "Run without opening paper trades or sending Telegram alerts"
+        description: "1 = test only, 0 = real paper run + alerts"
         required: false
         default: "0"
+
       timeframes:
-        description: "Comma-separated timeframes"
+        description: "Comma-separated timeframes: M5,M15,H1,H4"
         required: false
         default: "M15"
-      alerts:
-        description: "Send Telegram alerts"
+
+      sync:
+        description: "Run market sync"
         required: false
         default: "1"
+
+      health:
+        description: "Run paper health check"
+        required: false
+        default: "1"
+
       paper:
         description: "Run paper trading"
         required: false
         default: "1"
+
+      alerts:
+        description: "Run setup alerts"
+        required: false
+        default: "1"
+
+      analytics:
+        description: "Run analytics engine"
+        required: false
+        default: "1"
+
+      telegram:
+        description: "Send Telegram alerts"
+        required: false
+        default: "1"
+
       forceAlerts:
         description: "Ignore alert cooldown"
         required: false
@@ -29,276 +53,220 @@ on:
 
 concurrency:
   group: server-trading-engine
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   server-trading:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
 
     steps:
       - name: Validate secrets
         run: |
+          set -e
+
           if [ -z "${{ secrets.SITE_URL }}" ]; then
-            echo "Missing SITE_URL secret"
+            echo "❌ Missing GitHub secret: SITE_URL"
             exit 1
           fi
 
           if [ -z "${{ secrets.SYNC_SECRET }}" ]; then
-            echo "Missing SYNC_SECRET secret"
+            echo "❌ Missing GitHub secret: SYNC_SECRET"
             exit 1
           fi
 
-      - name: Prepare runtime variables
+          echo "✅ Required GitHub secrets exist"
+
+      - name: Prepare variables
         env:
-          SITE_URL: ${{ secrets.SITE_URL }}
+          SITE_URL_RAW: ${{ secrets.SITE_URL }}
           SYNC_SECRET: ${{ secrets.SYNC_SECRET }}
-          DRY_RUN: ${{ github.event.inputs.dryRun || '0' }}
-          TIMEFRAMES: ${{ github.event.inputs.timeframes || 'M15' }}
-          ALERTS: ${{ github.event.inputs.alerts || '1' }}
-          PAPER: ${{ github.event.inputs.paper || '1' }}
-          FORCE_ALERTS: ${{ github.event.inputs.forceAlerts || '0' }}
+
+          DRY_RUN_INPUT: ${{ github.event.inputs.dryRun }}
+          TIMEFRAMES_INPUT: ${{ github.event.inputs.timeframes }}
+          SYNC_INPUT: ${{ github.event.inputs.sync }}
+          HEALTH_INPUT: ${{ github.event.inputs.health }}
+          PAPER_INPUT: ${{ github.event.inputs.paper }}
+          ALERTS_INPUT: ${{ github.event.inputs.alerts }}
+          ANALYTICS_INPUT: ${{ github.event.inputs.analytics }}
+          TELEGRAM_INPUT: ${{ github.event.inputs.telegram }}
+          FORCE_ALERTS_INPUT: ${{ github.event.inputs.forceAlerts }}
         run: |
           set -e
 
-          echo "SITE_URL=${SITE_URL%/}" >> "$GITHUB_ENV"
+          SITE_URL="${SITE_URL_RAW%/}"
+
+          DRY_RUN="${DRY_RUN_INPUT:-0}"
+          TIMEFRAMES="${TIMEFRAMES_INPUT:-M15}"
+          SYNC="${SYNC_INPUT:-1}"
+          HEALTH="${HEALTH_INPUT:-1}"
+          PAPER="${PAPER_INPUT:-1}"
+          ALERTS="${ALERTS_INPUT:-1}"
+          ANALYTICS="${ANALYTICS_INPUT:-1}"
+          TELEGRAM="${TELEGRAM_INPUT:-1}"
+          FORCE_ALERTS="${FORCE_ALERTS_INPUT:-0}"
+
+          echo "SITE_URL=$SITE_URL" >> "$GITHUB_ENV"
           echo "SYNC_SECRET=$SYNC_SECRET" >> "$GITHUB_ENV"
+
           echo "DRY_RUN=$DRY_RUN" >> "$GITHUB_ENV"
           echo "TIMEFRAMES=$TIMEFRAMES" >> "$GITHUB_ENV"
-          echo "ALERTS=$ALERTS" >> "$GITHUB_ENV"
+          echo "SYNC=$SYNC" >> "$GITHUB_ENV"
+          echo "HEALTH=$HEALTH" >> "$GITHUB_ENV"
           echo "PAPER=$PAPER" >> "$GITHUB_ENV"
+          echo "ALERTS=$ALERTS" >> "$GITHUB_ENV"
+          echo "ANALYTICS=$ANALYTICS" >> "$GITHUB_ENV"
+          echo "TELEGRAM=$TELEGRAM" >> "$GITHUB_ENV"
           echo "FORCE_ALERTS=$FORCE_ALERTS" >> "$GITHUB_ENV"
-
-          echo "Runtime:"
-          echo "SITE_URL=${SITE_URL%/}"
-          echo "TIMEFRAMES=$TIMEFRAMES"
-          echo "DRY_RUN=$DRY_RUN"
-          echo "ALERTS=$ALERTS"
-          echo "PAPER=$PAPER"
-          echo "FORCE_ALERTS=$FORCE_ALERTS"
-
-      - name: Sync market data before trading
-        run: |
-          set -e
 
           mkdir -p workflow-logs
 
-          IFS=',' read -ra TFS <<< "$TIMEFRAMES"
+          echo "Runtime config:"
+          echo "SITE_URL=$SITE_URL"
+          echo "TIMEFRAMES=$TIMEFRAMES"
+          echo "DRY_RUN=$DRY_RUN"
+          echo "SYNC=$SYNC"
+          echo "HEALTH=$HEALTH"
+          echo "PAPER=$PAPER"
+          echo "ALERTS=$ALERTS"
+          echo "ANALYTICS=$ANALYTICS"
+          echo "TELEGRAM=$TELEGRAM"
+          echo "FORCE_ALERTS=$FORCE_ALERTS"
 
-          for TF in "${TFS[@]}"; do
-            TF="$(echo "$TF" | xargs | tr '[:lower:]' '[:upper:]')"
-
-            if [ -z "$TF" ]; then
-              continue
-            fi
-
-            echo "Syncing market data for $TF..."
-
-            URL="$SITE_URL/api/sync-market?token=$SYNC_SECRET&timeframe=$TF"
-
-            echo "$SITE_URL/api/sync-market?timeframe=$TF"
-
-            RESPONSE=$(curl -sS --fail-with-body "$URL")
-
-            echo "$RESPONSE" > "workflow-logs/sync-market-$TF.json"
-
-            node - "$TF" <<'NODE'
-          const fs = require("fs");
-          const tf = process.argv[2];
-          const file = `workflow-logs/sync-market-${tf}.json`;
-          const data = JSON.parse(fs.readFileSync(file, "utf8"));
-
-          console.log(JSON.stringify({
-            timeframe: tf,
-            ok: data.ok,
-            source: data.source,
-            version: data.version,
-            inserted: data.inserted,
-            updated: data.updated,
-            pairs: data.pairs,
-            durationMs: data.durationMs
-          }, null, 2));
-
-          if (data.ok === false) {
-            console.error(`Market sync failed for ${tf}`);
-            process.exit(1);
-          }
-          NODE
-          done
-
-      - name: Check paper server health
+      - name: Call server trading orchestrator
         run: |
           set -e
 
-          IFS=',' read -ra TFS <<< "$TIMEFRAMES"
+          SAFE_URL="$SITE_URL/api/server-trading?timeframes=$TIMEFRAMES&dryRun=$DRY_RUN&sync=$SYNC&health=$HEALTH&paper=$PAPER&alerts=$ALERTS&analytics=$ANALYTICS&telegram=$TELEGRAM&forceAlerts=$FORCE_ALERTS"
 
-          for TF in "${TFS[@]}"; do
-            TF="$(echo "$TF" | xargs | tr '[:lower:]' '[:upper:]')"
+          FULL_URL="$SAFE_URL&token=$SYNC_SECRET"
 
-            if [ -z "$TF" ]; then
-              continue
-            fi
+          echo "Calling:"
+          echo "$SAFE_URL"
 
-            echo "Checking paper health for $TF..."
+          HTTP_STATUS=$(curl -sS \
+            -o workflow-logs/server-trading-response.json \
+            -w "%{http_code}" \
+            "$FULL_URL")
 
-            URL="$SITE_URL/api/paper-health?token=$SYNC_SECRET&timeframe=$TF&marketAware=1&strict=0"
+          echo "$HTTP_STATUS" > workflow-logs/http-status.txt
 
-            echo "$SITE_URL/api/paper-health?timeframe=$TF&marketAware=1&strict=0"
+          echo "HTTP_STATUS=$HTTP_STATUS"
 
-            RESPONSE=$(curl -sS --fail-with-body "$URL")
-
-            echo "$RESPONSE" > "workflow-logs/paper-health-$TF.json"
-
-            node - "$TF" <<'NODE'
-          const fs = require("fs");
-          const tf = process.argv[2];
-          const file = `workflow-logs/paper-health-${tf}.json`;
-          const data = JSON.parse(fs.readFileSync(file, "utf8"));
-
-          console.log(JSON.stringify({
-            timeframe: tf,
-            ok: data.ok,
-            healthy: data.healthy,
-            degraded: data.degraded,
-            market: data.market,
-            totalPairs: data.totalPairs,
-            freshPairs: data.freshPairs,
-            stalePairs: data.stalePairs,
-            missingPairs: data.missingPairs,
-            minFreshPairs: data.minFreshPairs,
-            maxAgeSeconds: data.maxAgeSeconds,
-            lastRun: data.lastRun,
-            statusText: data.statusText
-          }, null, 2));
-
-          if (data.ok === false) {
-            console.error(`Paper server health failed for ${tf}`);
-            process.exit(1);
-          }
-          NODE
-          done
-
-      - name: Run FTMO status
-        run: |
-          set -e
-
-          IFS=',' read -ra TFS <<< "$TIMEFRAMES"
-
-          for TF in "${TFS[@]}"; do
-            TF="$(echo "$TF" | xargs | tr '[:lower:]' '[:upper:]')"
-
-            if [ -z "$TF" ]; then
-              continue
-            fi
-
-            echo "Checking FTMO status for $TF..."
-
-            URL="$SITE_URL/api/ftmo-status?token=$SYNC_SECRET&timeframe=$TF"
-
-            echo "$SITE_URL/api/ftmo-status?timeframe=$TF"
-
-            RESPONSE=$(curl -sS --fail-with-body "$URL")
-
-            echo "$RESPONSE" > "workflow-logs/ftmo-status-$TF.json"
-
-            node - "$TF" <<'NODE'
-          const fs = require("fs");
-          const tf = process.argv[2];
-          const file = `workflow-logs/ftmo-status-${tf}.json`;
-          const data = JSON.parse(fs.readFileSync(file, "utf8"));
-
-          console.log(JSON.stringify({
-            timeframe: tf,
-            ok: data.ok,
-            status: data.status,
-            metrics: data.metrics,
-            decision: data.decision
-          }, null, 2));
-
-          if (data.ok === false) {
-            console.error(`FTMO status failed for ${tf}`);
-            process.exit(1);
-          }
-          NODE
-          done
-
-      - name: Run server trading engine
-        run: |
-          set -e
-
-          URL="$SITE_URL/api/server-trading?token=$SYNC_SECRET&timeframes=$TIMEFRAMES&dryRun=$DRY_RUN&paper=$PAPER&alerts=$ALERTS&forceAlerts=$FORCE_ALERTS"
-
-          echo "Calling server trading engine..."
-          echo "$SITE_URL/api/server-trading?timeframes=$TIMEFRAMES&dryRun=$DRY_RUN&paper=$PAPER&alerts=$ALERTS&forceAlerts=$FORCE_ALERTS"
-
-          RESPONSE=$(curl -sS --fail-with-body "$URL")
-
-          echo "$RESPONSE" > "workflow-logs/server-trading-response.json"
+          if [ ! -s workflow-logs/server-trading-response.json ]; then
+            echo "❌ Empty response from server-trading"
+            exit 1
+          fi
 
           node <<'NODE'
           const fs = require("fs");
 
-          const data = JSON.parse(fs.readFileSync("workflow-logs/server-trading-response.json", "utf8"));
+          const status = String(fs.readFileSync("workflow-logs/http-status.txt", "utf8")).trim();
+          const raw = fs.readFileSync("workflow-logs/server-trading-response.json", "utf8");
 
-          console.log(JSON.stringify({
+          let data;
+
+          try {
+            data = JSON.parse(raw);
+          } catch (error) {
+            console.error("❌ Response is not valid JSON");
+            console.error(raw.slice(0, 2000));
+            process.exit(1);
+          }
+
+          const output = {
+            httpStatus: Number(status),
             ok: data.ok,
             source: data.source,
             version: data.version,
-            dryRun: data.dryRun,
-            alerts: data.alerts,
-            paper: data.paper,
-            timeframes: data.timeframes,
+            generatedAt: data.generatedAt,
             durationMs: data.durationMs,
+            dryRun: data.dryRun,
+            timeframes: data.timeframes,
             summary: data.summary
-          }, null, 2));
+          };
 
-          if (data.ok === false) {
-            console.error("Server trading failed");
+          console.log(JSON.stringify(output, null, 2));
+
+          const failed = Number(data?.summary?.failed || 0);
+
+          if (Number(status) >= 400) {
+            console.error("❌ HTTP error from server-trading");
             process.exit(1);
           }
+
+          if (data.ok === false || failed > 0) {
+            console.error("❌ Server trading reported failure");
+            process.exit(1);
+          }
+
+          console.log("✅ Server trading completed successfully");
           NODE
 
-      - name: Run analytics engine
+      - name: Build compact report
         if: always()
-        continue-on-error: true
         run: |
-          set -e
-
-          URL="$SITE_URL/api/analytics-engine?token=$SYNC_SECRET&minTrades=8"
-
-          echo "Calling analytics engine..."
-          echo "$SITE_URL/api/analytics-engine?minTrades=8"
-
-          RESPONSE=$(curl -sS --fail-with-body "$URL")
-
-          echo "$RESPONSE" > "workflow-logs/analytics-engine-response.json"
-
           node <<'NODE'
           const fs = require("fs");
 
-          const file = "workflow-logs/analytics-engine-response.json";
+          const file = "workflow-logs/server-trading-response.json";
 
           if (!fs.existsSync(file)) {
-            console.log("No analytics response file.");
+            console.log("No response file.");
             process.exit(0);
           }
 
-          const data = JSON.parse(fs.readFileSync(file, "utf8"));
+          let data = {};
 
-          console.log(JSON.stringify({
+          try {
+            data = JSON.parse(fs.readFileSync(file, "utf8"));
+          } catch {
+            console.log("Invalid JSON response.");
+            process.exit(0);
+          }
+
+          const report = {
             ok: data.ok,
-            source: data.source,
-            version: data.version,
+            generatedAt: data.generatedAt,
             durationMs: data.durationMs,
-            overall: data.overall,
-            recommendations: data.recommendations
+            summary: data.summary || {},
+            health: (data.results?.health || []).map((item) => ({
+              ok: item.ok,
+              timeframe: item.data?.timeframe,
+              freshPairs: item.data?.freshPairs,
+              stalePairs: item.data?.stalePairs,
+              missingPairs: item.data?.missingPairs,
+              statusText: item.data?.statusText
+            })),
+            paper: (data.results?.paper || []).map((item) => ({
+              ok: item.ok,
+              timeframe: item.data?.timeframe,
+              scannedPairs: item.data?.scannedPairs,
+              opened: item.data?.opened,
+              closed: item.data?.closed,
+              topCandidates: Array.isArray(item.data?.topCandidates)
+                ? item.data.topCandidates.slice(0, 5).map((candidate) => ({
+                    pair: candidate.pair,
+                    direction: candidate.direction,
+                    paperScore: candidate.paperScore,
+                    ultraScore: candidate.ultraScore,
+                    tradeAllowed: candidate.tradeAllowed,
+                    reason: candidate.tradeReason
+                  }))
+                : []
+            })),
+            alerts: data.results?.alerts
               ? {
-                  count: Array.isArray(data.recommendations.rules)
-                    ? data.recommendations.rules.length
-                    : 0
+                  ok: data.results.alerts.ok,
+                  summary: data.results.alerts.data?.summary,
+                  sent: data.results.alerts.data?.sent
                 }
               : null
-          }, null, 2));
+          };
+
+          fs.writeFileSync("workflow-logs/compact-report.json", JSON.stringify(report, null, 2));
+
+          console.log(JSON.stringify(report, null, 2));
           NODE
 
       - name: Upload workflow logs
