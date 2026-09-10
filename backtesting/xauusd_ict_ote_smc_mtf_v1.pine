@@ -36,6 +36,15 @@ bgcolor(showKillZones and inLondonKZ ? color.new(color.blue, 86) : na)
 bgcolor(showKillZones and inNYKZ ? color.new(color.orange, 86) : na)
 
 // ---------- Risk ----------
+
+gMTF = "Multi-Timeframe Decision"
+useMTF = input.bool(true, "Use MTF consensus", group=gMTF)
+minBullTF = input.int(4, "Minimum bullish TFs", minval=1, maxval=6, group=gMTF)
+minBearTF = input.int(4, "Minimum bearish TFs", minval=1, maxval=6, group=gMTF)
+requireHTF = input.bool(true, "Require H1/H2/H4 alignment", group=gMTF)
+showMTFTable = input.bool(true, "Show MTF matrix", group=gMTF)
+
+
 gRisk = "Trading"
 tpPts = input.float(15.0, "Take Profit", minval=0.1, group=gRisk)
 slPts = input.float(10.0, "Stop Loss", minval=0.1, group=gRisk)
@@ -316,6 +325,52 @@ stBear = ta.crossunder(k, d) and k > stOB - 10
 stBullTrend = k > d and k > 50
 stBearTrend = k < d and k < 50
 
+
+// ---------- Multi-Timeframe consensus engine ----------
+f_tf_state() =>
+    _basis = ta.ema(close, 20)
+    _dev = ta.stdev(close, 20)
+    _atr = ta.atr(14)
+    _atrMean = ta.sma(_atr, 50)
+    _vr = _atr / math.max(_atrMean, syminfo.mintick)
+    _mult = 2.20 + math.max(0.0, _vr - 1.0) * 0.35
+    _up = _basis + _dev * _mult
+    _lo = _basis - _dev * _mult
+    _ll = ta.lowest(low, 14)
+    _hh = ta.highest(high, 14)
+    _rk = 100 * (close - _ll) / math.max(_hh - _ll, syminfo.mintick)
+    _k = ta.ema(_rk, 3)
+    _d = ta.ema(_k, 3)
+    _e8 = ta.ema(close, 8)
+    _e20 = ta.ema(close, 20)
+    _e50 = ta.ema(close, 50)
+    _trendBull = _e8 > _e20 and _e20 > _e50
+    _trendBear = _e8 < _e20 and _e20 < _e50
+    _bbBull = close > _basis or (low < _lo and close > _lo)
+    _bbBear = close < _basis or (high > _up and close < _up)
+    _stBull = _k > _d and _k >= 45
+    _stBear = _k < _d and _k <= 55
+    _bull = (_trendBull ? 2 : 0) + (_bbBull ? 1 : 0) + (_stBull ? 1 : 0)
+    _bear = (_trendBear ? 2 : 0) + (_bbBear ? 1 : 0) + (_stBear ? 1 : 0)
+    _bull > _bear ? 1 : _bear > _bull ? -1 : 0
+
+tf5 = request.security(syminfo.tickerid, "5", f_tf_state(), lookahead=barmerge.lookahead_off)
+tf15 = request.security(syminfo.tickerid, "15", f_tf_state(), lookahead=barmerge.lookahead_off)
+tf30 = request.security(syminfo.tickerid, "30", f_tf_state(), lookahead=barmerge.lookahead_off)
+tf60 = request.security(syminfo.tickerid, "60", f_tf_state(), lookahead=barmerge.lookahead_off)
+tf120 = request.security(syminfo.tickerid, "120", f_tf_state(), lookahead=barmerge.lookahead_off)
+tf240 = request.security(syminfo.tickerid, "240", f_tf_state(), lookahead=barmerge.lookahead_off)
+
+bullTFCount = (tf5 == 1 ? 1 : 0) + (tf15 == 1 ? 1 : 0) + (tf30 == 1 ? 1 : 0) + (tf60 == 1 ? 1 : 0) + (tf120 == 1 ? 1 : 0) + (tf240 == 1 ? 1 : 0)
+bearTFCount = (tf5 == -1 ? 1 : 0) + (tf15 == -1 ? 1 : 0) + (tf30 == -1 ? 1 : 0) + (tf60 == -1 ? 1 : 0) + (tf120 == -1 ? 1 : 0) + (tf240 == -1 ? 1 : 0)
+
+htfBull = tf60 == 1 and tf120 == 1 and tf240 == 1
+htfBear = tf60 == -1 and tf120 == -1 and tf240 == -1
+
+mtfBullOK = not useMTF or (bullTFCount >= minBullTF and (not requireHTF or htfBull))
+mtfBearOK = not useMTF or (bearTFCount >= minBearTF and (not requireHTF or htfBear))
+
+
 // ---------- Confluence score ----------
 bullScore = 0.0
 bullScore += bullCHOCH ? 1.75 : 0
@@ -353,8 +408,8 @@ bearScore += inLondonKZ or inNYKZ ? 0.45 : 0
 bearScore += stBear ? 1.10 : stBearTrend ? 0.45 : 0
 bearScore += bbBearReclaim ? 1.10 : bbBearTrend ? 0.45 : 0
 
-longSignal = allowLong and inSession and bullScore >= minScore and bullScore > bearScore
-shortSignal = allowShort and inSession and bearScore >= minScore and bearScore > bullScore
+longSignal = allowLong and inSession and bullScore >= minScore and bullScore > bearScore and mtfBullOK
+shortSignal = allowShort and inSession and bearScore >= minScore and bearScore > bullScore and mtfBearOK
 
 // ---------- Strategy ----------
 if strategy.position_size == 0
@@ -398,6 +453,29 @@ if barstate.islast
     table.cell(dash,1,9,longSignal?"BUY":shortSignal?"SELL":"WAIT",
       bgcolor=longSignal?color.new(color.green,20):shortSignal?color.new(color.red,20):color.new(color.gray,75),
       text_color=color.white)
+
+
+// ---------- MTF matrix ----------
+var table mtf = table.new(position.bottom_right, 7, 2, border_width=1)
+f_state_text(v) => v == 1 ? "BULL" : v == -1 ? "BEAR" : "NEUTRAL"
+f_state_bg(v) => v == 1 ? color.new(color.green, 25) : v == -1 ? color.new(color.red, 25) : color.new(color.gray, 75)
+
+if showMTFTable and barstate.islast
+    table.cell(mtf,0,0,"MTF",bgcolor=color.black,text_color=color.white)
+    table.cell(mtf,1,0,"M5",bgcolor=color.black,text_color=color.white)
+    table.cell(mtf,2,0,"M15",bgcolor=color.black,text_color=color.white)
+    table.cell(mtf,3,0,"M30",bgcolor=color.black,text_color=color.white)
+    table.cell(mtf,4,0,"H1",bgcolor=color.black,text_color=color.white)
+    table.cell(mtf,5,0,"H2",bgcolor=color.black,text_color=color.white)
+    table.cell(mtf,6,0,"H4",bgcolor=color.black,text_color=color.white)
+    table.cell(mtf,0,1,str.tostring(bullTFCount) + "B/" + str.tostring(bearTFCount) + "S")
+    table.cell(mtf,1,1,f_state_text(tf5),bgcolor=f_state_bg(tf5),text_color=color.white)
+    table.cell(mtf,2,1,f_state_text(tf15),bgcolor=f_state_bg(tf15),text_color=color.white)
+    table.cell(mtf,3,1,f_state_text(tf30),bgcolor=f_state_bg(tf30),text_color=color.white)
+    table.cell(mtf,4,1,f_state_text(tf60),bgcolor=f_state_bg(tf60),text_color=color.white)
+    table.cell(mtf,5,1,f_state_text(tf120),bgcolor=f_state_bg(tf120),text_color=color.white)
+    table.cell(mtf,6,1,f_state_text(tf240),bgcolor=f_state_bg(tf240),text_color=color.white)
+
 
 // ---------- Alerts ----------
 alertcondition(longSignal, "XAUUSD BUY", "XAUUSD ICT/SMC BUY setup")
