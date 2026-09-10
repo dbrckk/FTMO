@@ -43,6 +43,7 @@ minBullTF = input.int(4, "Minimum bullish TFs", minval=1, maxval=6, group=gMTF)
 minBearTF = input.int(4, "Minimum bearish TFs", minval=1, maxval=6, group=gMTF)
 requireHTF = input.bool(true, "Require H1/H2/H4 alignment", group=gMTF)
 showMTFTable = input.bool(true, "Show MTF matrix", group=gMTF)
+adaptiveTF = input.bool(true, "Adaptive thresholds by chart TF", group=gMTF)
 
 
 gRisk = "Trading"
@@ -408,8 +409,31 @@ bearScore += inLondonKZ or inNYKZ ? 0.45 : 0
 bearScore += stBear ? 1.10 : stBearTrend ? 0.45 : 0
 bearScore += bbBearReclaim ? 1.10 : bbBearTrend ? 0.45 : 0
 
-longSignal = allowLong and inSession and bullScore >= minScore and bullScore > bearScore and mtfBullOK
-shortSignal = allowShort and inSession and bearScore >= minScore and bearScore > bullScore and mtfBearOK
+chartSec = timeframe.in_seconds()
+isM5 = chartSec == 300
+isM15 = chartSec == 900
+isM30 = chartSec == 1800
+isH1 = chartSec == 3600
+isH2 = chartSec == 7200
+isH4 = chartSec == 14400
+
+adaptiveScore = isM30 or isH4 ? 4.0 : 4.5
+adaptiveMinTF = isH1 ? 3 : isH2 ? 2 : 4
+adaptiveMinHTF = isH2 ? 1 : 2
+
+effScore = adaptiveTF ? adaptiveScore : minScore
+effMinBullTF = adaptiveTF ? adaptiveMinTF : minBullTF
+effMinBearTF = adaptiveTF ? adaptiveMinTF : minBearTF
+effMinHTF = adaptiveTF ? adaptiveMinHTF : 3
+
+htfBullCount = (tf60 == 1 ? 1 : 0) + (tf120 == 1 ? 1 : 0) + (tf240 == 1 ? 1 : 0)
+htfBearCount = (tf60 == -1 ? 1 : 0) + (tf120 == -1 ? 1 : 0) + (tf240 == -1 ? 1 : 0)
+
+adaptiveBullOK = not useMTF or (bullTFCount >= effMinBullTF and (not requireHTF or htfBullCount >= effMinHTF))
+adaptiveBearOK = not useMTF or (bearTFCount >= effMinBearTF and (not requireHTF or htfBearCount >= effMinHTF))
+
+longSignal = allowLong and inSession and bullScore >= effScore and bullScore > bearScore and adaptiveBullOK
+shortSignal = allowShort and inSession and bearScore >= effScore and bearScore > bullScore and adaptiveBearOK
 
 // ---------- Strategy ----------
 if strategy.position_size == 0
