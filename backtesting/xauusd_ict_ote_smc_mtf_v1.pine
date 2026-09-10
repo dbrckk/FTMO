@@ -40,6 +40,23 @@ trendLen1M = input.int(21, "1M regression days", minval=5, group=groupTrend)
 trendLen3M = input.int(63, "3M regression days", minval=20, group=groupTrend)
 trendLen6M = input.int(126, "6M regression days", minval=40, group=groupTrend)
 
+
+groupAdvanced = "Advanced ICT"
+showOB = input.bool(true, "Order Blocks", group=groupAdvanced)
+showBreaker = input.bool(true, "Breaker Blocks", group=groupAdvanced)
+showMitigation = input.bool(true, "Mitigation Blocks", group=groupAdvanced)
+showEQHL = input.bool(true, "Equal Highs / Lows", group=groupAdvanced)
+showPools = input.bool(true, "Liquidity Pools", group=groupAdvanced)
+showPremiumDiscount = input.bool(true, "Premium / Discount", group=groupAdvanced)
+eqToleranceATR = input.float(0.15, "EQH/EQL tolerance (ATR)", minval=0.01, step=0.01, group=groupAdvanced)
+obLookback = input.int(12, "OB search lookback", minval=2, maxval=50, group=groupAdvanced)
+
+groupKill = "ICT Kill Zones"
+showKillZones = input.bool(true, "Show Kill Zones", group=groupKill)
+londonKZ = input.session("0700-1000", "London Kill Zone", group=groupKill)
+nyKZ = input.session("1330-1600", "New York Kill Zone", group=groupKill)
+
+
 groupVisual = "Visuals"
 showDashboard = input.bool(true, "Dashboard", group=groupVisual)
 showSessionBg = input.bool(true, "Session background", group=groupVisual)
@@ -151,6 +168,97 @@ if showCHOCH and bullCHOCH
 if showCHOCH and bearCHOCH
     label.new(bar_index, high, "CHoCH ↓", style=label.style_label_down, textcolor=color.white, color=color.new(color.maroon, 0), size=size.small)
 
+
+// ---------- ICT Kill Zones ----------
+inLondonKZ = not na(time(timeframe.period, londonKZ, londonTZ))
+inNYKZ = not na(time(timeframe.period, nyKZ, nyTZ))
+bgcolor(showKillZones and inLondonKZ ? color.new(color.blue, 86) : na)
+bgcolor(showKillZones and inNYKZ ? color.new(color.orange, 86) : na)
+
+// ---------- Equal Highs / Equal Lows ----------
+atr14 = ta.atr(14)
+eqh = showEQHL and not na(ph) and not na(prevSwingHigh) and math.abs(ph - prevSwingHigh) <= atr14 * eqToleranceATR
+eql = showEQHL and not na(pl) and not na(prevSwingLow) and math.abs(pl - prevSwingLow) <= atr14 * eqToleranceATR
+
+if eqh
+    label.new(bar_index-pivotLen, ph, "EQH", style=label.style_label_down, color=color.new(color.yellow, 5), textcolor=color.black, size=size.tiny)
+if eql
+    label.new(bar_index-pivotLen, pl, "EQL", style=label.style_label_up, color=color.new(color.aqua, 5), textcolor=color.black, size=size.tiny)
+
+// ---------- Liquidity Pools ----------
+liqPoolHigh = not na(lastSwingHigh) ? lastSwingHigh : na
+liqPoolLow = not na(lastSwingLow) ? lastSwingLow : na
+plot(showPools ? liqPoolHigh : na, "BSL Pool", color=color.new(color.red, 65), linewidth=1, style=plot.style_linebr)
+plot(showPools ? liqPoolLow : na, "SSL Pool", color=color.new(color.green, 65), linewidth=1, style=plot.style_linebr)
+
+// ---------- Order Blocks / Breakers / Mitigation ----------
+var float bullOBHigh = na
+var float bullOBLow = na
+var int bullOBBar = na
+var bool bullOBBroken = false
+var float bearOBHigh = na
+var float bearOBLow = na
+var int bearOBBar = na
+var bool bearOBBroken = false
+
+if bullBreak
+    int found = na
+    for j = 1 to obLookback
+        if close[j] < open[j] and na(found)
+            found := j
+    if not na(found)
+        bullOBHigh := high[found]
+        bullOBLow := low[found]
+        bullOBBar := bar_index-found
+        bullOBBroken := false
+        if showOB
+            box.new(bullOBBar, bullOBHigh, bar_index+40, bullOBLow, bgcolor=color.new(color.green, 88), border_color=color.new(color.green, 45))
+
+if bearBreak
+    int found = na
+    for j = 1 to obLookback
+        if close[j] > open[j] and na(found)
+            found := j
+    if not na(found)
+        bearOBHigh := high[found]
+        bearOBLow := low[found]
+        bearOBBar := bar_index-found
+        bearOBBroken := false
+        if showOB
+            box.new(bearOBBar, bearOBHigh, bar_index+40, bearOBLow, bgcolor=color.new(color.red, 88), border_color=color.new(color.red, 45))
+
+bullOBTouch = not na(bullOBHigh) and low <= bullOBHigh and high >= bullOBLow
+bearOBTouch = not na(bearOBHigh) and high >= bearOBLow and low <= bearOBHigh
+
+if not na(bullOBLow) and close < bullOBLow
+    bullOBBroken := true
+if not na(bearOBHigh) and close > bearOBHigh
+    bearOBBroken := true
+
+if showBreaker and bullOBBroken and bullOBTouch
+    label.new(bar_index, high, "Breaker ↓", style=label.style_label_down, color=color.new(color.red, 15), textcolor=color.white, size=size.tiny)
+if showBreaker and bearOBBroken and bearOBTouch
+    label.new(bar_index, low, "Breaker ↑", style=label.style_label_up, color=color.new(color.green, 15), textcolor=color.white, size=size.tiny)
+
+if showMitigation and bullOBTouch and not bullOBBroken
+    label.new(bar_index, low, "Mitigation OB", style=label.style_label_up, color=color.new(color.teal, 55), textcolor=color.white, size=size.tiny)
+if showMitigation and bearOBTouch and not bearOBBroken
+    label.new(bar_index, high, "Mitigation OB", style=label.style_label_down, color=color.new(color.orange, 55), textcolor=color.white, size=size.tiny)
+
+// ---------- Premium / Discount Array ----------
+pdMid = not na(lastSwingHigh) and not na(lastSwingLow) ? (lastSwingHigh + lastSwingLow) / 2.0 : na
+premiumTop = lastSwingHigh
+discountBottom = lastSwingLow
+pPremTop = plot(showPremiumDiscount ? premiumTop : na, "Premium Top", color=color.new(color.red, 75), style=plot.style_linebr)
+pPDmid = plot(showPremiumDiscount ? pdMid : na, "PD Equilibrium", color=color.new(color.gray, 55), style=plot.style_linebr)
+pDiscBot = plot(showPremiumDiscount ? discountBottom : na, "Discount Bottom", color=color.new(color.green, 75), style=plot.style_linebr)
+fill(pPremTop, pPDmid, color=color.new(color.red, 93), title="Premium")
+fill(pPDmid, pDiscBot, color=color.new(color.green, 93), title="Discount")
+
+inDiscount = not na(pdMid) and close < pdMid
+inPremium = not na(pdMid) and close > pdMid
+
+
 // ---------- ICT OTE ----------
 var float impulseLow = na
 var float impulseHigh = na
@@ -232,8 +340,11 @@ plot(showTrend6M ? trend6M : na, "6M Trend", color=color.new(color.purple, 25), 
 bullTrendStack = sessionSlope > 0 and trend1MSlope > 0 and trend3MSlope > 0 and trend6MSlope > 0
 bearTrendStack = sessionSlope < 0 and trend1MSlope < 0 and trend3MSlope < 0 and trend6MSlope < 0
 
-bullConfluence = (inLondon or inNY) and structure == 1 and (inBullOTE or bullSweep) and (bullCHOCH or bullBOS or bullFVG) and bullTrendStack
-bearConfluence = (inLondon or inNY) and structure == -1 and (inBearOTE or bearSweep) and (bearCHOCH or bearBOS or bearFVG) and bearTrendStack
+bullICTContext = (inDiscount or inBullOTE) and (bullSweep or bullOBTouch or eql) and (bullCHOCH or bullBOS or bullFVG or bearOBBroken)
+bearICTContext = (inPremium or inBearOTE) and (bearSweep or bearOBTouch or eqh) and (bearCHOCH or bearBOS or bearFVG or bullOBBroken)
+
+bullConfluence = (inLondon or inNY) and bullICTContext and bullTrendStack
+bearConfluence = (inLondon or inNY) and bearICTContext and bearTrendStack
 
 plotshape(bullConfluence, "ICT/SMC BUY confluence", shape.labelup, location.belowbar, color=color.new(color.green, 0), textcolor=color.white, text="ICT BUY", size=size.small)
 plotshape(bearConfluence, "ICT/SMC SELL confluence", shape.labeldown, location.abovebar, color=color.new(color.red, 0), textcolor=color.white, text="ICT SELL", size=size.small)
