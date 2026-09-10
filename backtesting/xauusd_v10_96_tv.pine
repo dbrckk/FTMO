@@ -1,0 +1,95 @@
+//@version=6
+strategy("XAUUSD V10.96 London+US TP15 SL10", overlay=true, pyramiding=0, process_orders_on_close=false, initial_capital=100000, default_qty_type=strategy.fixed, default_qty_value=0.25, commission_type=strategy.commission.cash_per_order, commission_value=0)
+
+// TradingView implementation of the validated architecture constraints.
+// IMPORTANT: the Python research engine used LightGBM models; this Pine version is a causal rule-based approximation,
+// so the historical V10.96 metrics must NOT be assumed to transfer 1:1 to this script.
+
+tpPts = input.float(15.0, "Take Profit (Gold points)", minval=0.1)
+slPts = input.float(10.0, "Stop Loss (Gold points)", minval=0.1)
+startDate = input.time(timestamp("UTC", 2020, 1, 1, 0, 0), "Start date")
+londonSession = input.session("0700-1700", "London session")
+usSession = input.session("1200-2200", "US session")
+londonTz = input.string("Europe/London", "London timezone")
+usTz = input.string("America/New_York", "US timezone")
+
+inLondon = not na(time(timeframe.period, londonSession, londonTz))
+inUS = not na(time(timeframe.period, usSession, usTz))
+inSession = inLondon or inUS
+inDate = time >= startDate
+isM5 = timeframe.isminutes and timeframe.multiplier == 5
+
+ema20 = ta.ema(close, 20)
+ema50 = ta.ema(close, 50)
+ema200 = ta.ema(close, 200)
+atr14 = ta.atr(14)
+rsi14 = ta.rsi(close, 14)
+range = high - low
+rangeAvg = ta.sma(range, 20)
+rangeRel = rangeAvg > 0 ? range / rangeAvg : 0.0
+mom3 = close - close[3]
+
+m15Close = request.security(syminfo.tickerid, "15", close, barmerge.gaps_off, barmerge.lookahead_off)
+m15Ema20 = request.security(syminfo.tickerid, "15", ta.ema(close, 20), barmerge.gaps_off, barmerge.lookahead_off)
+m15Ema50 = request.security(syminfo.tickerid, "15", ta.ema(close, 50), barmerge.gaps_off, barmerge.lookahead_off)
+m15Rsi = request.security(syminfo.tickerid, "15", ta.rsi(close, 14), barmerge.gaps_off, barmerge.lookahead_off)
+m30Close = request.security(syminfo.tickerid, "30", close, barmerge.gaps_off, barmerge.lookahead_off)
+m30Ema20 = request.security(syminfo.tickerid, "30", ta.ema(close, 20), barmerge.gaps_off, barmerge.lookahead_off)
+h1Close = request.security(syminfo.tickerid, "60", close, barmerge.gaps_off, barmerge.lookahead_off)
+h1Ema20 = request.security(syminfo.tickerid, "60", ta.ema(close, 20), barmerge.gaps_off, barmerge.lookahead_off)
+h1Ema50 = request.security(syminfo.tickerid, "60", ta.ema(close, 50), barmerge.gaps_off, barmerge.lookahead_off)
+
+bullHTF = h1Close > h1Ema20 and h1Ema20 > h1Ema50 and m30Close > m30Ema20 and m15Close > m15Ema20
+bearHTF = h1Close < h1Ema20 and h1Ema20 < h1Ema50 and m30Close < m30Ema20 and m15Close < m15Ema20
+
+bullM5 = close > ema20 and ema20 > ema50 and mom3 > 0 and rsi14 > 48 and rsi14 < 72
+bearM5 = close < ema20 and ema20 < ema50 and mom3 < 0 and rsi14 < 52 and rsi14 > 28
+
+pullbackBuy = low <= ema20 and close > ema20 and close > open
+pullbackSell = high >= ema20 and close < ema20 and close < open
+expandOk = rangeRel >= 0.85 and rangeRel <= 2.75
+volOk = atr14 > ta.sma(atr14, 50) * 0.70
+
+buyScore = (bullHTF ? 3 : 0) + (bullM5 ? 2 : 0) + (pullbackBuy ? 2 : 0) + (expandOk ? 1 : 0) + (volOk ? 1 : 0) + (m15Rsi > 45 and m15Rsi < 72 ? 1 : 0)
+sellScore = (bearHTF ? 3 : 0) + (bearM5 ? 2 : 0) + (pullbackSell ? 2 : 0) + (expandOk ? 1 : 0) + (volOk ? 1 : 0) + (m15Rsi < 55 and m15Rsi > 28 ? 1 : 0)
+
+minScore = input.int(7, "Minimum signal score", minval=1, maxval=10)
+canTrade = isM5 and inDate and inSession and strategy.position_size == 0
+buySignal = canTrade and buyScore >= minScore and buyScore > sellScore
+sellSignal = canTrade and sellScore >= minScore and sellScore > buyScore
+
+if buySignal
+    strategy.entry("BUY", strategy.long, qty=0.25)
+if sellSignal
+    strategy.entry("SELL", strategy.short, qty=0.25)
+
+if strategy.position_size > 0
+    strategy.exit("BUY EXIT", "BUY", stop=strategy.position_avg_price - slPts, limit=strategy.position_avg_price + tpPts)
+if strategy.position_size < 0
+    strategy.exit("SELL EXIT", "SELL", stop=strategy.position_avg_price + slPts, limit=strategy.position_avg_price - tpPts)
+
+plotshape(buySignal, title="BUY", style=shape.labelup, location=location.belowbar, text="BUY\nTP +15\nSL -10", size=size.tiny)
+plotshape(sellSignal, title="SELL", style=shape.labeldown, location=location.abovebar, text="SELL\nTP +15\nSL -10", size=size.tiny)
+
+entryLine = strategy.position_size != 0 ? strategy.position_avg_price : na
+tpLine = strategy.position_size > 0 ? strategy.position_avg_price + tpPts : strategy.position_size < 0 ? strategy.position_avg_price - tpPts : na
+slLine = strategy.position_size > 0 ? strategy.position_avg_price - slPts : strategy.position_size < 0 ? strategy.position_avg_price + slPts : na
+plot(entryLine, "Entry", linewidth=2, style=plot.style_linebr)
+plot(tpLine, "TP", linewidth=1, style=plot.style_linebr)
+plot(slLine, "SL", linewidth=1, style=plot.style_linebr)
+
+alertcondition(buySignal, "XAUUSD BUY", "XAUUSD BUY signal - TP +15 / SL -10")
+alertcondition(sellSignal, "XAUUSD SELL", "XAUUSD SELL signal - TP +15 / SL -10")
+
+var table panel = table.new(position.top_right, 2, 5)
+if barstate.islast
+    table.cell(panel, 0, 0, "V10.96 TV")
+    table.cell(panel, 1, 0, isM5 ? "M5" : "USE M5")
+    table.cell(panel, 0, 1, "Session")
+    table.cell(panel, 1, 1, inLondon and inUS ? "LONDON+US" : inLondon ? "LONDON" : inUS ? "US" : "OFF")
+    table.cell(panel, 0, 2, "BUY score")
+    table.cell(panel, 1, 2, str.tostring(buyScore))
+    table.cell(panel, 0, 3, "SELL score")
+    table.cell(panel, 1, 3, str.tostring(sellScore))
+    table.cell(panel, 0, 4, "TP / SL")
+    table.cell(panel, 1, 4, "+15 / -10")
