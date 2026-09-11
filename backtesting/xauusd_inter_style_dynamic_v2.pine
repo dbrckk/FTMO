@@ -64,14 +64,20 @@ bcOnlyM5 = input.bool(true, "BC+ signals only on M5", group=gBC)
 bcAllowLondonOnly = input.bool(false, "Allow London-only BC+ (OOS weak)", group=gBC)
 bcAllowNYOnly = input.bool(true, "Allow NY-only BC+", group=gBC)
 bcAllowOverlap = input.bool(true, "Allow London/NY overlap BC+", group=gBC)
-bcSLFloor = input.float(15.0, "SL floor (Gold points)", minval=1, step=.5, group=gBC)
-bcSLATR = input.float(6.0, "SL ATR multiplier", minval=.5, step=.5, group=gBC)
-bcSLCap = input.float(25.0, "SL cap (Gold points)", minval=1, step=.5, group=gBC)
-bcTPFloor = input.float(30.0, "TP floor (Gold points)", minval=1, step=.5, group=gBC)
-bcTPATR = input.float(6.0, "TP ATR multiplier", minval=.5, step=.5, group=gBC)
-bcNYMult = input.float(1.30, "NY-only TP multiplier", minval=.5, step=.05, group=gBC)
-bcOverlapMult = input.float(1.20, "London/NY overlap TP multiplier", minval=.5, step=.05, group=gBC)
-bcMaxHoldBars = input.int(72, "Maximum BC+ hold bars on M5", minval=1, group=gBC)
+bcNYSLFloor = input.float(10.0, "NY-only SL floor", minval=1, step=.5, group=gBC)
+bcNYSLATR = input.float(6.0, "NY-only SL ATR multiplier", minval=.5, step=.5, group=gBC)
+bcNYSLCap = input.float(30.0, "NY-only SL cap", minval=1, step=.5, group=gBC)
+bcNYTPFloor = input.float(35.0, "NY-only TP floor", minval=1, step=.5, group=gBC)
+bcNYTPATR = input.float(5.0, "NY-only TP ATR multiplier", minval=.5, step=.5, group=gBC)
+bcNYMaxHoldBars = input.int(96, "NY-only max hold bars", minval=1, group=gBC)
+
+bcOverlapSLFloor = input.float(18.0, "Overlap SL floor", minval=1, step=.5, group=gBC)
+bcOverlapSLATR = input.float(8.0, "Overlap SL ATR multiplier", minval=.5, step=.5, group=gBC)
+bcOverlapSLCap = input.float(25.0, "Overlap SL cap", minval=1, step=.5, group=gBC)
+bcOverlapTPFloor = input.float(30.0, "Overlap TP floor", minval=1, step=.5, group=gBC)
+bcOverlapTPATR = input.float(12.0, "Overlap TP ATR multiplier", minval=.5, step=.5, group=gBC)
+bcOverlapMaxHoldBars = input.int(48, "Overlap max hold bars", minval=1, group=gBC)
+
 showBCLevels = input.bool(true, "Plot active BC+ TP/SL", group=gBC)
 
 gOsc = "Gold Filters"
@@ -517,6 +523,7 @@ var bool liquidityTaken=false
 var bool bcTrade=false
 var float bcActiveSL=na
 var float bcActiveTP=na
+var int bcActiveMaxHold=na
 
 
 if strategy.position_size==0 and gapOK
@@ -528,17 +535,20 @@ if strategy.position_size==0 and gapOK
     bcTrade:=false
     bcActiveSL:=na
     bcActiveTP:=na
+    bcActiveMaxHold:=na
     if bcLongEdge
         bcTrade:=true
         reversalTrade:=false
         bcActiveSL:=bcSignalSL
         bcActiveTP:=bcSignalTP
+        bcActiveMaxHold:=bcSignalMaxHold
         strategy.entry("BC+ BUY",strategy.long)
     else if bcShortEdge
         bcTrade:=true
         reversalTrade:=false
         bcActiveSL:=bcSignalSL
         bcActiveTP:=bcSignalTP
+        bcActiveMaxHold:=bcSignalMaxHold
         strategy.entry("BC+ SELL",strategy.short)
     else if longEdge and freshBull
         reversalTrade:=strictRevLong and not continuationLong
@@ -556,7 +566,7 @@ if strategy.position_size>0
         float bcLongStop=strategy.position_avg_price-bcActiveSL
         float bcLongTP=strategy.position_avg_price+bcActiveTP
         strategy.exit("BC+ BUY EXIT","BC+ BUY",stop=bcLongStop,limit=bcLongTP)
-        if strategy.opentrades>0 and bar_index-strategy.opentrades.entry_bar_index(0)>=bcMaxHoldBars
+        if strategy.opentrades>0 and bar_index-strategy.opentrades.entry_bar_index(0)>=bcActiveMaxHold
             strategy.close("BC+ BUY",comment="BC+ max hold")
     else
         peak:=na(peak)?high:math.max(peak,high)
@@ -584,7 +594,7 @@ if strategy.position_size<0
         float bcShortStop=strategy.position_avg_price+bcActiveSL
         float bcShortTP=strategy.position_avg_price-bcActiveTP
         strategy.exit("BC+ SELL EXIT","BC+ SELL",stop=bcShortStop,limit=bcShortTP)
-        if strategy.opentrades>0 and bar_index-strategy.opentrades.entry_bar_index(0)>=bcMaxHoldBars
+        if strategy.opentrades>0 and bar_index-strategy.opentrades.entry_bar_index(0)>=bcActiveMaxHold
             strategy.close("BC+ SELL",comment="BC+ max hold")
     else
         trough:=na(trough)?low:math.min(trough,low)
