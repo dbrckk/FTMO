@@ -478,8 +478,8 @@ bcEMA20SlopeNorm = math.abs(bcEMA20 - bcEMA20[6]) / math.max(atr14, syminfo.mint
 bcOverlapRegimeOK = not bcOverlap or bcEMA20SlopeNorm >= bcOverlapTrendSlopeMin
 bcBreakLong = close > ta.highest(high[1], 6)
 bcBreakShort = close < ta.lowest(low[1], 6)
-bcHTFLong = tf15 == 1 and tf30 == 1 and tf60 == 1 and tf120 == 1 and tf240 == 1
-bcHTFShort = tf15 == -1 and tf30 == -1 and tf60 == -1 and tf120 == -1 and tf240 == -1
+bcHTFLong = tf60 == 1 and tf120 == 1 and tf240 == 1 and (tf15 == 1 or tf30 == 1)
+bcHTFShort = tf60 == -1 and tf120 == -1 and tf240 == -1 and (tf15 == -1 or tf30 == -1)
 
 // NY-only robust windows (New York local time):
 // LONG 12:00-13:30 and 14:00-16:30; SHORT 12:00-12:30.
