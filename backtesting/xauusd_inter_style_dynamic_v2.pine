@@ -406,6 +406,43 @@ freshBearSetup = bearSetupGen > lastBearUsed
 longEdge = longSignal and not longSignal[1]
 shortEdge = shortSignal and not shortSignal[1]
 
+
+// ---------- Continuation A+ ----------
+bullDisp = close - open > atr14 * 0.8 and high - low > atr14 * 1.2 and close > open
+bearDisp = open - close > atr14 * 0.8 and high - low > atr14 * 1.2 and close < open
+bullDispRecent = ta.barssince(bullDisp) >= 0 and ta.barssince(bullDisp) <= 6
+bearDispRecent = ta.barssince(bearDisp) >= 0 and ta.barssince(bearDisp) <= 6
+bullStructRecent6 = ta.barssince(bullBOS or bullCHOCH) >= 0 and ta.barssince(bullBOS or bullCHOCH) <= 6
+bearStructRecent6 = ta.barssince(bearBOS or bearCHOCH) >= 0 and ta.barssince(bearBOS or bearCHOCH) <= 6
+
+aPlusBullCount =
+     (bullDispRecent ? 1 : 0) +
+     (bullFVGRecent ? 1 : 0) +
+     (bullOBTouch ? 1 : 0) +
+     (inBullOTE ? 1 : 0) +
+     (bullLiquidityQualityRecent >= 1.5 ? 1 : 0) +
+     (bullStructRecent6 ? 1 : 0) +
+     (inLondonKZ or inNYKZ ? 1 : 0) +
+     (k > d ? 1 : 0) +
+     (close > bbBasis ? 1 : 0)
+
+aPlusBearCount =
+     (bearDispRecent ? 1 : 0) +
+     (bearFVGRecent ? 1 : 0) +
+     (bearOBTouch ? 1 : 0) +
+     (inBearOTE ? 1 : 0) +
+     (bearLiquidityQualityRecent >= 1.5 ? 1 : 0) +
+     (bearStructRecent6 ? 1 : 0) +
+     (inLondonKZ or inNYKZ ? 1 : 0) +
+     (k < d ? 1 : 0) +
+     (close < bbBasis ? 1 : 0)
+
+continuationAPlusBull = tf240 == 1 and tf120 == 1 and tf60 == 1 and tf30 == 1 and tf15 == 1 and tf5 == 1 and bullDispRecent and aPlusBullCount >= 5 and (bullOBTouch or inBullOTE or bullLiquidityQualityRecent >= 1.5)
+continuationAPlusBear = tf240 == -1 and tf120 == -1 and tf60 == -1 and tf30 == -1 and tf15 == -1 and tf5 == -1 and bearDispRecent and aPlusBearCount >= 5 and (bearOBTouch or inBearOTE or bearLiquidityQualityRecent >= 1.5)
+
+plotshape(continuationAPlusBull, "A+ BUY continuation", shape.labelup, location.belowbar, color=color.new(color.lime, 0), textcolor=color.black, text="A+ BUY", size=size.tiny)
+plotshape(continuationAPlusBear, "A+ SELL continuation", shape.labeldown, location.abovebar, color=color.new(color.fuchsia, 0), textcolor=color.white, text="A+ SELL", size=size.tiny)
+
 // ---------- Dynamic management ----------
 var float peakSinceEntry = na
 var float troughSinceEntry = na
