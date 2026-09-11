@@ -52,6 +52,8 @@ minQuality = input.float(2.75, "Minimum ICT quality", minval=0, step=0.25, group
 showFVG = input.bool(true, "Show FVG", group=gICT)
 showOTE = input.bool(true, "Show OTE", group=gICT)
 showStructure = input.bool(true, "Show BOS / CHoCH", group=gICT)
+enableReversals = input.bool(true, "Enable strict reversal setups", group=gICT)
+reversalMinLiquidity = input.float(2.0, "Reversal minimum liquidity score", minval=0, step=0.25, group=gICT)
 showOB = input.bool(true, "Show Order Blocks", group=gICT)
 
 gOsc = "Gold Filters"
@@ -351,8 +353,6 @@ plot(d30Low, "30D Low", color=color.new(color.green, 65), style=plot.style_stepl
 bullQuality = (bullFVGRecent ? 2.0 : 0.0) + (bullOBTouch ? 2.0 : 0.0) + (inBullOTE ? 1.25 : 0.0) + bullLiquidityQuality + (bullCHOCH ? 1.5 : bullBOS ? 0.75 : 0.0) + (tf240 == 1 ? 0.75 : 0.0) + (k > d ? 0.5 : 0.0)
 bearQuality = (bearFVGRecent ? 2.0 : 0.0) + (bearOBTouch ? 2.0 : 0.0) + (inBearOTE ? 1.25 : 0.0) + bearLiquidityQuality + (bearCHOCH ? 1.5 : bearBOS ? 0.75 : 0.0) + (tf240 == -1 ? 0.75 : 0.0) + (k < d ? 0.5 : 0.0)
 
-longSignal = allowLong and robustWindow and biasBull and confirmBull and triggerBull and bullQuality >= minQuality
-shortSignal = allowShort and robustWindow and biasBear and confirmBear and triggerBear and bearQuality >= minQuality
 
 // ---------- Event-driven setup lock ----------
 var int bullSetupGen = 0
@@ -386,6 +386,7 @@ shortEdge = shortSignal and not shortSignal[1]
 var float peakSinceEntry = na
 var float troughSinceEntry = na
 var bool protected = false
+var bool reversalTrade = false
 
 if strategy.position_size == 0 and rearmGapOK
     peakSinceEntry := na
@@ -406,9 +407,13 @@ if strategy.position_size > 0
     if not na(lastSwingHigh) and lastSwingHigh > strategy.position_avg_price
         strategy.exit("BUY PARTIAL", "BUY", limit=lastSwingHigh, qty_percent=partialQty)
 
-    float longStop = strategy.position_avg_price - emergencyStop
+    float activeEmergency = reversalTrade ? math.min(emergencyStop, 8.0) : emergencyStop
+    float activeTrail = reversalTrade ? math.min(trailATR, 0.50) : trailATR
+    float activeProtect = reversalTrade ? math.min(protectTrigger, 6.0) : protectTrigger
+    protected := protected or peakSinceEntry - strategy.position_avg_price >= activeProtect
+    float longStop = strategy.position_avg_price - activeEmergency
     if protected
-        longStop := math.max(strategy.position_avg_price, peakSinceEntry - atr14 * trailATR)
+        longStop := math.max(strategy.position_avg_price, peakSinceEntry - atr14 * activeTrail)
     strategy.exit("BUY PROTECT", "BUY", stop=longStop)
 
     longInvalid = bearCHOCH or (close < bbBasis and k < d)
@@ -422,9 +427,13 @@ if strategy.position_size < 0
     if not na(lastSwingLow) and lastSwingLow < strategy.position_avg_price
         strategy.exit("SELL PARTIAL", "SELL", limit=lastSwingLow, qty_percent=partialQty)
 
-    float shortStop = strategy.position_avg_price + emergencyStop
+    float activeEmergencyS = reversalTrade ? math.min(emergencyStop, 8.0) : emergencyStop
+    float activeTrailS = reversalTrade ? math.min(trailATR, 0.50) : trailATR
+    float activeProtectS = reversalTrade ? math.min(protectTrigger, 6.0) : protectTrigger
+    protected := protected or strategy.position_avg_price - troughSinceEntry >= activeProtectS
+    float shortStop = strategy.position_avg_price + activeEmergencyS
     if protected
-        shortStop := math.min(strategy.position_avg_price, troughSinceEntry + atr14 * trailATR)
+        shortStop := math.min(strategy.position_avg_price, troughSinceEntry + atr14 * activeTrailS)
     strategy.exit("SELL PROTECT", "SELL", stop=shortStop)
 
     shortInvalid = bullCHOCH or (close > bbBasis and k > d)
@@ -435,7 +444,7 @@ if strategy.position_size < 0
 plotshape(longEdge and rearmGapOK and freshBullSetup, "BUY setup", shape.labelup, location.belowbar, color=color.green, textcolor=color.white, text="BUY", size=size.small)
 plotshape(shortEdge and rearmGapOK and freshBearSetup, "SELL setup", shape.labeldown, location.abovebar, color=color.red, textcolor=color.white, text="SELL", size=size.small)
 
-var table dash = table.new(position.top_right, 2, 8, border_width=1)
+var table dash = table.new(position.top_right, 2, 9, border_width=1)
 if barstate.islast
     table.cell(dash,0,0,"XAUUSD",bgcolor=color.black,text_color=color.white)
     table.cell(dash,1,0,"INTER-STYLE",bgcolor=color.black,text_color=color.white)
@@ -451,7 +460,9 @@ if barstate.islast
     table.cell(dash,1,5,str.tostring(bearQuality,"#.##"))
     table.cell(dash,0,6,"Setup Lock")
     table.cell(dash,1,6,rearmGapOK?"READY":"LOCKED")
-    table.cell(dash,0,7,"Decision")
+    table.cell(dash,0,7,"Setup Type")
+    table.cell(dash,1,7,continuationLong or continuationShort?"CONT":strictReversalLong or strictReversalShort?"REV":"NONE")
+    table.cell(dash,0,8,"Decision")
     table.cell(dash,1,7,longEdge and rearmGapOK and freshBullSetup?"BUY":shortEdge and rearmGapOK and freshBearSetup?"SELL":"WAIT",
       bgcolor=longEdge and rearmGapOK and freshBullSetup?color.new(color.green,20):shortEdge and rearmGapOK and freshBearSetup?color.new(color.red,20):color.new(color.gray,75),
       text_color=color.white)
