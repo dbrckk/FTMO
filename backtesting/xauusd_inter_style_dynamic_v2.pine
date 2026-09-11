@@ -61,6 +61,9 @@ minRearmBars = input.int(12, "Minimum M5-equivalent setup gap", minval=0, group=
 gBC = "BC+ Breakout Continuation"
 enableBCPlus = input.bool(true, "Enable BC+ engine", group=gBC)
 bcOnlyM5 = input.bool(true, "BC+ signals only on M5", group=gBC)
+bcAllowLondonOnly = input.bool(false, "Allow London-only BC+ (OOS weak)", group=gBC)
+bcAllowNYOnly = input.bool(true, "Allow NY-only BC+", group=gBC)
+bcAllowOverlap = input.bool(true, "Allow London/NY overlap BC+", group=gBC)
 bcSLFloor = input.float(15.0, "SL floor (Gold points)", minval=1, step=.5, group=gBC)
 bcSLATR = input.float(6.0, "SL ATR multiplier", minval=.5, step=.5, group=gBC)
 bcSLCap = input.float(25.0, "SL cap (Gold points)", minval=1, step=.5, group=gBC)
@@ -456,7 +459,10 @@ shortEdge=rawShort and not rawShort[1]
 // Entry: M5 breakout of prior 6 bars + recent displacement + all five higher TFs aligned
 //        + EMA8/EMA20 direction + stochastic direction, London/NY sessions only.
 // Management is intentionally simple: dynamic ATR/session TP/SL, no early BE/trailing.
-bcSessionOK = inLondon or inNY
+bcLondonOnly = inLondon and not inNY
+bcNYOnly = inNY and not inLondon
+bcOverlap = inLondon and inNY
+bcSessionOK = (bcAllowLondonOnly and bcLondonOnly) or (bcAllowNYOnly and bcNYOnly) or (bcAllowOverlap and bcOverlap)
 bcTFOK = not bcOnlyM5 or timeframe.period == "5"
 bcEMA8 = ta.ema(close, 8)
 bcBreakLong = close > ta.highest(high[1], 6)
@@ -468,7 +474,7 @@ bcShortRaw = enableBCPlus and bcTFOK and bcSessionOK and bcBreakShort and bearDi
 bcLongEdge = bcLongRaw and not bcLongRaw[1]
 bcShortEdge = bcShortRaw and not bcShortRaw[1]
 
-bcTPMult = nyOnly ? bcNYMult : overlapSession ? bcOverlapMult : 1.0
+bcTPMult = bcNYOnly ? bcNYMult : bcOverlap ? bcOverlapMult : 1.0
 bcSignalSL = math.min(bcSLCap, math.max(bcSLFloor, atr14 * bcSLATR))
 bcSignalTP = math.max(bcTPFloor, atr14 * bcTPATR * bcTPMult)
 
@@ -737,6 +743,10 @@ plotshape(preWarnShort, "PRE15 WATCH SHORT", shape.circle, location.abovebar, co
 plotshape(pre15Long, "PRE15 LONG TRIGGER", shape.triangleup, location.belowbar, color=color.aqua, size=size.small, text="15L")
 plotshape(pre15Short, "PRE15 SHORT TRIGGER", shape.triangledown, location.abovebar, color=color.orange, size=size.small, text="15S")
 
+// BC+ segment validation 2020-23 vs 2024-26:
+// London-only PF 1.269 -> 0.987 (disabled by default)
+// NY-only PF 1.186 -> 1.606
+// Overlap PF 1.367 -> 1.663 (strongest segment)
 // ---------- BC+ visuals ----------
 bcLongPlotTP = strategy.position_size > 0 and bcTrade ? strategy.position_avg_price + bcActiveTP : na
 bcLongPlotSL = strategy.position_size > 0 and bcTrade ? strategy.position_avg_price - bcActiveSL : na
