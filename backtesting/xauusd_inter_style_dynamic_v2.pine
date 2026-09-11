@@ -20,10 +20,17 @@ nySession = input.session("0800-1700", "New York", group=gSess)
 londonTZ = input.string("Europe/London", "London timezone", group=gSess)
 nyTZ = input.string("America/New_York", "New York timezone", group=gSess)
 showSessionBg = input.bool(true, "Session background", group=gSess)
+showTemporalLiquidity = input.bool(true, "Temporal liquidity levels", group=gSess)
+londonKZ = input.session("0700-1000", "London Kill Zone", group=gSess)
+nyKZ = input.session("0830-1100", "NY Kill Zone", group=gSess)
 
 inLondon = not na(time(timeframe.period, londonSession, londonTZ))
 inNY = not na(time(timeframe.period, nySession, nyTZ))
 nyMinutes = hour(time, nyTZ) * 60 + minute(time, nyTZ)
+londonMinutes = hour(time, londonTZ) * 60 + minute(time, londonTZ)
+inLondonKZ = not na(time(timeframe.period, londonKZ, londonTZ))
+inNYKZ = not na(time(timeframe.period, nyKZ, nyTZ))
+inKillZone = inLondonKZ or inNYKZ
 robustWindow = (inLondon and inNY) or (nyMinutes >= 10 * 60 and nyMinutes < 13 * 60)
 
 bgcolor(showSessionBg and inLondon ? color.new(color.blue, 93) : na)
@@ -174,6 +181,79 @@ bearSweepRecent = ta.barssince(bearSweep) >= 0 and ta.barssince(bearSweep) <= 12
 
 plotshape(bullSweep, "Bull sweep", shape.triangleup, location.belowbar, color=color.aqua, size=size.tiny, text="LQ")
 plotshape(bearSweep, "Bear sweep", shape.triangledown, location.abovebar, color=color.yellow, size=size.tiny, text="LQ")
+
+// ---------- Temporal liquidity ----------
+var float asiaHigh = na
+var float asiaLow = na
+var float prevAsiaHigh = na
+var float prevAsiaLow = na
+var float londonOpen = na
+var float nyOpen = na
+
+newLondonDay = londonMinutes < londonMinutes[1] - 600
+if newLondonDay
+    if not na(asiaHigh)
+        prevAsiaHigh := asiaHigh
+        prevAsiaLow := asiaLow
+    asiaHigh := na
+    asiaLow := na
+    londonOpen := na
+    nyOpen := na
+
+inAsia = londonMinutes >= 0 and londonMinutes < 8 * 60
+if inAsia
+    asiaHigh := na(asiaHigh) ? high : math.max(asiaHigh, high)
+    asiaLow := na(asiaLow) ? low : math.min(asiaLow, low)
+
+if londonMinutes >= 8 * 60 and na(londonOpen)
+    londonOpen := open
+if nyMinutes >= 8 * 60 and na(nyOpen)
+    nyOpen := open
+
+pwHigh = request.security(syminfo.tickerid, "W", high[1], lookahead=barmerge.lookahead_off)
+pwLow = request.security(syminfo.tickerid, "W", low[1], lookahead=barmerge.lookahead_off)
+pdHigh = request.security(syminfo.tickerid, "D", high[1], lookahead=barmerge.lookahead_off)
+pdLow = request.security(syminfo.tickerid, "D", low[1], lookahead=barmerge.lookahead_off)
+d30High = request.security(syminfo.tickerid, "D", ta.highest(high[1], 30), lookahead=barmerge.lookahead_off)
+d30Low = request.security(syminfo.tickerid, "D", ta.lowest(low[1], 30), lookahead=barmerge.lookahead_off)
+
+sweepBelow(level) => not na(level) and low < level and close > level
+sweepAbove(level) => not na(level) and high > level and close < level
+
+bullTemporalLQ =
+     (sweepBelow(prevAsiaLow) ? 1.75 : 0.0) +
+     (sweepBelow(londonOpen) ? 1.25 : 0.0) +
+     (sweepBelow(nyOpen) ? 1.25 : 0.0) +
+     (sweepBelow(pwLow) ? 2.25 : 0.0)
+
+bearTemporalLQ =
+     (sweepAbove(prevAsiaHigh) ? 1.75 : 0.0) +
+     (sweepAbove(londonOpen) ? 1.25 : 0.0) +
+     (sweepAbove(nyOpen) ? 1.25 : 0.0) +
+     (sweepAbove(pwHigh) ? 2.25 : 0.0)
+
+bullCoreLQ =
+     (bullSweep ? 1.0 : 0.0) +
+     (sweepBelow(pdLow) ? 2.0 : 0.0) +
+     (sweepBelow(d30Low) ? 2.5 : 0.0)
+
+bearCoreLQ =
+     (bearSweep ? 1.0 : 0.0) +
+     (sweepAbove(pdHigh) ? 2.0 : 0.0) +
+     (sweepAbove(d30High) ? 2.5 : 0.0)
+
+bullLiquidityQuality = bullCoreLQ + bullTemporalLQ + ((bullCoreLQ + bullTemporalLQ) > 0 and inKillZone ? 0.75 : 0.0)
+bearLiquidityQuality = bearCoreLQ + bearTemporalLQ + ((bearCoreLQ + bearTemporalLQ) > 0 and inKillZone ? 0.75 : 0.0)
+
+bullLiquidityRecent = ta.highest(bullLiquidityQuality, 12)
+bearLiquidityRecent = ta.highest(bearLiquidityQuality, 12)
+
+plot(showTemporalLiquidity ? prevAsiaHigh : na, "Prev Asia High", color=color.new(color.yellow, 45), style=plot.style_stepline)
+plot(showTemporalLiquidity ? prevAsiaLow : na, "Prev Asia Low", color=color.new(color.yellow, 45), style=plot.style_stepline)
+plot(showTemporalLiquidity ? pwHigh : na, "PWH", color=color.new(color.purple, 45), style=plot.style_stepline)
+plot(showTemporalLiquidity ? pwLow : na, "PWL", color=color.new(color.purple, 45), style=plot.style_stepline)
+plot(showTemporalLiquidity ? londonOpen : na, "London Open", color=color.new(color.blue, 55), style=plot.style_stepline)
+plot(showTemporalLiquidity ? nyOpen : na, "NY Open", color=color.new(color.orange, 55), style=plot.style_stepline)
 
 // ---------- MTF state ----------
 f_tf_state() =>
