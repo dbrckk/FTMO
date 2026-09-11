@@ -80,6 +80,12 @@ bcOverlapMaxHoldBars = input.int(48, "Overlap max hold bars", minval=1, group=gB
 bcOverlapUseTimeFilter = input.bool(true, "Use validated overlap time filter", group=gBC)
 bcOverlapAllowShort11 = input.bool(true, "Allow overlap SHORT 11:00-11:30 NY", group=gBC)
 
+bcEnableHighConvictionReentry = input.bool(true, "Enable high-conviction re-entry", group=gBC)
+bcReentryTrendATR = input.float(2.0, "Re-entry min |EMA8-EMA50| / ATR", minval=.5, step=.1, group=gBC)
+bcReentryGap7 = input.bool(true, "Allow re-entry at 7 bars", group=gBC)
+bcReentryGap8 = input.bool(true, "Allow re-entry at 8 bars", group=gBC)
+bcReentryGap11 = input.bool(true, "Allow re-entry at 11 bars", group=gBC)
+
 showBCLevels = input.bool(true, "Plot active BC+ TP/SL", group=gBC)
 
 gOsc = "Gold Filters"
@@ -474,7 +480,9 @@ bcSessionOK = (bcAllowLondonOnly and bcLondonOnly) or (bcAllowNYOnly and bcNYOnl
 bcTFOK = not bcOnlyM5 or timeframe.period == "5"
 bcEMA8 = ta.ema(close, 8)
 bcEMA20 = ta.ema(close, 20)
+bcEMA50 = ta.ema(close, 50)
 bcEMA20SlopeNorm = math.abs(bcEMA20 - bcEMA20[6]) / math.max(atr14, syminfo.mintick)
+bcTrendStrengthATR = math.abs(bcEMA8 - bcEMA50) / math.max(atr14, syminfo.mintick)
 bcOverlapRegimeOK = not bcOverlap or bcEMA20SlopeNorm >= bcOverlapTrendSlopeMin
 bcBreakLong = close > ta.highest(high[1], 6)
 bcBreakShort = close < ta.lowest(low[1], 6)
@@ -505,6 +513,16 @@ bcLongRaw = enableBCPlus and bcTFOK and bcSessionOK and bcOverlapRegimeOK and bc
 bcShortRaw = enableBCPlus and bcTFOK and bcSessionOK and bcOverlapRegimeOK and bcShortTimeOK and bcBreakShort and bearDispRecent and bcHTFShort and bcEMA8 < bbBasis and stK < stD
 bcLongEdge = bcLongRaw and not bcLongRaw[1]
 bcShortEdge = bcShortRaw and not bcShortRaw[1]
+
+// High-conviction re-entry exception validated separately.
+// Normal rearm remains 12 M5 bars. Earlier re-entry is allowed only at
+// 7, 8 or 11 bars with |EMA8-EMA50| / ATR >= 2.0 and a fresh BC+ edge.
+bcBarsSinceLastEntry = na(bcLastEntryBar) ? 999999 : bar_index - bcLastEntryBar
+bcReentryGapOK = (bcReentryGap7 and bcBarsSinceLastEntry == 7) or
+                 (bcReentryGap8 and bcBarsSinceLastEntry == 8) or
+                 (bcReentryGap11 and bcBarsSinceLastEntry == 11)
+bcHighConvictionReentryOK = bcEnableHighConvictionReentry and bcReentryGapOK and bcTrendStrengthATR >= bcReentryTrendATR
+bcEntryGate = gapOK or bcHighConvictionReentryOK
 
 // Segment-specific management frozen from the robust grids.
 bcSignalSL = bcNYOnly ? math.min(bcNYSLCap, math.max(bcNYSLFloor, atr14 * bcNYSLATR)) :
@@ -557,9 +575,10 @@ var bool bcTrade=false
 var float bcActiveSL=na
 var float bcActiveTP=na
 var int bcActiveMaxHold=na
+var int bcLastEntryBar=na
 
 
-if strategy.position_size==0 and gapOK
+if strategy.position_size==0 and bcEntryGate
     peak:=na
     trough:=na
     protected:=false
@@ -571,6 +590,7 @@ if strategy.position_size==0 and gapOK
     bcActiveMaxHold:=na
     if bcLongEdge
         bcTrade:=true
+        bcLastEntryBar:=bar_index
         reversalTrade:=false
         bcActiveSL:=bcSignalSL
         bcActiveTP:=bcSignalTP
@@ -578,17 +598,18 @@ if strategy.position_size==0 and gapOK
         strategy.entry("BC+ BUY",strategy.long)
     else if bcShortEdge
         bcTrade:=true
+        bcLastEntryBar:=bar_index
         reversalTrade:=false
         bcActiveSL:=bcSignalSL
         bcActiveTP:=bcSignalTP
         bcActiveMaxHold:=bcSignalMaxHold
         strategy.entry("BC+ SELL",strategy.short)
-    else if longEdge and freshBull
+    else if gapOK and longEdge and freshBull
         reversalTrade:=strictRevLong and not continuationLong
         strategy.entry("BUY",strategy.long)
         activeLiqTarget:=f_nearest_above(close,liqTargetMinDist)
         lastBullUsed:=bullGeneration
-    else if shortEdge and freshBear
+    else if gapOK and shortEdge and freshBear
         reversalTrade:=strictRevShort and not continuationShort
         strategy.entry("SELL",strategy.short)
         activeLiqTarget:=f_nearest_below(close,liqTargetMinDist)
@@ -802,8 +823,8 @@ bcShortPlotTP = strategy.position_size < 0 and bcTrade ? strategy.position_avg_p
 bcShortPlotSL = strategy.position_size < 0 and bcTrade ? strategy.position_avg_price + bcActiveSL : na
 plot(showBCLevels ? (not na(bcLongPlotTP) ? bcLongPlotTP : bcShortPlotTP) : na, "BC+ TP", color=color.new(color.lime,0), linewidth=2, style=plot.style_linebr)
 plot(showBCLevels ? (not na(bcLongPlotSL) ? bcLongPlotSL : bcShortPlotSL) : na, "BC+ SL", color=color.new(color.red,0), linewidth=2, style=plot.style_linebr)
-plotshape(bcLongEdge and gapOK, "BC+ BUY", shape.labelup, location.belowbar, color=color.new(color.aqua,0), textcolor=color.black, text="BC+", size=size.small)
-plotshape(bcShortEdge and gapOK, "BC+ SELL", shape.labeldown, location.abovebar, color=color.new(color.orange,0), textcolor=color.black, text="BC+", size=size.small)
+plotshape(bcLongEdge and bcEntryGate, "BC+ BUY", shape.labelup, location.belowbar, color=color.new(color.aqua,0), textcolor=color.black, text="BC+", size=size.small)
+plotshape(bcShortEdge and bcEntryGate, "BC+ SELL", shape.labeldown, location.abovebar, color=color.new(color.orange,0), textcolor=color.black, text="BC+", size=size.small)
 
 // ---------- Visual signals ----------
 isBullAPlus=bullScore100>=aPlusScore or continuationAPlusBull
@@ -862,8 +883,8 @@ if barstate.islast
        bgcolor=longEdge and gapOK and freshBull?color.new(color.green,20):shortEdge and gapOK and freshBear?color.new(color.red,20):color.new(color.gray,80),
        text_color=color.white)
 
-alertcondition(bcLongEdge and gapOK,"XAUUSD BC+ BUY","XAUUSD BC+ breakout-continuation BUY")
-alertcondition(bcShortEdge and gapOK,"XAUUSD BC+ SELL","XAUUSD BC+ breakout-continuation SELL")
+alertcondition(bcLongEdge and bcEntryGate,"XAUUSD BC+ BUY","XAUUSD BC+ breakout-continuation BUY")
+alertcondition(bcShortEdge and bcEntryGate,"XAUUSD BC+ SELL","XAUUSD BC+ breakout-continuation SELL")
 alertcondition(longEdge and gapOK and freshBull,"XAUUSD BUY","XAUUSD Inter-style BUY")
 alertcondition(shortEdge and gapOK and freshBear,"XAUUSD SELL","XAUUSD Inter-style SELL")
 alertcondition(continuationAPlusBull,"XAUUSD A+ BUY","XAUUSD A+ continuation BUY")
