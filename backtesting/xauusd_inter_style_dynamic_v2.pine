@@ -9,7 +9,7 @@ strategy("XAUUSD Inter-Style ICT Dynamic v3", overlay=true, pyramiding=0,
 // Top-down: H4/H1 bias -> H2/M30 context -> M15/M5 timing.
 // Setup families: continuation, A+ continuation, strict reversal.
 // No fixed RR / no fixed TP.
-// Management: liquidity partials, BE protection, ATR runner,
+// Management: liquidity-event runner, BE protection, progressive ATR trail,
 // structure/momentum invalidation, emergency stop.
 // =====================================================
 
@@ -38,17 +38,19 @@ showLiquidity = input.bool(true, "Liquidity map", group=gICT)
 gScore = "Quality Score"
 minScoreTrade = input.int(55, "Minimum score to trade", minval=0, maxval=100, group=gScore)
 aPlusScore = input.int(85, "A+ score", minval=50, maxval=100, group=gScore)
+eliteScore = input.int(90, "Elite score", minval=50, maxval=100, group=gScore)
+sTierScore = input.int(96, "S-Tier score", minval=50, maxval=100, group=gScore)
 showScoreLabels = input.bool(true, "Score labels", group=gScore)
 
 gMgmt = "Dynamic Management"
 emergencyStop = input.float(8.0, "Continuation emergency stop", minval=1, group=gMgmt)
 protectTrigger = input.float(5.0, "Continuation protect after MFE", minval=1, group=gMgmt)
 trailATR = input.float(0.25, "Initial protected ATR trail", minval=.1, step=.05, group=gMgmt)
-partialQty = input.float(33.0, "Continuation partial %", minval=1, maxval=90, group=gMgmt)
+liqTargetMinDist = input.float(3.0, "Liquidity target minimum distance", minval=.5, step=.5, group=gMgmt)
+liqTrailATR = input.float(0.15, "ATR trail after liquidity taken", minval=.05, step=.05, group=gMgmt)
 reversalEmergency = input.float(6.0, "Reversal emergency stop", minval=1, group=gMgmt)
 reversalProtect = input.float(6.0, "Reversal protect after MFE", minval=1, group=gMgmt)
 reversalTrailATR = input.float(0.40, "Reversal ATR trail", minval=.1, step=.05, group=gMgmt)
-reversalPartialQty = input.float(50.0, "Reversal partial %", minval=1, maxval=90, group=gMgmt)
 trailTier1 = input.float(10.0, "Trail tier 1 MFE", minval=1, group=gMgmt)
 trailTier2 = input.float(15.0, "Trail tier 2 MFE", minval=1, group=gMgmt)
 trailATR2 = input.float(0.35, "ATR trail after tier 1", minval=.1, step=.05, group=gMgmt)
@@ -389,7 +391,7 @@ bearLogit=baseLogit+
 // Frozen pre-2020 empirical percentile cutoffs.
 // The displayed score is a validated quality tier midpoint, not a fabricated probability.
 f_cal_score(float z) =>
-    z < -0.40027632 ? 30 : z < -0.23783007 ? 47 : z < -0.12664342 ? 62 : z < 0.10206356 ? 77 : 92
+    z < -0.40027632 ? 30 : z < -0.23783007 ? 47 : z < -0.12664342 ? 62 : z < 0.10206356 ? 77 : 97
 
 bullScore100=f_cal_score(bullLogit)
 bearScore100=f_cal_score(bearLogit)
@@ -435,68 +437,101 @@ sTierShort = bearScore100 >= sTierScore and bearDispRecent and eliteShort
 longEdge=rawLong and not rawLong[1]
 shortEdge=rawShort and not rawShort[1]
 
+// ---------- Liquidity target selection ----------
+f_nearest_above(float entry, float minDist) =>
+    float t = na
+    if not na(lastSwingHigh) and lastSwingHigh-entry >= minDist
+        t := lastSwingHigh
+    if not na(pdHigh) and pdHigh-entry >= minDist and (na(t) or pdHigh<t)
+        t := pdHigh
+    if not na(pwHigh) and pwHigh-entry >= minDist and (na(t) or pwHigh<t)
+        t := pwHigh
+    if not na(d30High) and d30High-entry >= minDist and (na(t) or d30High<t)
+        t := d30High
+    if not na(prevAsiaHigh) and prevAsiaHigh-entry >= minDist and (na(t) or prevAsiaHigh<t)
+        t := prevAsiaHigh
+    t
+
+f_nearest_below(float entry, float minDist) =>
+    float t = na
+    if not na(lastSwingLow) and entry-lastSwingLow >= minDist
+        t := lastSwingLow
+    if not na(pdLow) and entry-pdLow >= minDist and (na(t) or pdLow>t)
+        t := pdLow
+    if not na(pwLow) and entry-pwLow >= minDist and (na(t) or pwLow>t)
+        t := pwLow
+    if not na(d30Low) and entry-d30Low >= minDist and (na(t) or d30Low>t)
+        t := d30Low
+    if not na(prevAsiaLow) and entry-prevAsiaLow >= minDist and (na(t) or prevAsiaLow>t)
+        t := prevAsiaLow
+    t
+
 // ---------- Dynamic management ----------
 var float peak=na
 var float trough=na
 var bool protected=false
 var bool reversalTrade=false
+var float activeLiqTarget=na
+var bool liquidityTaken=false
 
 if strategy.position_size==0 and gapOK
     peak:=na
     trough:=na
     protected:=false
+    liquidityTaken:=false
+    activeLiqTarget:=na
     if longEdge and freshBull
         reversalTrade:=strictRevLong and not continuationLong
         strategy.entry("BUY",strategy.long)
+        activeLiqTarget:=f_nearest_above(close,liqTargetMinDist)
         lastBullUsed:=bullGeneration
     else if shortEdge and freshBear
         reversalTrade:=strictRevShort and not continuationShort
         strategy.entry("SELL",strategy.short)
+        activeLiqTarget:=f_nearest_below(close,liqTargetMinDist)
         lastBearUsed:=bearGeneration
 
 if strategy.position_size>0
     peak:=na(peak)?high:math.max(peak,high)
-    activeEmergency=reversalTrade?reversalEmergency:emergencyStop
-    activeProtect=reversalTrade?reversalProtect:protectTrigger
-    activeTrail=reversalTrade?reversalTrailATR:trailATR
-    activePartial=reversalTrade?reversalPartialQty:partialQty
-    protected:=protected or peak-strategy.position_avg_price>=activeProtect
-    if not na(lastSwingHigh) and lastSwingHigh>strategy.position_avg_price
-        strategy.exit("BUY PARTIAL","BUY",limit=lastSwingHigh,qty_percent=activePartial)
-    longStop=strategy.position_avg_price-activeEmergency
-    if protected
-        float trailNow = activeTrail
-    float mfeNow = peak - strategy.position_avg_price
+    float mfeNow=peak-strategy.position_avg_price
+    float activeEmergency=reversalTrade?reversalEmergency:emergencyStop
+    float activeProtect=reversalTrade?reversalProtect:protectTrigger
+    protected:=protected or mfeNow>=activeProtect
+    liquidityTaken:=liquidityTaken or (not na(activeLiqTarget) and high>=activeLiqTarget)
+    float trailNow=reversalTrade?reversalTrailATR:trailATR
     if not reversalTrade
-        trailNow := mfeNow >= trailTier2 ? trailATR3 : mfeNow >= trailTier1 ? trailATR2 : trailATR
-    longStop:=math.max(strategy.position_avg_price,peak-atr14*trailNow)
+        trailNow:=mfeNow>=trailTier2?trailATR3:mfeNow>=trailTier1?trailATR2:trailATR
+    if liquidityTaken
+        trailNow:=liqTrailATR
+    float longStop=strategy.position_avg_price-activeEmergency
+    if protected
+        longStop:=math.max(strategy.position_avg_price,peak-atr14*trailNow)
     strategy.exit("BUY PROTECT","BUY",stop=longStop)
     if bearCHOCH or (close<bbBasis and stK<stD)
         strategy.close("BUY",comment="Structure exit")
-    if bar_index - strategy.opentrades.entry_bar_index(0) >= maxHoldBars
-        strategy.close("BUY", comment="Max hold exit")
+    if strategy.opentrades>0 and bar_index-strategy.opentrades.entry_bar_index(0)>=maxHoldBars
+        strategy.close("BUY",comment="Max hold exit")
 
 if strategy.position_size<0
     trough:=na(trough)?low:math.min(trough,low)
-    activeEmergencyS=reversalTrade?reversalEmergency:emergencyStop
-    activeProtectS=reversalTrade?reversalProtect:protectTrigger
-    activeTrailS=reversalTrade?reversalTrailATR:trailATR
-    activePartialS=reversalTrade?reversalPartialQty:partialQty
-    protected:=protected or strategy.position_avg_price-trough>=activeProtectS
-    if not na(lastSwingLow) and lastSwingLow<strategy.position_avg_price
-        strategy.exit("SELL PARTIAL","SELL",limit=lastSwingLow,qty_percent=activePartialS)
-    shortStop=strategy.position_avg_price+activeEmergencyS
-    if protected
-        float trailNowS = activeTrailS
-    float mfeNowS = strategy.position_avg_price - trough
+    float mfeNowS=strategy.position_avg_price-trough
+    float activeEmergencyS=reversalTrade?reversalEmergency:emergencyStop
+    float activeProtectS=reversalTrade?reversalProtect:protectTrigger
+    protected:=protected or mfeNowS>=activeProtectS
+    liquidityTaken:=liquidityTaken or (not na(activeLiqTarget) and low<=activeLiqTarget)
+    float trailNowS=reversalTrade?reversalTrailATR:trailATR
     if not reversalTrade
-        trailNowS := mfeNowS >= trailTier2 ? trailATR3 : mfeNowS >= trailTier1 ? trailATR2 : trailATR
-    shortStop:=math.min(strategy.position_avg_price,trough+atr14*trailNowS)
+        trailNowS:=mfeNowS>=trailTier2?trailATR3:mfeNowS>=trailTier1?trailATR2:trailATR
+    if liquidityTaken
+        trailNowS:=liqTrailATR
+    float shortStop=strategy.position_avg_price+activeEmergencyS
+    if protected
+        shortStop:=math.min(strategy.position_avg_price,trough+atr14*trailNowS)
     strategy.exit("SELL PROTECT","SELL",stop=shortStop)
     if bullCHOCH or (close>bbBasis and stK>stD)
         strategy.close("SELL",comment="Structure exit")
-    if bar_index - strategy.opentrades.entry_bar_index(0) >= maxHoldBars
-        strategy.close("SELL", comment="Max hold exit")
+    if strategy.opentrades>0 and bar_index-strategy.opentrades.entry_bar_index(0)>=maxHoldBars
+        strategy.close("SELL",comment="Max hold exit")
 
 // ---------- Visual signals ----------
 isBullAPlus=bullScore100>=aPlusScore or continuationAPlusBull
