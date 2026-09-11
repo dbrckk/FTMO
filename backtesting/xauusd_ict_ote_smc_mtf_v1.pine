@@ -21,6 +21,7 @@ londonTZ = input.string("Europe/London", "London timezone", group=gSess)
 nyTZ = input.string("America/New_York", "New York timezone", group=gSess)
 showSessionBG = input.bool(true, "Session background", group=gSess)
 showKillZones = input.bool(true, "ICT kill zones", group=gSess)
+robustM5Window = input.bool(true, "M5 robust overlap + NY extension", group=gSess)
 londonKZ = input.session("0700-1000", "London kill zone", group=gSess)
 nyKZ = input.session("0830-1100", "NY kill zone", group=gSess)
 
@@ -377,6 +378,12 @@ isH1 = chartSec > 30 * 60 and chartSec <= 60 * 60
 isH2 = chartSec > 60 * 60 and chartSec <= 120 * 60
 isH4 = chartSec > 120 * 60
 
+// Robust M5 trading window validated on 2004-2026:
+// London/NY overlap + New York 10:00-13:00 local.
+nyMinutes = hour(time, nyTZ) * 60 + minute(time, nyTZ)
+robustM5Session = (inLondon and inNY) or (nyMinutes >= 10 * 60 and nyMinutes < 13 * 60)
+tradeSessionOK = isM5 and robustM5Window ? robustM5Session : inSession
+
 // Thresholds selected from full-history top-down comparison.\n// M5 validated 2004-2026: score 2.5, H4 bias + H1 non-opposition, H2+M30 confirm, M15 or M5 trigger.
 autoScore = isM5 ? 2.5 : isM15 ? 5.0 : isM30 ? 4.5 : isH1 ? 4.5 : isH2 ? 3.0 : 4.0
 biasStrict = isM15 or isM30 or isH1 or isH4
@@ -481,7 +488,7 @@ if barstate.islast
     table.cell(dash,0,0,"XAUUSD PRO",bgcolor=color.black,text_color=color.white)
     table.cell(dash,1,0,"ICT/SMC",bgcolor=color.black,text_color=color.white)
     table.cell(dash,0,1,"Session")
-    table.cell(dash,1,1,inLondon and inNY?"London + NY":inLondon?"London":inNY?"New York":"Off")
+    table.cell(dash,1,1,isM5 and robustM5Window ? (robustM5Session?"M5 Robust":"Off") : inLondon and inNY?"London + NY":inLondon?"London":inNY?"New York":"Off")
     table.cell(dash,0,2,"Structure")
     table.cell(dash,1,2,structure==1?"Bullish":structure==-1?"Bearish":"Neutral")
     table.cell(dash,0,3,"Bull Score")
