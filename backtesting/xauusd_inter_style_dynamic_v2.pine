@@ -77,6 +77,8 @@ bcOverlapSLCap = input.float(25.0, "Overlap SL cap", minval=1, step=.5, group=gB
 bcOverlapTPFloor = input.float(30.0, "Overlap TP floor", minval=1, step=.5, group=gBC)
 bcOverlapTPATR = input.float(12.0, "Overlap TP ATR multiplier", minval=.5, step=.5, group=gBC)
 bcOverlapMaxHoldBars = input.int(48, "Overlap max hold bars", minval=1, group=gBC)
+bcOverlapUseTimeFilter = input.bool(true, "Use validated overlap time filter", group=gBC)
+bcOverlapAllowShort11 = input.bool(true, "Allow overlap SHORT 11:00-11:30 NY", group=gBC)
 
 showBCLevels = input.bool(true, "Plot active BC+ TP/SL", group=gBC)
 
@@ -475,8 +477,8 @@ bcBreakLong = close > ta.highest(high[1], 6)
 bcBreakShort = close < ta.lowest(low[1], 6)
 bcHTFLong = tf15 == 1 and tf30 == 1 and tf60 == 1 and tf120 == 1 and tf240 == 1
 bcHTFShort = tf15 == -1 and tf30 == -1 and tf60 == -1 and tf120 == -1 and tf240 == -1
-bcLongRaw = enableBCPlus and bcTFOK and bcSessionOK and bcBreakLong and bullDispRecent and bcHTFLong and bcEMA8 > bbBasis and stK > stD
-bcShortRaw = enableBCPlus and bcTFOK and bcSessionOK and bcBreakShort and bearDispRecent and bcHTFShort and bcEMA8 < bbBasis and stK < stD
+bcLongRaw = enableBCPlus and bcTFOK and bcSessionOK and bcOverlapLongOK and bcBreakLong and bullDispRecent and bcHTFLong and bcEMA8 > bbBasis and stK > stD
+bcShortRaw = enableBCPlus and bcTFOK and bcSessionOK and bcOverlapShortOK and bcBreakShort and bearDispRecent and bcHTFShort and bcEMA8 < bbBasis and stK < stD
 bcLongEdge = bcLongRaw and not bcLongRaw[1]
 bcShortEdge = bcShortRaw and not bcShortRaw[1]
 
@@ -753,7 +755,12 @@ plotshape(preWarnShort, "PRE15 WATCH SHORT", shape.circle, location.abovebar, co
 plotshape(pre15Long, "PRE15 LONG TRIGGER", shape.triangleup, location.belowbar, color=color.aqua, size=size.small, text="15L")
 plotshape(pre15Short, "PRE15 SHORT TRIGGER", shape.triangledown, location.abovebar, color=color.orange, size=size.small, text="15S")
 
-// BC+ segment validation 2020-23 vs 2024-26:
+// Overlap time filter validation:
+// unfiltered overlap: PF 1.475 -> 1.611
+// filtered overlap:   PF 1.745 -> 1.805
+// LONG validated windows (NY time): 08:00-08:30, 09:00-11:00, 11:30-12:00
+// SHORT validated window (NY time): 11:00-11:30
+// // BC+ segment validation 2020-23 vs 2024-26:
 // London-only PF 1.269 -> 0.987 (disabled by default)
 // NY-only PF 1.186 -> 1.606
 // Overlap PF 1.367 -> 1.663 (strongest segment)
