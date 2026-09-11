@@ -542,6 +542,8 @@ enablePreExpansion = input.bool(true, "Enable pre-expansion layer", group=gPre)
 preExpansionThreshold = input.float(0.875, "Pre-expansion probability threshold", minval=0.50, maxval=0.99, step=0.005, group=gPre)
 preExpansionWindow = input.int(3, "Trigger window (M5 bars)", minval=1, maxval=6, group=gPre)
 preExpansionCooldown = input.int(12, "Pre-expansion cooldown (M5 bars)", minval=1, group=gPre)
+enableTimePrior = input.bool(true, "Use validated session-time prior", group=gPre)
+timePriorStrength = input.float(0.22, "Time-prior strength", minval=0.0, maxval=0.50, step=0.01, group=gPre)
 
 preEma8 = ta.ema(close, 8)
 preEma20 = ta.ema(close, 20)
@@ -571,6 +573,38 @@ preBullSweep = (sweepBelow(pdLow) or sweepBelow(prevAsiaLow)) ? 1.0 : 0.0
 preBearSweep = (sweepAbove(pdHigh) or sweepAbove(prevAsiaHigh)) ? 1.0 : 0.0
 
 f_z(float x, float mean, float scale) => (x - mean) / scale
+
+// Session-time prior derived from all >=15-point M5 expansions since 2020.
+// Only windows with lift >1 in BOTH 2020-23 and 2024-26 are used.
+// Strongest: London 08:00 (~4.1x OOS) and NY 08:00 (~3.2x OOS).
+f_pre_time_lift() =>
+    float lift = 1.0
+    if inLondon
+        lift := lonMinutes >= 480 and lonMinutes < 495 ? 4.087 :
+                lonMinutes >= 495 and lonMinutes < 510 ? 1.416 :
+                lonMinutes >= 540 and lonMinutes < 555 ? 1.188 :
+                lonMinutes >= 570 and lonMinutes < 585 ? 1.290 :
+                lonMinutes >= 600 and lonMinutes < 615 ? 1.239 :
+                lonMinutes >= 660 and lonMinutes < 675 ? 1.158 :
+                lonMinutes >= 930 and lonMinutes < 945 ? 1.042 : lift
+    if inNY
+        float nyLift = nyMinutes >= 480 and nyMinutes < 495 ? 3.236 :
+                       nyMinutes >= 495 and nyMinutes < 510 ? 1.525 :
+                       nyMinutes >= 600 and nyMinutes < 615 ? 1.283 :
+                       nyMinutes >= 630 and nyMinutes < 645 ? 1.477 :
+                       nyMinutes >= 660 and nyMinutes < 675 ? 1.114 :
+                       nyMinutes >= 690 and nyMinutes < 705 ? 1.053 :
+                       nyMinutes >= 690 and nyMinutes < 720 ? 1.975 :
+                       nyMinutes >= 720 and nyMinutes < 735 ? 1.417 :
+                       nyMinutes >= 735 and nyMinutes < 750 ? 1.181 :
+                       nyMinutes >= 750 and nyMinutes < 765 ? 1.557 :
+                       nyMinutes >= 765 and nyMinutes < 780 ? 1.115 :
+                       nyMinutes >= 780 and nyMinutes < 795 ? 1.352 : 1.0
+        lift := math.max(lift, nyLift)
+    lift
+
+preTimeLift = f_pre_time_lift()
+preTimeBonus = enableTimePrior ? timePriorStrength * math.log(math.max(preTimeLift, 1.0)) : 0.0
 
 preLogitLong =
      -0.30167756 +
@@ -602,8 +636,8 @@ preLogitShort =
     -0.216568 * f_z(preRange36ATR, 6.245262, 1.891950) +
      0.479251 * f_z(preBBWidth, 0.004024, 0.003337)
 
-preProbLong = 1.0 / (1.0 + math.exp(-preLogitLong))
-preProbShort = 1.0 / (1.0 + math.exp(-preLogitShort))
+preProbLong = 1.0 / (1.0 + math.exp(-(preLogitLong + preTimeBonus)))
+preProbShort = 1.0 / (1.0 + math.exp(-(preLogitShort + preTimeBonus)))
 preSessionOK = inLondon or inNY
 
 var int preWarnLongBar = na
