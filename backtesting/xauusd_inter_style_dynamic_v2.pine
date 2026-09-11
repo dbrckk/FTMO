@@ -41,14 +41,19 @@ aPlusScore = input.int(85, "A+ score", minval=50, maxval=100, group=gScore)
 showScoreLabels = input.bool(true, "Score labels", group=gScore)
 
 gMgmt = "Dynamic Management"
-emergencyStop = input.float(12.0, "Continuation emergency stop", minval=1, group=gMgmt)
-protectTrigger = input.float(8.0, "Continuation protect after MFE", minval=1, group=gMgmt)
-trailATR = input.float(0.60, "Continuation ATR trail", minval=.1, step=.05, group=gMgmt)
+emergencyStop = input.float(8.0, "Continuation emergency stop", minval=1, group=gMgmt)
+protectTrigger = input.float(5.0, "Continuation protect after MFE", minval=1, group=gMgmt)
+trailATR = input.float(0.25, "Initial protected ATR trail", minval=.1, step=.05, group=gMgmt)
 partialQty = input.float(33.0, "Continuation partial %", minval=1, maxval=90, group=gMgmt)
 reversalEmergency = input.float(6.0, "Reversal emergency stop", minval=1, group=gMgmt)
 reversalProtect = input.float(6.0, "Reversal protect after MFE", minval=1, group=gMgmt)
 reversalTrailATR = input.float(0.40, "Reversal ATR trail", minval=.1, step=.05, group=gMgmt)
 reversalPartialQty = input.float(50.0, "Reversal partial %", minval=1, maxval=90, group=gMgmt)
+trailTier1 = input.float(10.0, "Trail tier 1 MFE", minval=1, group=gMgmt)
+trailTier2 = input.float(15.0, "Trail tier 2 MFE", minval=1, group=gMgmt)
+trailATR2 = input.float(0.35, "ATR trail after tier 1", minval=.1, step=.05, group=gMgmt)
+trailATR3 = input.float(0.50, "ATR trail after tier 2", minval=.1, step=.05, group=gMgmt)
+maxHoldBars = input.int(48, "Maximum hold bars on M5", minval=1, group=gMgmt)
 minRearmBars = input.int(12, "Minimum M5-equivalent setup gap", minval=0, group=gMgmt)
 
 gOsc = "Gold Filters"
@@ -460,10 +465,16 @@ if strategy.position_size>0
         strategy.exit("BUY PARTIAL","BUY",limit=lastSwingHigh,qty_percent=activePartial)
     longStop=strategy.position_avg_price-activeEmergency
     if protected
-        longStop:=math.max(strategy.position_avg_price,peak-atr14*activeTrail)
+        float trailNow = activeTrail
+    float mfeNow = peak - strategy.position_avg_price
+    if not reversalTrade
+        trailNow := mfeNow >= trailTier2 ? trailATR3 : mfeNow >= trailTier1 ? trailATR2 : trailATR
+    longStop:=math.max(strategy.position_avg_price,peak-atr14*trailNow)
     strategy.exit("BUY PROTECT","BUY",stop=longStop)
     if bearCHOCH or (close<bbBasis and stK<stD)
         strategy.close("BUY",comment="Structure exit")
+    if bar_index - strategy.opentrades.entry_bar_index(0) >= maxHoldBars
+        strategy.close("BUY", comment="Max hold exit")
 
 if strategy.position_size<0
     trough:=na(trough)?low:math.min(trough,low)
@@ -476,10 +487,16 @@ if strategy.position_size<0
         strategy.exit("SELL PARTIAL","SELL",limit=lastSwingLow,qty_percent=activePartialS)
     shortStop=strategy.position_avg_price+activeEmergencyS
     if protected
-        shortStop:=math.min(strategy.position_avg_price,trough+atr14*activeTrailS)
+        float trailNowS = activeTrailS
+    float mfeNowS = strategy.position_avg_price - trough
+    if not reversalTrade
+        trailNowS := mfeNowS >= trailTier2 ? trailATR3 : mfeNowS >= trailTier1 ? trailATR2 : trailATR
+    shortStop:=math.min(strategy.position_avg_price,trough+atr14*trailNowS)
     strategy.exit("SELL PROTECT","SELL",stop=shortStop)
     if bullCHOCH or (close>bbBasis and stK>stD)
         strategy.close("SELL",comment="Structure exit")
+    if bar_index - strategy.opentrades.entry_bar_index(0) >= maxHoldBars
+        strategy.close("SELL", comment="Max hold exit")
 
 // ---------- Visual signals ----------
 isBullAPlus=bullScore100>=aPlusScore or continuationAPlusBull
