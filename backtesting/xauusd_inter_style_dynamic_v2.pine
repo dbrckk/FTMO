@@ -473,6 +473,9 @@ bcOverlap = inLondon and inNY
 bcSessionOK = (bcAllowLondonOnly and bcLondonOnly) or (bcAllowNYOnly and bcNYOnly) or (bcAllowOverlap and bcOverlap)
 bcTFOK = not bcOnlyM5 or timeframe.period == "5"
 bcEMA8 = ta.ema(close, 8)
+bcEMA20 = ta.ema(close, 20)
+bcEMA20SlopeNorm = math.abs(bcEMA20 - bcEMA20[6]) / math.max(atr14, syminfo.mintick)
+bcOverlapRegimeOK = not bcOverlap or bcEMA20SlopeNorm >= bcOverlapTrendSlopeMin
 bcBreakLong = close > ta.highest(high[1], 6)
 bcBreakShort = close < ta.lowest(low[1], 6)
 bcHTFLong = tf15 == 1 and tf30 == 1 and tf60 == 1 and tf120 == 1 and tf240 == 1
@@ -498,8 +501,8 @@ bcShortTimeOK = bcLondonOnly ? bcAllowLondonOnly :
                 bcNYOnly ? bcNYShortTimeOK :
                 bcOverlap ? bcOverlapShortTimeOK : false
 
-bcLongRaw = enableBCPlus and bcTFOK and bcSessionOK and bcLongTimeOK and bcBreakLong and bullDispRecent and bcHTFLong and bcEMA8 > bbBasis and stK > stD
-bcShortRaw = enableBCPlus and bcTFOK and bcSessionOK and bcShortTimeOK and bcBreakShort and bearDispRecent and bcHTFShort and bcEMA8 < bbBasis and stK < stD
+bcLongRaw = enableBCPlus and bcTFOK and bcSessionOK and bcOverlapRegimeOK and bcLongTimeOK and bcBreakLong and bullDispRecent and bcHTFLong and bcEMA8 > bbBasis and stK > stD
+bcShortRaw = enableBCPlus and bcTFOK and bcSessionOK and bcOverlapRegimeOK and bcShortTimeOK and bcBreakShort and bearDispRecent and bcHTFShort and bcEMA8 < bbBasis and stK < stD
 bcLongEdge = bcLongRaw and not bcLongRaw[1]
 bcShortEdge = bcShortRaw and not bcShortRaw[1]
 
