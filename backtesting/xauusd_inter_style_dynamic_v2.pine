@@ -533,6 +533,108 @@ if strategy.position_size<0
     if strategy.opentrades>0 and bar_index-strategy.opentrades.entry_bar_index(0)>=maxHoldBars
         strategy.close("SELL",comment="Max hold exit")
 
+// ---------- Pre-expansion >=15 Gold points (M5 research layer) ----------
+// Trained on 2020-2023 and checked on 2024-2026. This is a WATCH/TRIGGER layer,
+// not a replacement for the core strategy. It estimates conditions 5-15 minutes
+// before a >=15-point session expansion, then requires an M5 directional trigger.
+gPre = "Pre-Expansion 15pt"
+enablePreExpansion = input.bool(true, "Enable pre-expansion layer", group=gPre)
+preExpansionThreshold = input.float(0.875, "Pre-expansion probability threshold", minval=0.50, maxval=0.99, step=0.005, group=gPre)
+preExpansionWindow = input.int(3, "Trigger window (M5 bars)", minval=1, maxval=6, group=gPre)
+preExpansionCooldown = input.int(12, "Pre-expansion cooldown (M5 bars)", minval=1, group=gPre)
+
+preEma8 = ta.ema(close, 8)
+preEma20 = ta.ema(close, 20)
+preEma50 = ta.ema(close, 50)
+preAtrMean100 = ta.sma(atr14, 100)
+preAtrRel = atr14 / math.max(preAtrMean100, syminfo.mintick)
+preRange12ATR = (ta.highest(high[1], 12) - ta.lowest(low[1], 12)) / math.max(atr14, syminfo.mintick)
+preRange36ATR = (ta.highest(high[1], 36) - ta.lowest(low[1], 36)) / math.max(atr14, syminfo.mintick)
+preBBWidth = (4.4 * bbDev) / math.max(close, syminfo.mintick)
+
+preBullTrend = (tf15 == 1 ? 1.0 : 0.0) + (tf30 == 1 ? 1.0 : 0.0) + (tf60 == 1 ? 1.0 : 0.0) + (tf120 == 1 ? 1.0 : 0.0) + (tf240 == 1 ? 1.0 : 0.0)
+preBearTrend = (tf15 == -1 ? 1.0 : 0.0) + (tf30 == -1 ? 1.0 : 0.0) + (tf60 == -1 ? 1.0 : 0.0) + (tf120 == -1 ? 1.0 : 0.0) + (tf240 == -1 ? 1.0 : 0.0)
+
+preBullEMA = preEma8 > preEma20 and preEma20 > preEma50 ? 1.0 : 0.0
+preBearEMA = preEma8 < preEma20 and preEma20 < preEma50 ? 1.0 : 0.0
+preBullStoch = stK > stD and stK < 80 ? 1.0 : 0.0
+preBearStoch = stK < stD and stK > 20 ? 1.0 : 0.0
+preBullFVG = ta.barssince(bullFVG) >= 0 and ta.barssince(bullFVG) <= 6 ? 1.0 : 0.0
+preBearFVG = ta.barssince(bearFVG) >= 0 and ta.barssince(bearFVG) <= 6 ? 1.0 : 0.0
+preBullDisp = ta.barssince(bullDisp) >= 0 and ta.barssince(bullDisp) <= 6 ? 1.0 : 0.0
+preBearDisp = ta.barssince(bearDisp) >= 0 and ta.barssince(bearDisp) <= 6 ? 1.0 : 0.0
+preBullBOS = ta.barssince(bullBOS) >= 0 and ta.barssince(bullBOS) <= 6 ? 1.0 : 0.0
+preBearBOS = ta.barssince(bearBOS) >= 0 and ta.barssince(bearBOS) <= 6 ? 1.0 : 0.0
+preBullCHOCH = ta.barssince(bullCHOCH) >= 0 and ta.barssince(bullCHOCH) <= 6 ? 1.0 : 0.0
+preBearCHOCH = ta.barssince(bearCHOCH) >= 0 and ta.barssince(bearCHOCH) <= 6 ? 1.0 : 0.0
+preBullSweep = (sweepBelow(pdLow) or sweepBelow(prevAsiaLow)) ? 1.0 : 0.0
+preBearSweep = (sweepAbove(pdHigh) or sweepAbove(prevAsiaHigh)) ? 1.0 : 0.0
+
+f_z(float x, float mean, float scale) => (x - mean) / scale
+
+preLogitLong =
+     -0.30167756 +
+     0.045217 * f_z(preBullTrend, 2.085752, 1.891226) +
+    -0.372655 * f_z(preBullEMA, 0.400131, 0.489925) +
+    -0.363419 * f_z(preBullStoch, 0.363201, 0.480922) +
+    -0.213174 * f_z(preBullFVG, 0.446385, 0.497117) +
+     0.040755 * f_z(preBullDisp, 0.366611, 0.481879) +
+    -0.102900 * f_z(preBullBOS, 0.140064, 0.347053) +
+    -0.174379 * f_z(preBullCHOCH, 0.108682, 0.311239) +
+    -0.046001 * f_z(preBullSweep, 0.042031, 0.200659) +
+     0.099713 * f_z(preAtrRel, 1.205161, 0.345416) +
+    -0.067827 * f_z(preRange12ATR, 3.544861, 1.119371) +
+    -0.259205 * f_z(preRange36ATR, 6.245262, 1.891950) +
+     0.439650 * f_z(preBBWidth, 0.004024, 0.003337)
+
+preLogitShort =
+     -0.31252108 +
+     0.199020 * f_z(preBearTrend, 1.773760, 1.821162) +
+    -0.392645 * f_z(preBearEMA, 0.380496, 0.485509) +
+    -0.335645 * f_z(preBearStoch, 0.375918, 0.484359) +
+    -0.272140 * f_z(preBearFVG, 0.433233, 0.495522) +
+    -0.058517 * f_z(preBearDisp, 0.364845, 0.481387) +
+    -0.059382 * f_z(preBearBOS, 0.129345, 0.335582) +
+    -0.124004 * f_z(preBearCHOCH, 0.108426, 0.310918) +
+    -0.026478 * f_z(preBearSweep, 0.042920, 0.202676) +
+     0.097837 * f_z(preAtrRel, 1.205161, 0.345416) +
+    -0.072797 * f_z(preRange12ATR, 3.544861, 1.119371) +
+    -0.216568 * f_z(preRange36ATR, 6.245262, 1.891950) +
+     0.479251 * f_z(preBBWidth, 0.004024, 0.003337)
+
+preProbLong = 1.0 / (1.0 + math.exp(-preLogitLong))
+preProbShort = 1.0 / (1.0 + math.exp(-preLogitShort))
+preSessionOK = inLondon or inNY
+
+var int preWarnLongBar = na
+var int preWarnShortBar = na
+var int preLastSignalBar = na
+
+preWarnLong = enablePreExpansion and timeframe.period == "5" and preSessionOK and preProbLong >= preExpansionThreshold and preProbLong > preProbShort and nz(preProbLong[1], 0) < preExpansionThreshold
+preWarnShort = enablePreExpansion and timeframe.period == "5" and preSessionOK and preProbShort >= preExpansionThreshold and preProbShort > preProbLong and nz(preProbShort[1], 0) < preExpansionThreshold
+
+if preWarnLong
+    preWarnLongBar := bar_index
+if preWarnShort
+    preWarnShortBar := bar_index
+
+preLongTriggerRaw = bullDisp or close > ta.highest(high[1], 3)
+preShortTriggerRaw = bearDisp or close < ta.lowest(low[1], 3)
+preCooldownOK = na(preLastSignalBar) or bar_index - preLastSignalBar >= preExpansionCooldown
+
+pre15Long = enablePreExpansion and preCooldownOK and not na(preWarnLongBar) and bar_index > preWarnLongBar and bar_index - preWarnLongBar <= preExpansionWindow and preLongTriggerRaw
+pre15Short = enablePreExpansion and preCooldownOK and not na(preWarnShortBar) and bar_index > preWarnShortBar and bar_index - preWarnShortBar <= preExpansionWindow and preShortTriggerRaw
+
+if pre15Long or pre15Short
+    preLastSignalBar := bar_index
+    preWarnLongBar := na
+    preWarnShortBar := na
+
+plotshape(preWarnLong, "PRE15 WATCH LONG", shape.circle, location.belowbar, color=color.new(color.aqua, 15), size=size.tiny, text="15?")
+plotshape(preWarnShort, "PRE15 WATCH SHORT", shape.circle, location.abovebar, color=color.new(color.orange, 15), size=size.tiny, text="15?")
+plotshape(pre15Long, "PRE15 LONG TRIGGER", shape.triangleup, location.belowbar, color=color.aqua, size=size.small, text="15L")
+plotshape(pre15Short, "PRE15 SHORT TRIGGER", shape.triangledown, location.abovebar, color=color.orange, size=size.small, text="15S")
+
 // ---------- Visual signals ----------
 isBullAPlus=bullScore100>=aPlusScore or continuationAPlusBull
 isBearAPlus=bearScore100>=aPlusScore or continuationAPlusBear
@@ -600,3 +702,8 @@ alertcondition(eliteLong,"XAUUSD ELITE BUY","XAUUSD Elite BUY score >= 90")
 alertcondition(eliteShort,"XAUUSD ELITE SELL","XAUUSD Elite SELL score >= 90")
 alertcondition(sTierLong,"XAUUSD S-TIER BUY","XAUUSD S-tier BUY score >= 96 + displacement")
 alertcondition(sTierShort,"XAUUSD S-TIER SELL","XAUUSD S-tier SELL score >= 96 + displacement")
+
+alertcondition(preWarnLong,"XAUUSD PRE15 WATCH LONG","XAUUSD possible >=15-point LONG expansion developing")
+alertcondition(preWarnShort,"XAUUSD PRE15 WATCH SHORT","XAUUSD possible >=15-point SHORT expansion developing")
+alertcondition(pre15Long,"XAUUSD PRE15 LONG","XAUUSD PRE15 LONG trigger after pre-expansion warning")
+alertcondition(pre15Short,"XAUUSD PRE15 SHORT","XAUUSD PRE15 SHORT trigger after pre-expansion warning")
