@@ -55,6 +55,8 @@ showStructure = input.bool(true, "Show BOS / CHoCH", group=gICT)
 enableReversals = input.bool(true, "Enable strict reversal setups", group=gICT)
 reversalMinLiquidity = input.float(2.0, "Reversal minimum liquidity score", minval=0, step=0.25, group=gICT)
 showOB = input.bool(true, "Show Order Blocks", group=gICT)
+enableStrictReversal = input.bool(true, "Enable strict reversal module", group=gICT)
+reversalGap = input.int(18, "Reversal setup gap", minval=0, group=gICT)
 
 gOsc = "Gold Filters"
 stLen = input.int(14, "Stochastic length", minval=5, group=gOsc)
@@ -348,6 +350,28 @@ plot(pdHigh, "PDH", color=color.new(color.fuchsia, 55), style=plot.style_steplin
 plot(pdLow, "PDL", color=color.new(color.fuchsia, 55), style=plot.style_stepline)
 plot(d30High, "30D High", color=color.new(color.red, 65), style=plot.style_stepline)
 plot(d30Low, "30D Low", color=color.new(color.green, 65), style=plot.style_stepline)
+
+// ---------- Strict reversal module ----------
+pdHigh = request.security(syminfo.tickerid, "D", high[1], lookahead=barmerge.lookahead_off)
+pdLow = request.security(syminfo.tickerid, "D", low[1], lookahead=barmerge.lookahead_off)
+d30High = request.security(syminfo.tickerid, "D", ta.highest(high[1], 30), lookahead=barmerge.lookahead_off)
+d30Low = request.security(syminfo.tickerid, "D", ta.lowest(low[1], 30), lookahead=barmerge.lookahead_off)
+
+majorBullSweep = (low < pdLow and close > pdLow) or (low < d30Low and close > d30Low)
+majorBearSweep = (high > pdHigh and close < pdHigh) or (high > d30High and close < d30High)
+
+bullDisplacement = (close - open) > atr14 * 0.80 and (high - low) > atr14 * 1.20
+bearDisplacement = (open - close) > atr14 * 0.80 and (high - low) > atr14 * 1.20
+
+majorBullRecent = ta.barssince(majorBullSweep) >= 0 and ta.barssince(majorBullSweep) <= 8
+majorBearRecent = ta.barssince(majorBearSweep) >= 0 and ta.barssince(majorBearSweep) <= 8
+bullDispRecent = ta.barssince(bullDisplacement) >= 0 and ta.barssince(bullDisplacement) <= 6
+bearDispRecent = ta.barssince(bearDisplacement) >= 0 and ta.barssince(bearDisplacement) <= 6
+bullCHOCHRecent = ta.barssince(bullCHOCH) >= 0 and ta.barssince(bullCHOCH) <= 6
+bearCHOCHRecent = ta.barssince(bearCHOCH) >= 0 and ta.barssince(bearCHOCH) <= 6
+
+strictRevLong = enableStrictReversal and robustWindow and majorBullRecent and bullDispRecent and bullCHOCHRecent and (bullFVGRecent or bullOBTouch or inBullOTE) and triggerBull and k > d and close > bbBasis and tf240 != -1
+strictRevShort = enableStrictReversal and robustWindow and majorBearRecent and bearDispRecent and bearCHOCHRecent and (bearFVGRecent or bearOBTouch or inBearOTE) and triggerBear and k < d and close < bbBasis and tf240 != 1
 
 // ---------- Quality ----------
 bullQuality = (bullFVGRecent ? 2.0 : 0.0) + (bullOBTouch ? 2.0 : 0.0) + (inBullOTE ? 1.25 : 0.0) + bullLiquidityQuality + (bullCHOCH ? 1.5 : bullBOS ? 0.75 : 0.0) + (tf240 == 1 ? 0.75 : 0.0) + (k > d ? 0.5 : 0.0)
