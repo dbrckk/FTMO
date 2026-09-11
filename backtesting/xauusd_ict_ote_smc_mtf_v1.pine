@@ -47,6 +47,11 @@ showMTFTable = input.bool(true, "Show MTF matrix", group=gMTF)
 adaptiveTF = input.bool(true, "Adaptive thresholds by chart TF", group=gMTF)
 
 
+gInter = "Discretionary ICT Quality"
+useInterQuality = input.bool(true, "Use Inter-style quality layer", group=gInter)
+interMinScore = input.float(2.75, "Minimum quality score", minval=0, step=0.25, group=gInter)
+showQuality = input.bool(true, "Show quality score", group=gInter)
+
 gRisk = "Trading"
 tpPts = input.float(15.0, "Take Profit", minval=0.1, group=gRisk)
 slPts = input.float(10.0, "Stop Loss", minval=0.1, group=gRisk)
@@ -477,6 +482,9 @@ if strategy.position_size > 0
 
 if strategy.position_size < 0
     strategy.exit("SELL EXIT", "SELL", stop=strategy.position_avg_price+slPts, limit=strategy.position_avg_price-tpPts)
+
+plotchar(showQuality ? interBullScore : na, "Bull ICT Quality", "", location.top, color=color.new(color.green, 100), display=display.data_window)
+plotchar(showQuality ? interBearScore : na, "Bear ICT Quality", "", location.top, color=color.new(color.red, 100), display=display.data_window)
 
 // ---------- Visual signals ----------
 plotshape(longSignal, "BUY setup", shape.labelup, location.belowbar, color=color.new(color.green, 0), textcolor=color.white, text="BUY", size=size.small)
