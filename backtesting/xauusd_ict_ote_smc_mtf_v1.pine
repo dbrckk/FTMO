@@ -377,11 +377,11 @@ isH1 = chartSec > 30 * 60 and chartSec <= 60 * 60
 isH2 = chartSec > 60 * 60 and chartSec <= 120 * 60
 isH4 = chartSec > 120 * 60
 
-// Thresholds selected from full-history top-down comparison.
-autoScore = isM5 ? 4.5 : isM15 ? 5.0 : isM30 ? 4.5 : isH1 ? 4.5 : isH2 ? 3.0 : 4.0
+// Thresholds selected from full-history top-down comparison.\n// M5 validated 2004-2026: score 2.5, H4 bias + H1 non-opposition, H2+M30 confirm, M15 or M5 trigger.
+autoScore = isM5 ? 2.5 : isM15 ? 5.0 : isM30 ? 4.5 : isH1 ? 4.5 : isH2 ? 3.0 : 4.0
 biasStrict = isM15 or isM30 or isH1 or isH4
 confNeed = isM5 ? 2 : isM15 ? 1 : isM30 ? 2 : isH1 ? 2 : isH2 ? 1 : 2
-trigNeed = isM5 ? 2 : isM15 ? 1 : isM30 ? 1 : isH1 ? 2 : isH2 ? 1 : 1
+trigNeed = isM5 ? 1 : isM15 ? 1 : isM30 ? 1 : isH1 ? 2 : isH2 ? 1 : 1
 
 biasBull = biasStrict ? (tf240 == 1 and tf60 == 1) : (tf240 == 1 and tf60 != -1)
 biasBear = biasStrict ? (tf240 == -1 and tf60 == -1) : (tf240 == -1 and tf60 != 1)
