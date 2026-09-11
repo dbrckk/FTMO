@@ -211,9 +211,65 @@ confirmBear = tf120 == -1 and tf30 == -1
 triggerBull = tf15 == 1 or tf5 == 1
 triggerBear = tf15 == -1 or tf5 == -1
 
+// ---------- High-value liquidity map ----------
+pdHigh = request.security(syminfo.tickerid, "D", high[1], lookahead=barmerge.lookahead_off)
+pdLow = request.security(syminfo.tickerid, "D", low[1], lookahead=barmerge.lookahead_off)
+d30High = request.security(syminfo.tickerid, "D", ta.highest(high[1], 30), lookahead=barmerge.lookahead_off)
+d30Low = request.security(syminfo.tickerid, "D", ta.lowest(low[1], 30), lookahead=barmerge.lookahead_off)
+
+var float prevLondonHigh = na
+var float prevLondonLow = na
+var float curLondonHigh = na
+var float curLondonLow = na
+var float prevNYHigh = na
+var float prevNYLow = na
+var float curNYHigh = na
+var float curNYLow = na
+
+newLondon = inLondon and not inLondon[1]
+endLondon = not inLondon and inLondon[1]
+if newLondon
+    curLondonHigh := high
+    curLondonLow := low
+else if inLondon
+    curLondonHigh := math.max(nz(curLondonHigh, high), high)
+    curLondonLow := math.min(nz(curLondonLow, low), low)
+if endLondon
+    prevLondonHigh := curLondonHigh
+    prevLondonLow := curLondonLow
+
+newNY = inNY and not inNY[1]
+endNY = not inNY and inNY[1]
+if newNY
+    curNYHigh := high
+    curNYLow := low
+else if inNY
+    curNYHigh := math.max(nz(curNYHigh, high), high)
+    curNYLow := math.min(nz(curNYLow, low), low)
+if endNY
+    prevNYHigh := curNYHigh
+    prevNYLow := curNYLow
+
+sweepPDL = low < pdLow and close > pdLow
+sweepPDH = high > pdHigh and close < pdHigh
+sweep30L = low < d30Low and close > d30Low
+sweep30H = high > d30High and close < d30High
+sweepPrevSessionL = (not na(prevLondonLow) and low < prevLondonLow and close > prevLondonLow) or (not na(prevNYLow) and low < prevNYLow and close > prevNYLow)
+sweepPrevSessionH = (not na(prevLondonHigh) and high > prevLondonHigh and close < prevLondonHigh) or (not na(prevNYHigh) and high > prevNYHigh and close < prevNYHigh)
+
+bullLiquidityQualityNow = (bullSweep ? 1.0 : 0.0) + (sweepPrevSessionL ? 1.5 : 0.0) + (sweepPDL ? 2.0 : 0.0) + (sweep30L ? 2.5 : 0.0)
+bearLiquidityQualityNow = (bearSweep ? 1.0 : 0.0) + (sweepPrevSessionH ? 1.5 : 0.0) + (sweepPDH ? 2.0 : 0.0) + (sweep30H ? 2.5 : 0.0)
+bullLiquidityQuality = ta.highest(bullLiquidityQualityNow, 12)
+bearLiquidityQuality = ta.highest(bearLiquidityQualityNow, 12)
+
+plot(pdHigh, "PDH", color=color.new(color.fuchsia, 55), style=plot.style_stepline)
+plot(pdLow, "PDL", color=color.new(color.fuchsia, 55), style=plot.style_stepline)
+plot(d30High, "30D High", color=color.new(color.red, 65), style=plot.style_stepline)
+plot(d30Low, "30D Low", color=color.new(color.green, 65), style=plot.style_stepline)
+
 // ---------- Quality ----------
-bullQuality = (bullFVGRecent ? 2.0 : 0.0) + (bullOBTouch ? 2.0 : 0.0) + (inBullOTE ? 1.25 : 0.0) + (bullSweepRecent ? 1.25 : 0.0) + (bullCHOCH ? 1.5 : bullBOS ? 0.75 : 0.0) + (tf240 == 1 ? 0.75 : 0.0) + (k > d ? 0.5 : 0.0)
-bearQuality = (bearFVGRecent ? 2.0 : 0.0) + (bearOBTouch ? 2.0 : 0.0) + (inBearOTE ? 1.25 : 0.0) + (bearSweepRecent ? 1.25 : 0.0) + (bearCHOCH ? 1.5 : bearBOS ? 0.75 : 0.0) + (tf240 == -1 ? 0.75 : 0.0) + (k < d ? 0.5 : 0.0)
+bullQuality = (bullFVGRecent ? 2.0 : 0.0) + (bullOBTouch ? 2.0 : 0.0) + (inBullOTE ? 1.25 : 0.0) + bullLiquidityQuality + (bullCHOCH ? 1.5 : bullBOS ? 0.75 : 0.0) + (tf240 == 1 ? 0.75 : 0.0) + (k > d ? 0.5 : 0.0)
+bearQuality = (bearFVGRecent ? 2.0 : 0.0) + (bearOBTouch ? 2.0 : 0.0) + (inBearOTE ? 1.25 : 0.0) + bearLiquidityQuality + (bearCHOCH ? 1.5 : bearBOS ? 0.75 : 0.0) + (tf240 == -1 ? 0.75 : 0.0) + (k < d ? 0.5 : 0.0)
 
 longSignal = allowLong and robustWindow and biasBull and confirmBull and triggerBull and bullQuality >= minQuality
 shortSignal = allowShort and robustWindow and biasBear and confirmBear and triggerBear and bearQuality >= minQuality
