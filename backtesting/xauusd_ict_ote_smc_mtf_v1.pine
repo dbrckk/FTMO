@@ -37,7 +37,7 @@ bgcolor(showKillZones and inNYKZ ? color.new(color.orange, 86) : na)
 
 // ---------- Risk ----------
 
-gMTF = "Multi-Timeframe Decision"
+gMTF = "Multi-Timeframe Decision"\n// Top-Down ICT Hierarchy
 useMTF = input.bool(true, "Use MTF consensus", group=gMTF)
 minBullTF = input.int(4, "Minimum bullish TFs", minval=1, maxval=6, group=gMTF)
 minBearTF = input.int(4, "Minimum bearish TFs", minval=1, maxval=6, group=gMTF)
@@ -365,11 +365,34 @@ tf240 = request.security(syminfo.tickerid, "240", f_tf_state(), lookahead=barmer
 bullTFCount = (tf5 == 1 ? 1 : 0) + (tf15 == 1 ? 1 : 0) + (tf30 == 1 ? 1 : 0) + (tf60 == 1 ? 1 : 0) + (tf120 == 1 ? 1 : 0) + (tf240 == 1 ? 1 : 0)
 bearTFCount = (tf5 == -1 ? 1 : 0) + (tf15 == -1 ? 1 : 0) + (tf30 == -1 ? 1 : 0) + (tf60 == -1 ? 1 : 0) + (tf120 == -1 ? 1 : 0) + (tf240 == -1 ? 1 : 0)
 
-htfBull = tf60 == 1 and tf120 == 1 and tf240 == 1
-htfBear = tf60 == -1 and tf120 == -1 and tf240 == -1
+// Top-down hierarchy:
+// H4/H1 = directional bias
+// H2/M30 = structure confirmation
+// M15/M5 = entry timing
+chartSec = timeframe.in_seconds(timeframe.period)
+isM5 = chartSec <= 5 * 60
+isM15 = chartSec > 5 * 60 and chartSec <= 15 * 60
+isM30 = chartSec > 15 * 60 and chartSec <= 30 * 60
+isH1 = chartSec > 30 * 60 and chartSec <= 60 * 60
+isH2 = chartSec > 60 * 60 and chartSec <= 120 * 60
+isH4 = chartSec > 120 * 60
 
-mtfBullOK = not useMTF or (bullTFCount >= minBullTF and (not requireHTF or htfBull))
-mtfBearOK = not useMTF or (bearTFCount >= minBearTF and (not requireHTF or htfBear))
+// Thresholds selected from full-history top-down comparison.
+autoScore = isM5 ? 4.5 : isM15 ? 5.0 : isM30 ? 4.5 : isH1 ? 4.5 : isH2 ? 3.0 : 4.0
+biasStrict = isM15 or isM30 or isH1 or isH4
+confNeed = isM5 ? 2 : isM15 ? 1 : isM30 ? 2 : isH1 ? 2 : isH2 ? 1 : 2
+trigNeed = isM5 ? 2 : isM15 ? 1 : isM30 ? 1 : isH1 ? 2 : isH2 ? 1 : 1
+
+biasBull = biasStrict ? (tf240 == 1 and tf60 == 1) : (tf240 == 1 and tf60 != -1)
+biasBear = biasStrict ? (tf240 == -1 and tf60 == -1) : (tf240 == -1 and tf60 != 1)
+
+confirmBullCount = (tf120 == 1 ? 1 : 0) + (tf30 == 1 ? 1 : 0)
+confirmBearCount = (tf120 == -1 ? 1 : 0) + (tf30 == -1 ? 1 : 0)
+triggerBullCount = (tf15 == 1 ? 1 : 0) + (tf5 == 1 ? 1 : 0)
+triggerBearCount = (tf15 == -1 ? 1 : 0) + (tf5 == -1 ? 1 : 0)
+
+mtfBullOK = not useMTF or (biasBull and confirmBullCount >= confNeed and triggerBullCount >= trigNeed)
+mtfBearOK = not useMTF or (biasBear and confirmBearCount >= confNeed and triggerBearCount >= trigNeed)
 
 
 // ---------- Confluence score ----------
@@ -453,7 +476,7 @@ plotshape(longSignal, "BUY setup", shape.labelup, location.belowbar, color=color
 plotshape(shortSignal, "SELL setup", shape.labeldown, location.abovebar, color=color.new(color.red, 0), textcolor=color.white, text="SELL", size=size.small)
 
 // ---------- Dashboard ----------
-var table dash = table.new(position.top_right, 2, 10, border_width=1)
+var table dash = table.new(position.top_right, 2, 13, border_width=1)
 if barstate.islast
     table.cell(dash,0,0,"XAUUSD PRO",bgcolor=color.black,text_color=color.white)
     table.cell(dash,1,0,"ICT/SMC",bgcolor=color.black,text_color=color.white)
