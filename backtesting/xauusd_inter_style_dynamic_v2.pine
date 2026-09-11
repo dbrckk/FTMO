@@ -1,70 +1,76 @@
 //@version=6
-strategy("XAUUSD Inter-Style ICT Dynamic v2", overlay=true, pyramiding=0,
+strategy("XAUUSD Inter-Style ICT Dynamic v3", overlay=true, pyramiding=0,
      process_orders_on_close=false, calc_on_order_fills=true,
-     initial_capital=100000, default_qty_type=strategy.fixed, default_qty_value=0.25)
+     initial_capital=100000, default_qty_type=strategy.fixed, default_qty_value=0.25,
+     max_labels_count=500, max_boxes_count=250, max_lines_count=500)
 
 // =====================================================
-// XAUUSD discretionary-style ICT/SMC engine
+// XAUUSD ICT/SMC discretionary-style engine
+// Top-down: H4/H1 bias -> H2/M30 context -> M15/M5 timing.
+// Setup families: continuation, A+ continuation, strict reversal.
 // No fixed RR / no fixed TP.
-// H4/H1 bias -> H2/M30 confirmation -> M15/M5 timing.
-// Entry: liquidity/structure/FVG/OB/OTE confluence.
-// Management: partial on natural liquidity, protection, ATR runner,
+// Management: liquidity partials, BE protection, ATR runner,
 // structure/momentum invalidation, emergency stop.
-// Optimized research base: M5, London/NY overlap + NY 10:00-13:00.
 // =====================================================
 
-// ---------- Sessions ----------
+// ---------- Inputs ----------
 gSess = "Sessions"
 londonSession = input.session("0800-1700", "London", group=gSess)
 nySession = input.session("0800-1700", "New York", group=gSess)
+londonKZ = input.session("0700-1000", "London Kill Zone", group=gSess)
+nyKZ = input.session("0830-1100", "NY Kill Zone", group=gSess)
 londonTZ = input.string("Europe/London", "London timezone", group=gSess)
 nyTZ = input.string("America/New_York", "New York timezone", group=gSess)
 showSessionBg = input.bool(true, "Session background", group=gSess)
-showTemporalLiquidity = input.bool(true, "Temporal liquidity levels", group=gSess)
-londonKZ = input.session("0700-1000", "London Kill Zone", group=gSess)
-nyKZ = input.session("0830-1100", "NY Kill Zone", group=gSess)
-
-inLondon = not na(time(timeframe.period, londonSession, londonTZ))
-inNY = not na(time(timeframe.period, nySession, nyTZ))
-nyMinutes = hour(time, nyTZ) * 60 + minute(time, nyTZ)
-londonMinutes = hour(time, londonTZ) * 60 + minute(time, londonTZ)
-inLondonKZ = not na(time(timeframe.period, londonKZ, londonTZ))
-inNYKZ = not na(time(timeframe.period, nyKZ, nyTZ))
-inKillZone = inLondonKZ or inNYKZ
-robustWindow = (inLondon and inNY) or (nyMinutes >= 10 * 60 and nyMinutes < 13 * 60)
-
-bgcolor(showSessionBg and inLondon ? color.new(color.blue, 93) : na)
-bgcolor(showSessionBg and inNY ? color.new(color.orange, 93) : na)
-
-// ---------- Inputs ----------
-gTrade = "Trade Management"
-allowLong = input.bool(true, "Allow BUY", group=gTrade)
-allowShort = input.bool(true, "Allow SELL", group=gTrade)
-emergencyStop = input.float(12.0, "Emergency stop (Gold points)", minval=1.0, group=gTrade)
-protectTrigger = input.float(8.0, "Protect after MFE (points)", minval=1.0, group=gTrade)
-trailATR = input.float(0.60, "Runner ATR trail", minval=0.1, step=0.05, group=gTrade)
-partialQty = input.float(33.0, "Liquidity partial %", minval=1, maxval=90, group=gTrade)
-minRearmBars = input.int(12, "Minimum bars between setups", minval=0, group=gTrade)
 
 gICT = "ICT / SMC"
 pivotLen = input.int(3, "Confirmed swing length", minval=1, maxval=10, group=gICT)
-minQuality = input.float(2.75, "Minimum ICT quality", minval=0, step=0.25, group=gICT)
-showFVG = input.bool(true, "Show FVG", group=gICT)
-showOTE = input.bool(true, "Show OTE", group=gICT)
-showStructure = input.bool(true, "Show BOS / CHoCH", group=gICT)
-enableReversals = input.bool(true, "Enable strict reversal setups", group=gICT)
-reversalMinLiquidity = input.float(2.0, "Reversal minimum liquidity score", minval=0, step=0.25, group=gICT)
-showOB = input.bool(true, "Show Order Blocks", group=gICT)
-enableStrictReversal = input.bool(true, "Enable strict reversal module", group=gICT)
-reversalGap = input.int(18, "Reversal setup gap", minval=0, group=gICT)
+minQuality = input.float(2.75, "Base ICT quality", minval=0, step=0.25, group=gICT)
+enableContinuation = input.bool(true, "Continuation setups", group=gICT)
+enableAPlus = input.bool(true, "A+ continuation labels", group=gICT)
+enableReversal = input.bool(true, "Strict reversal setups", group=gICT)
+showStructure = input.bool(true, "BOS / CHoCH", group=gICT)
+showFVG = input.bool(true, "FVG", group=gICT)
+showOTE = input.bool(true, "OTE", group=gICT)
+showOB = input.bool(true, "Order Blocks", group=gICT)
+showLiquidity = input.bool(true, "Liquidity map", group=gICT)
+
+gScore = "Quality Score"
+minScoreTrade = input.int(55, "Minimum score to trade", minval=0, maxval=100, group=gScore)
+aPlusScore = input.int(75, "A+ score", minval=50, maxval=100, group=gScore)
+showScoreLabels = input.bool(true, "Score labels", group=gScore)
+
+gMgmt = "Dynamic Management"
+emergencyStop = input.float(12.0, "Continuation emergency stop", minval=1, group=gMgmt)
+protectTrigger = input.float(8.0, "Continuation protect after MFE", minval=1, group=gMgmt)
+trailATR = input.float(0.60, "Continuation ATR trail", minval=.1, step=.05, group=gMgmt)
+partialQty = input.float(33.0, "Continuation partial %", minval=1, maxval=90, group=gMgmt)
+reversalEmergency = input.float(6.0, "Reversal emergency stop", minval=1, group=gMgmt)
+reversalProtect = input.float(6.0, "Reversal protect after MFE", minval=1, group=gMgmt)
+reversalTrailATR = input.float(0.40, "Reversal ATR trail", minval=.1, step=.05, group=gMgmt)
+reversalPartialQty = input.float(50.0, "Reversal partial %", minval=1, maxval=90, group=gMgmt)
+minRearmBars = input.int(12, "Minimum M5-equivalent setup gap", minval=0, group=gMgmt)
 
 gOsc = "Gold Filters"
 stLen = input.int(14, "Stochastic length", minval=5, group=gOsc)
 bbLen = input.int(20, "Bollinger EMA length", minval=5, group=gOsc)
-bbMult = input.float(2.20, "Bollinger base deviation", minval=0.5, step=0.05, group=gOsc)
-bbVolBoost = input.float(0.35, "Bollinger volatility boost", minval=0, step=0.05, group=gOsc)
+bbMult = input.float(2.20, "Bollinger deviation", minval=.5, step=.05, group=gOsc)
+bbVolBoost = input.float(.35, "Bollinger volatility boost", minval=0, step=.05, group=gOsc)
 
-// ---------- Gold stochastic + adaptive Bollinger ----------
+// ---------- Sessions ----------
+inLondon = not na(time(timeframe.period, londonSession, londonTZ))
+inNY = not na(time(timeframe.period, nySession, nyTZ))
+inLondonKZ = not na(time(timeframe.period, londonKZ, londonTZ))
+inNYKZ = not na(time(timeframe.period, nyKZ, nyTZ))
+inKillZone = inLondonKZ or inNYKZ
+nyMinutes = hour(time, nyTZ) * 60 + minute(time, nyTZ)
+lonMinutes = hour(time, londonTZ) * 60 + minute(time, londonTZ)
+robustWindow = (inLondon and inNY) or (nyMinutes >= 600 and nyMinutes < 780)
+
+bgcolor(showSessionBg and inLondon ? color.new(color.blue, 94) : na)
+bgcolor(showSessionBg and inNY ? color.new(color.orange, 94) : na)
+
+// ---------- Gold Bollinger + Stochastic ----------
 atr14 = ta.atr(14)
 bbBasis = ta.ema(close, bbLen)
 bbDev = ta.stdev(close, bbLen)
@@ -77,12 +83,12 @@ bbLower = bbBasis - bbDev * adaptiveMult
 ll = ta.lowest(low, stLen)
 hh = ta.highest(high, stLen)
 rawK = 100 * (close - ll) / math.max(hh - ll, syminfo.mintick)
-k = ta.ema(rawK, 3)
-d = ta.ema(k, 3)
+stK = ta.ema(rawK, 3)
+stD = ta.ema(stK, 3)
 
-plot(bbUpper, "Gold BB Upper", color=color.new(color.red, 30))
-plot(bbBasis, "Gold BB Basis", color=color.new(color.gray, 50))
-plot(bbLower, "Gold BB Lower", color=color.new(color.green, 30))
+plot(bbUpper, "Gold BB Upper", color=color.new(color.red, 35))
+plot(bbBasis, "Gold BB Basis", color=color.new(color.gray, 55))
+plot(bbLower, "Gold BB Lower", color=color.new(color.green, 35))
 
 // ---------- Confirmed structure ----------
 ph = ta.pivothigh(high, pivotLen, pivotLen)
@@ -90,11 +96,15 @@ pl = ta.pivotlow(low, pivotLen, pivotLen)
 
 var float lastSwingHigh = na
 var float lastSwingLow = na
+var float prevSwingHigh = na
+var float prevSwingLow = na
 var int structure = 0
 
 if not na(ph)
+    prevSwingHigh := lastSwingHigh
     lastSwingHigh := ph
 if not na(pl)
+    prevSwingLow := lastSwingLow
     lastSwingLow := pl
 
 bullBreak = not na(lastSwingHigh) and close > lastSwingHigh and close[1] <= lastSwingHigh
@@ -110,9 +120,9 @@ if bearBreak
     structure := -1
 
 if showStructure and bullBOS
-    label.new(bar_index, low, "BOS ↑", style=label.style_label_up, color=color.new(color.green, 20), textcolor=color.white, size=size.tiny)
+    label.new(bar_index, low, "BOS ↑", style=label.style_label_up, color=color.new(color.green,20), textcolor=color.white, size=size.tiny)
 if showStructure and bearBOS
-    label.new(bar_index, high, "BOS ↓", style=label.style_label_down, color=color.new(color.red, 20), textcolor=color.white, size=size.tiny)
+    label.new(bar_index, high, "BOS ↓", style=label.style_label_down, color=color.new(color.red,20), textcolor=color.white, size=size.tiny)
 if showStructure and bullCHOCH
     label.new(bar_index, low, "CHoCH ↑", style=label.style_label_up, color=color.teal, textcolor=color.white, size=size.tiny)
 if showStructure and bearCHOCH
@@ -120,31 +130,29 @@ if showStructure and bearCHOCH
 
 // ---------- OTE ----------
 swingRange = not na(lastSwingHigh) and not na(lastSwingLow) ? lastSwingHigh - lastSwingLow : na
-bullOTE62 = structure == 1 ? lastSwingHigh - swingRange * 0.62 : na
-bullOTE79 = structure == 1 ? lastSwingHigh - swingRange * 0.79 : na
-bearOTE62 = structure == -1 ? lastSwingLow + swingRange * 0.62 : na
-bearOTE79 = structure == -1 ? lastSwingLow + swingRange * 0.79 : na
-
+bullOTE62 = structure == 1 ? lastSwingHigh - swingRange * .62 : na
+bullOTE79 = structure == 1 ? lastSwingHigh - swingRange * .79 : na
+bearOTE62 = structure == -1 ? lastSwingLow + swingRange * .62 : na
+bearOTE79 = structure == -1 ? lastSwingLow + swingRange * .79 : na
 inBullOTE = structure == 1 and not na(bullOTE62) and low <= bullOTE62 and high >= bullOTE79
 inBearOTE = structure == -1 and not na(bearOTE62) and high >= bearOTE62 and low <= bearOTE79
 
-pB62 = plot(showOTE ? bullOTE62 : na, "Bull OTE 62", color=color.new(color.green, 35), style=plot.style_linebr)
-pB79 = plot(showOTE ? bullOTE79 : na, "Bull OTE 79", color=color.new(color.green, 35), style=plot.style_linebr)
-fill(pB62, pB79, color=color.new(color.green, 90))
-pS62 = plot(showOTE ? bearOTE62 : na, "Bear OTE 62", color=color.new(color.red, 35), style=plot.style_linebr)
-pS79 = plot(showOTE ? bearOTE79 : na, "Bear OTE 79", color=color.new(color.red, 35), style=plot.style_linebr)
-fill(pS62, pS79, color=color.new(color.red, 90))
+pB62 = plot(showOTE ? bullOTE62 : na, "Bull OTE 62", color=color.new(color.green,40), style=plot.style_linebr)
+pB79 = plot(showOTE ? bullOTE79 : na, "Bull OTE 79", color=color.new(color.green,40), style=plot.style_linebr)
+fill(pB62,pB79,color=color.new(color.green,91))
+pS62 = plot(showOTE ? bearOTE62 : na, "Bear OTE 62", color=color.new(color.red,40), style=plot.style_linebr)
+pS79 = plot(showOTE ? bearOTE79 : na, "Bear OTE 79", color=color.new(color.red,40), style=plot.style_linebr)
+fill(pS62,pS79,color=color.new(color.red,91))
 
 // ---------- FVG ----------
 bullFVG = low > high[2]
 bearFVG = high < low[2]
 bullFVGRecent = ta.barssince(bullFVG) >= 0 and ta.barssince(bullFVG) <= 12
 bearFVGRecent = ta.barssince(bearFVG) >= 0 and ta.barssince(bearFVG) <= 12
-
 if showFVG and bullFVG
-    box.new(bar_index - 2, low, bar_index + 16, high[2], bgcolor=color.new(color.green, 91), border_color=color.new(color.green, 60))
+    box.new(bar_index-2, low, bar_index+16, high[2], bgcolor=color.new(color.green,92), border_color=color.new(color.green,65))
 if showFVG and bearFVG
-    box.new(bar_index - 2, low[2], bar_index + 16, high, bgcolor=color.new(color.red, 91), border_color=color.new(color.red, 60))
+    box.new(bar_index-2, low[2], bar_index+16, high, bgcolor=color.new(color.red,92), border_color=color.new(color.red,65))
 
 // ---------- Order Blocks ----------
 var float bullOBHigh = na
@@ -153,40 +161,38 @@ var float bearOBHigh = na
 var float bearOBLow = na
 
 if bullBreak
-    int foundBull = na
+    int fb = na
     for j = 1 to 12
-        if close[j] < open[j] and na(foundBull)
-            foundBull := j
-    if not na(foundBull)
-        bullOBHigh := high[foundBull]
-        bullOBLow := low[foundBull]
+        if close[j] < open[j] and na(fb)
+            fb := j
+    if not na(fb)
+        bullOBHigh := high[fb]
+        bullOBLow := low[fb]
         if showOB
-            box.new(bar_index - foundBull, bullOBHigh, bar_index + 30, bullOBLow, bgcolor=color.new(color.green, 90), border_color=color.new(color.green, 65))
+            box.new(bar_index-fb,bullOBHigh,bar_index+30,bullOBLow,bgcolor=color.new(color.green,91),border_color=color.new(color.green,65))
 
 if bearBreak
-    int foundBear = na
+    int fs = na
     for j = 1 to 12
-        if close[j] > open[j] and na(foundBear)
-            foundBear := j
-    if not na(foundBear)
-        bearOBHigh := high[foundBear]
-        bearOBLow := low[foundBear]
+        if close[j] > open[j] and na(fs)
+            fs := j
+    if not na(fs)
+        bearOBHigh := high[fs]
+        bearOBLow := low[fs]
         if showOB
-            box.new(bar_index - foundBear, bearOBHigh, bar_index + 30, bearOBLow, bgcolor=color.new(color.red, 90), border_color=color.new(color.red, 65))
+            box.new(bar_index-fs,bearOBHigh,bar_index+30,bearOBLow,bgcolor=color.new(color.red,91),border_color=color.new(color.red,65))
 
 bullOBTouch = not na(bullOBHigh) and low <= bullOBHigh and high >= bullOBLow
 bearOBTouch = not na(bearOBHigh) and high >= bearOBLow and low <= bearOBHigh
 
-// ---------- Liquidity sweeps ----------
-bullSweep = not na(lastSwingLow) and low < lastSwingLow and close > lastSwingLow
-bearSweep = not na(lastSwingHigh) and high > lastSwingHigh and close < lastSwingHigh
-bullSweepRecent = ta.barssince(bullSweep) >= 0 and ta.barssince(bullSweep) <= 12
-bearSweepRecent = ta.barssince(bearSweep) >= 0 and ta.barssince(bearSweep) <= 12
+// ---------- Temporal / major liquidity ----------
+pdHigh = request.security(syminfo.tickerid,"D",high[1],lookahead=barmerge.lookahead_off)
+pdLow = request.security(syminfo.tickerid,"D",low[1],lookahead=barmerge.lookahead_off)
+pwHigh = request.security(syminfo.tickerid,"W",high[1],lookahead=barmerge.lookahead_off)
+pwLow = request.security(syminfo.tickerid,"W",low[1],lookahead=barmerge.lookahead_off)
+d30High = request.security(syminfo.tickerid,"D",ta.highest(high[1],30),lookahead=barmerge.lookahead_off)
+d30Low = request.security(syminfo.tickerid,"D",ta.lowest(low[1],30),lookahead=barmerge.lookahead_off)
 
-plotshape(bullSweep, "Bull sweep", shape.triangleup, location.belowbar, color=color.aqua, size=size.tiny, text="LQ")
-plotshape(bearSweep, "Bear sweep", shape.triangledown, location.abovebar, color=color.yellow, size=size.tiny, text="LQ")
-
-// ---------- Temporal liquidity ----------
 var float asiaHigh = na
 var float asiaLow = na
 var float prevAsiaHigh = na
@@ -194,8 +200,8 @@ var float prevAsiaLow = na
 var float londonOpen = na
 var float nyOpen = na
 
-newLondonDay = londonMinutes < londonMinutes[1] - 600
-if newLondonDay
+newLonDay = not na(lonMinutes[1]) and lonMinutes < lonMinutes[1] - 600
+if newLonDay
     if not na(asiaHigh)
         prevAsiaHigh := asiaHigh
         prevAsiaLow := asiaLow
@@ -204,329 +210,281 @@ if newLondonDay
     londonOpen := na
     nyOpen := na
 
-inAsia = londonMinutes >= 0 and londonMinutes < 8 * 60
+inAsia = lonMinutes >= 0 and lonMinutes < 480
 if inAsia
-    asiaHigh := na(asiaHigh) ? high : math.max(asiaHigh, high)
-    asiaLow := na(asiaLow) ? low : math.min(asiaLow, low)
-
-if londonMinutes >= 8 * 60 and na(londonOpen)
+    asiaHigh := na(asiaHigh) ? high : math.max(asiaHigh,high)
+    asiaLow := na(asiaLow) ? low : math.min(asiaLow,low)
+if lonMinutes >= 480 and na(londonOpen)
     londonOpen := open
-if nyMinutes >= 8 * 60 and na(nyOpen)
+if nyMinutes >= 480 and na(nyOpen)
     nyOpen := open
 
-pwHigh = request.security(syminfo.tickerid, "W", high[1], lookahead=barmerge.lookahead_off)
-pwLow = request.security(syminfo.tickerid, "W", low[1], lookahead=barmerge.lookahead_off)
-pdHigh = request.security(syminfo.tickerid, "D", high[1], lookahead=barmerge.lookahead_off)
-pdLow = request.security(syminfo.tickerid, "D", low[1], lookahead=barmerge.lookahead_off)
-d30High = request.security(syminfo.tickerid, "D", ta.highest(high[1], 30), lookahead=barmerge.lookahead_off)
-d30Low = request.security(syminfo.tickerid, "D", ta.lowest(low[1], 30), lookahead=barmerge.lookahead_off)
+sweepBelow(float level) => not na(level) and low < level and close > level
+sweepAbove(float level) => not na(level) and high > level and close < level
 
-sweepBelow(level) => not na(level) and low < level and close > level
-sweepAbove(level) => not na(level) and high > level and close < level
+bullSwingSweep = sweepBelow(lastSwingLow)
+bearSwingSweep = sweepAbove(lastSwingHigh)
 
-bullTemporalLQ =
+bullLiquidityNow =
+     (bullSwingSweep ? 1.0 : 0.0) +
      (sweepBelow(prevAsiaLow) ? 1.75 : 0.0) +
      (sweepBelow(londonOpen) ? 1.25 : 0.0) +
      (sweepBelow(nyOpen) ? 1.25 : 0.0) +
-     (sweepBelow(pwLow) ? 2.25 : 0.0)
+     (sweepBelow(pdLow) ? 2.0 : 0.0) +
+     (sweepBelow(pwLow) ? 2.25 : 0.0) +
+     (sweepBelow(d30Low) ? 2.5 : 0.0)
 
-bearTemporalLQ =
+bearLiquidityNow =
+     (bearSwingSweep ? 1.0 : 0.0) +
      (sweepAbove(prevAsiaHigh) ? 1.75 : 0.0) +
      (sweepAbove(londonOpen) ? 1.25 : 0.0) +
      (sweepAbove(nyOpen) ? 1.25 : 0.0) +
-     (sweepAbove(pwHigh) ? 2.25 : 0.0)
-
-bullCoreLQ =
-     (bullSweep ? 1.0 : 0.0) +
-     (sweepBelow(pdLow) ? 2.0 : 0.0) +
-     (sweepBelow(d30Low) ? 2.5 : 0.0)
-
-bearCoreLQ =
-     (bearSweep ? 1.0 : 0.0) +
      (sweepAbove(pdHigh) ? 2.0 : 0.0) +
+     (sweepAbove(pwHigh) ? 2.25 : 0.0) +
      (sweepAbove(d30High) ? 2.5 : 0.0)
 
-bullLiquidityQuality = bullCoreLQ + bullTemporalLQ + ((bullCoreLQ + bullTemporalLQ) > 0 and inKillZone ? 0.75 : 0.0)
-bearLiquidityQuality = bearCoreLQ + bearTemporalLQ + ((bearCoreLQ + bearTemporalLQ) > 0 and inKillZone ? 0.75 : 0.0)
+bullLiquidityNow += bullLiquidityNow > 0 and inKillZone ? .75 : 0
+bearLiquidityNow += bearLiquidityNow > 0 and inKillZone ? .75 : 0
+bullLiquidityRecent = ta.highest(bullLiquidityNow,12)
+bearLiquidityRecent = ta.highest(bearLiquidityNow,12)
 
-bullLiquidityRecent = ta.highest(bullLiquidityQuality, 12)
-bearLiquidityRecent = ta.highest(bearLiquidityQuality, 12)
-
-plot(showTemporalLiquidity ? prevAsiaHigh : na, "Prev Asia High", color=color.new(color.yellow, 45), style=plot.style_stepline)
-plot(showTemporalLiquidity ? prevAsiaLow : na, "Prev Asia Low", color=color.new(color.yellow, 45), style=plot.style_stepline)
-plot(showTemporalLiquidity ? pwHigh : na, "PWH", color=color.new(color.purple, 45), style=plot.style_stepline)
-plot(showTemporalLiquidity ? pwLow : na, "PWL", color=color.new(color.purple, 45), style=plot.style_stepline)
-plot(showTemporalLiquidity ? londonOpen : na, "London Open", color=color.new(color.blue, 55), style=plot.style_stepline)
-plot(showTemporalLiquidity ? nyOpen : na, "NY Open", color=color.new(color.orange, 55), style=plot.style_stepline)
+plot(showLiquidity ? pdHigh : na,"PDH",color=color.new(color.fuchsia,55),style=plot.style_stepline)
+plot(showLiquidity ? pdLow : na,"PDL",color=color.new(color.fuchsia,55),style=plot.style_stepline)
+plot(showLiquidity ? pwHigh : na,"PWH",color=color.new(color.purple,55),style=plot.style_stepline)
+plot(showLiquidity ? pwLow : na,"PWL",color=color.new(color.purple,55),style=plot.style_stepline)
+plot(showLiquidity ? d30High : na,"30D High",color=color.new(color.red,65),style=plot.style_stepline)
+plot(showLiquidity ? d30Low : na,"30D Low",color=color.new(color.green,65),style=plot.style_stepline)
+plot(showLiquidity ? prevAsiaHigh : na,"Prev Asia High",color=color.new(color.yellow,55),style=plot.style_stepline)
+plot(showLiquidity ? prevAsiaLow : na,"Prev Asia Low",color=color.new(color.yellow,55),style=plot.style_stepline)
 
 // ---------- MTF state ----------
 f_tf_state() =>
-    _basis = ta.ema(close, 20)
-    _dev = ta.stdev(close, 20)
-    _atr = ta.atr(14)
-    _atrMean = ta.sma(_atr, 50)
-    _vr = _atr / math.max(_atrMean, syminfo.mintick)
-    _mult = 2.20 + math.max(0.0, _vr - 1.0) * 0.35
-    _up = _basis + _dev * _mult
-    _lo = _basis - _dev * _mult
-    _ll = ta.lowest(low, 14)
-    _hh = ta.highest(high, 14)
-    _rk = 100 * (close - _ll) / math.max(_hh - _ll, syminfo.mintick)
-    _k = ta.ema(_rk, 3)
-    _ds = ta.ema(_k, 3)
-    _e8 = ta.ema(close, 8)
-    _e20 = ta.ema(close, 20)
-    _e50 = ta.ema(close, 50)
-    _bull = (_e8 > _e20 and _e20 > _e50 ? 2 : 0) + (close > _basis or (low < _lo and close > _lo) ? 1 : 0) + (_k > _ds and _k >= 45 ? 1 : 0)
-    _bear = (_e8 < _e20 and _e20 < _e50 ? 2 : 0) + (close < _basis or (high > _up and close < _up) ? 1 : 0) + (_k < _ds and _k <= 55 ? 1 : 0)
-    _bull > _bear ? 1 : _bear > _bull ? -1 : 0
+    _basis=ta.ema(close,20)
+    _dev=ta.stdev(close,20)
+    _atr=ta.atr(14)
+    _am=ta.sma(_atr,50)
+    _vr=_atr/math.max(_am,syminfo.mintick)
+    _mul=2.20+math.max(0.0,_vr-1.0)*.35
+    _up=_basis+_dev*_mul
+    _lo=_basis-_dev*_mul
+    _ll=ta.lowest(low,14)
+    _hh=ta.highest(high,14)
+    _rk=100*(close-_ll)/math.max(_hh-_ll,syminfo.mintick)
+    _k=ta.ema(_rk,3)
+    _d=ta.ema(_k,3)
+    _e8=ta.ema(close,8)
+    _e20=ta.ema(close,20)
+    _e50=ta.ema(close,50)
+    _bull=(_e8>_e20 and _e20>_e50?2:0)+(close>_basis or (low<_lo and close>_lo)?1:0)+(_k>_d and _k>=45?1:0)
+    _bear=(_e8<_e20 and _e20<_e50?2:0)+(close<_basis or (high>_up and close<_up)?1:0)+(_k<_d and _k<=55?1:0)
+    _bull>_bear?1:_bear>_bull?-1:0
 
-tf5 = request.security(syminfo.tickerid, "5", f_tf_state(), lookahead=barmerge.lookahead_off)
-tf15 = request.security(syminfo.tickerid, "15", f_tf_state(), lookahead=barmerge.lookahead_off)
-tf30 = request.security(syminfo.tickerid, "30", f_tf_state(), lookahead=barmerge.lookahead_off)
-tf60 = request.security(syminfo.tickerid, "60", f_tf_state(), lookahead=barmerge.lookahead_off)
-tf120 = request.security(syminfo.tickerid, "120", f_tf_state(), lookahead=barmerge.lookahead_off)
-tf240 = request.security(syminfo.tickerid, "240", f_tf_state(), lookahead=barmerge.lookahead_off)
+tf5=request.security(syminfo.tickerid,"5",f_tf_state(),lookahead=barmerge.lookahead_off)
+tf15=request.security(syminfo.tickerid,"15",f_tf_state(),lookahead=barmerge.lookahead_off)
+tf30=request.security(syminfo.tickerid,"30",f_tf_state(),lookahead=barmerge.lookahead_off)
+tf60=request.security(syminfo.tickerid,"60",f_tf_state(),lookahead=barmerge.lookahead_off)
+tf120=request.security(syminfo.tickerid,"120",f_tf_state(),lookahead=barmerge.lookahead_off)
+tf240=request.security(syminfo.tickerid,"240",f_tf_state(),lookahead=barmerge.lookahead_off)
 
-biasBull = tf240 == 1 and tf60 != -1
-biasBear = tf240 == -1 and tf60 != 1
-confirmBull = tf120 == 1 and tf30 == 1
-confirmBear = tf120 == -1 and tf30 == -1
-triggerBull = tf15 == 1 or tf5 == 1
-triggerBear = tf15 == -1 or tf5 == -1
+biasBull=tf240==1 and tf60!=-1
+biasBear=tf240==-1 and tf60!=1
+confirmBull=tf120==1 and tf30==1
+confirmBear=tf120==-1 and tf30==-1
+triggerBull=tf15==1 or tf5==1
+triggerBear=tf15==-1 or tf5==-1
+fullBull=tf240==1 and tf120==1 and tf60==1 and tf30==1 and tf15==1 and tf5==1
+fullBear=tf240==-1 and tf120==-1 and tf60==-1 and tf30==-1 and tf15==-1 and tf5==-1
 
-// ---------- High-value liquidity map ----------
-pdHigh = request.security(syminfo.tickerid, "D", high[1], lookahead=barmerge.lookahead_off)
-pdLow = request.security(syminfo.tickerid, "D", low[1], lookahead=barmerge.lookahead_off)
-d30High = request.security(syminfo.tickerid, "D", ta.highest(high[1], 30), lookahead=barmerge.lookahead_off)
-d30Low = request.security(syminfo.tickerid, "D", ta.lowest(low[1], 30), lookahead=barmerge.lookahead_off)
+bullMTFCount=(tf5==1?1:0)+(tf15==1?1:0)+(tf30==1?1:0)+(tf60==1?1:0)+(tf120==1?1:0)+(tf240==1?1:0)
+bearMTFCount=(tf5==-1?1:0)+(tf15==-1?1:0)+(tf30==-1?1:0)+(tf60==-1?1:0)+(tf120==-1?1:0)+(tf240==-1?1:0)
 
-var float prevLondonHigh = na
-var float prevLondonLow = na
-var float curLondonHigh = na
-var float curLondonLow = na
-var float prevNYHigh = na
-var float prevNYLow = na
-var float curNYHigh = na
-var float curNYLow = na
+// ---------- Displacement ----------
+bullDisp=close-open>atr14*.8 and high-low>atr14*1.2
+bearDisp=open-close>atr14*.8 and high-low>atr14*1.2
+bullDispRecent=ta.barssince(bullDisp)>=0 and ta.barssince(bullDisp)<=6
+bearDispRecent=ta.barssince(bearDisp)>=0 and ta.barssince(bearDisp)<=6
+bullStructRecent=ta.barssince(bullBOS or bullCHOCH)>=0 and ta.barssince(bullBOS or bullCHOCH)<=6
+bearStructRecent=ta.barssince(bearBOS or bearCHOCH)>=0 and ta.barssince(bearBOS or bearCHOCH)<=6
 
-newLondon = inLondon and not inLondon[1]
-endLondon = not inLondon and inLondon[1]
-if newLondon
-    curLondonHigh := high
-    curLondonLow := low
-else if inLondon
-    curLondonHigh := math.max(nz(curLondonHigh, high), high)
-    curLondonLow := math.min(nz(curLondonLow, low), low)
-if endLondon
-    prevLondonHigh := curLondonHigh
-    prevLondonLow := curLondonLow
+// ---------- Setup families ----------
+bullQuality=(bullFVGRecent?2.0:0)+(bullOBTouch?2.0:0)+(inBullOTE?1.25:0)+bullLiquidityRecent+(bullCHOCH?1.5:bullBOS?.75:0)+(tf240==1?.75:0)+(stK>stD?.5:0)
+bearQuality=(bearFVGRecent?2.0:0)+(bearOBTouch?2.0:0)+(inBearOTE?1.25:0)+bearLiquidityRecent+(bearCHOCH?1.5:bearBOS?.75:0)+(tf240==-1?.75:0)+(stK<stD?.5:0)
 
-newNY = inNY and not inNY[1]
-endNY = not inNY and inNY[1]
-if newNY
-    curNYHigh := high
-    curNYLow := low
-else if inNY
-    curNYHigh := math.max(nz(curNYHigh, high), high)
-    curNYLow := math.min(nz(curNYLow, low), low)
-if endNY
-    prevNYHigh := curNYHigh
-    prevNYLow := curNYLow
+continuationLong=enableContinuation and robustWindow and biasBull and confirmBull and triggerBull and bullQuality>=minQuality
+continuationShort=enableContinuation and robustWindow and biasBear and confirmBear and triggerBear and bearQuality>=minQuality
 
-sweepPDL = low < pdLow and close > pdLow
-sweepPDH = high > pdHigh and close < pdHigh
-sweep30L = low < d30Low and close > d30Low
-sweep30H = high > d30High and close < d30High
-sweepPrevSessionL = (not na(prevLondonLow) and low < prevLondonLow and close > prevLondonLow) or (not na(prevNYLow) and low < prevNYLow and close > prevNYLow)
-sweepPrevSessionH = (not na(prevLondonHigh) and high > prevLondonHigh and close < prevLondonHigh) or (not na(prevNYHigh) and high > prevNYHigh and close < prevNYHigh)
+aPlusBullCount=(bullDispRecent?1:0)+(bullFVGRecent?1:0)+(bullOBTouch?1:0)+(inBullOTE?1:0)+(bullLiquidityRecent>=1.5?1:0)+(bullStructRecent?1:0)+(inKillZone?1:0)+(stK>stD?1:0)+(close>bbBasis?1:0)
+aPlusBearCount=(bearDispRecent?1:0)+(bearFVGRecent?1:0)+(bearOBTouch?1:0)+(inBearOTE?1:0)+(bearLiquidityRecent>=1.5?1:0)+(bearStructRecent?1:0)+(inKillZone?1:0)+(stK<stD?1:0)+(close<bbBasis?1:0)
+continuationAPlusBull=enableAPlus and fullBull and bullDispRecent and aPlusBullCount>=5 and (bullOBTouch or inBullOTE or bullLiquidityRecent>=1.5)
+continuationAPlusBear=enableAPlus and fullBear and bearDispRecent and aPlusBearCount>=5 and (bearOBTouch or inBearOTE or bearLiquidityRecent>=1.5)
 
-bullLiquidityQualityNow = (bullSweep ? 1.0 : 0.0) + (sweepPrevSessionL ? 1.5 : 0.0) + (sweepPDL ? 2.0 : 0.0) + (sweep30L ? 2.5 : 0.0)
-bearLiquidityQualityNow = (bearSweep ? 1.0 : 0.0) + (sweepPrevSessionH ? 1.5 : 0.0) + (sweepPDH ? 2.0 : 0.0) + (sweep30H ? 2.5 : 0.0)
-bullLiquidityQuality = ta.highest(bullLiquidityQualityNow, 12)
-bearLiquidityQuality = ta.highest(bearLiquidityQualityNow, 12)
+majorBullSweep=(sweepBelow(pdLow) or sweepBelow(d30Low))
+majorBearSweep=(sweepAbove(pdHigh) or sweepAbove(d30High))
+majorBullRecent=ta.barssince(majorBullSweep)>=0 and ta.barssince(majorBullSweep)<=8
+majorBearRecent=ta.barssince(majorBearSweep)>=0 and ta.barssince(majorBearSweep)<=8
+bullCHOCHRecent=ta.barssince(bullCHOCH)>=0 and ta.barssince(bullCHOCH)<=6
+bearCHOCHRecent=ta.barssince(bearCHOCH)>=0 and ta.barssince(bearCHOCH)<=6
+strictRevLong=enableReversal and robustWindow and inKillZone and majorBullRecent and bullDispRecent and bullCHOCHRecent and (bullFVGRecent or bullOBTouch or inBullOTE) and triggerBull and stK>stD and close>bbBasis and tf240!=-1
+strictRevShort=enableReversal and robustWindow and inKillZone and majorBearRecent and bearDispRecent and bearCHOCHRecent and (bearFVGRecent or bearOBTouch or inBearOTE) and triggerBear and stK<stD and close<bbBasis and tf240!=1
 
-plot(pdHigh, "PDH", color=color.new(color.fuchsia, 55), style=plot.style_stepline)
-plot(pdLow, "PDL", color=color.new(color.fuchsia, 55), style=plot.style_stepline)
-plot(d30High, "30D High", color=color.new(color.red, 65), style=plot.style_stepline)
-plot(d30Low, "30D Low", color=color.new(color.green, 65), style=plot.style_stepline)
+// ---------- Unified 0-100 quality score ----------
+// Five blocks: MTF 30, ICT structure 25, liquidity 20, momentum 15, timing/setup 10.
+bullMTFScore=math.min(30.0,bullMTFCount*5.0)
+bearMTFScore=math.min(30.0,bearMTFCount*5.0)
 
-// ---------- Strict reversal module ----------
-pdHigh = request.security(syminfo.tickerid, "D", high[1], lookahead=barmerge.lookahead_off)
-pdLow = request.security(syminfo.tickerid, "D", low[1], lookahead=barmerge.lookahead_off)
-d30High = request.security(syminfo.tickerid, "D", ta.highest(high[1], 30), lookahead=barmerge.lookahead_off)
-d30Low = request.security(syminfo.tickerid, "D", ta.lowest(low[1], 30), lookahead=barmerge.lookahead_off)
+bullICTScore=math.min(25.0,
+     (bullFVGRecent?6.0:0)+(bullOBTouch?6.0:0)+(inBullOTE?5.0:0)+
+     (bullCHOCH?8.0:bullBOS?4.0:0))
+bearICTScore=math.min(25.0,
+     (bearFVGRecent?6.0:0)+(bearOBTouch?6.0:0)+(inBearOTE?5.0:0)+
+     (bearCHOCH?8.0:bearBOS?4.0:0))
 
-majorBullSweep = (low < pdLow and close > pdLow) or (low < d30Low and close > d30Low)
-majorBearSweep = (high > pdHigh and close < pdHigh) or (high > d30High and close < d30High)
+bullLQScore=math.min(20.0,bullLiquidityRecent*6.0)
+bearLQScore=math.min(20.0,bearLiquidityRecent*6.0)
 
-bullDisplacement = (close - open) > atr14 * 0.80 and (high - low) > atr14 * 1.20
-bearDisplacement = (open - close) > atr14 * 0.80 and (high - low) > atr14 * 1.20
+bullMomScore=math.min(15.0,
+     (stK>stD?5.0:0)+(close>bbBasis?4.0:0)+(bullDispRecent?6.0:0))
+bearMomScore=math.min(15.0,
+     (stK<stD?5.0:0)+(close<bbBasis?4.0:0)+(bearDispRecent?6.0:0))
 
-majorBullRecent = ta.barssince(majorBullSweep) >= 0 and ta.barssince(majorBullSweep) <= 8
-majorBearRecent = ta.barssince(majorBearSweep) >= 0 and ta.barssince(majorBearSweep) <= 8
-bullDispRecent = ta.barssince(bullDisplacement) >= 0 and ta.barssince(bullDisplacement) <= 6
-bearDispRecent = ta.barssince(bearDisplacement) >= 0 and ta.barssince(bearDisplacement) <= 6
-bullCHOCHRecent = ta.barssince(bullCHOCH) >= 0 and ta.barssince(bullCHOCH) <= 6
-bearCHOCHRecent = ta.barssince(bearCHOCH) >= 0 and ta.barssince(bearCHOCH) <= 6
+bullTimingScore=(robustWindow?4.0:0)+(inKillZone?3.0:0)+(triggerBull?3.0:0)
+bearTimingScore=(robustWindow?4.0:0)+(inKillZone?3.0:0)+(triggerBear?3.0:0)
 
-strictRevLong = enableStrictReversal and robustWindow and majorBullRecent and bullDispRecent and bullCHOCHRecent and (bullFVGRecent or bullOBTouch or inBullOTE) and triggerBull and k > d and close > bbBasis and tf240 != -1
-strictRevShort = enableStrictReversal and robustWindow and majorBearRecent and bearDispRecent and bearCHOCHRecent and (bearFVGRecent or bearOBTouch or inBearOTE) and triggerBear and k < d and close < bbBasis and tf240 != 1
-
-// ---------- Quality ----------
-bullQuality = (bullFVGRecent ? 2.0 : 0.0) + (bullOBTouch ? 2.0 : 0.0) + (inBullOTE ? 1.25 : 0.0) + bullLiquidityQuality + (bullCHOCH ? 1.5 : bullBOS ? 0.75 : 0.0) + (tf240 == 1 ? 0.75 : 0.0) + (k > d ? 0.5 : 0.0)
-bearQuality = (bearFVGRecent ? 2.0 : 0.0) + (bearOBTouch ? 2.0 : 0.0) + (inBearOTE ? 1.25 : 0.0) + bearLiquidityQuality + (bearCHOCH ? 1.5 : bearBOS ? 0.75 : 0.0) + (tf240 == -1 ? 0.75 : 0.0) + (k < d ? 0.5 : 0.0)
-
+bullScore100=math.round(math.min(100.0,bullMTFScore+bullICTScore+bullLQScore+bullMomScore+bullTimingScore))
+bearScore100=math.round(math.min(100.0,bearMTFScore+bearICTScore+bearLQScore+bearMomScore+bearTimingScore))
 
 // ---------- Event-driven setup lock ----------
-var int bullSetupGen = 0
-var int bearSetupGen = 0
-var int lastBullUsed = -1
-var int lastBearUsed = -1
-var int lastExitBar = na
+var int bullGeneration=0
+var int bearGeneration=0
+var int lastBullUsed=-1
+var int lastBearUsed=-1
+var int lastExitBar=na
 
-// A setup is considered new only when the market prints a fresh ICT event.
-// FVG alone is allowed to re-arm because testing showed the best full-history
-// behaviour came from sweep/FVG/BOS-CHoCH event generation.
-newBullEvent = bullSweep or bullFVG or bullBOS or bullCHOCH
-newBearEvent = bearSweep or bearFVG or bearBOS or bearCHOCH
-
+newBullEvent=bullSwingSweep or bullFVG or bullBOS or bullCHOCH or bullLiquidityNow>=1.5
+newBearEvent=bearSwingSweep or bearFVG or bearBOS or bearCHOCH or bearLiquidityNow>=1.5
 if newBullEvent
-    bullSetupGen += 1
+    bullGeneration+=1
 if newBearEvent
-    bearSetupGen += 1
+    bearGeneration+=1
 
-justClosed = strategy.position_size == 0 and strategy.position_size[1] != 0
+justClosed=strategy.position_size==0 and strategy.position_size[1]!=0
 if justClosed
-    lastExitBar := bar_index
+    lastExitBar:=bar_index
 
-rearmGapOK = na(lastExitBar) or bar_index - lastExitBar >= minRearmBars
-freshBullSetup = bullSetupGen > lastBullUsed
-freshBearSetup = bearSetupGen > lastBearUsed
-longEdge = longSignal and not longSignal[1]
-shortEdge = shortSignal and not shortSignal[1]
+gapOK=na(lastExitBar) or bar_index-lastExitBar>=minRearmBars
+freshBull=bullGeneration>lastBullUsed
+freshBear=bearGeneration>lastBearUsed
 
-
-// ---------- Continuation A+ ----------
-bullDisp = close - open > atr14 * 0.8 and high - low > atr14 * 1.2 and close > open
-bearDisp = open - close > atr14 * 0.8 and high - low > atr14 * 1.2 and close < open
-bullDispRecent = ta.barssince(bullDisp) >= 0 and ta.barssince(bullDisp) <= 6
-bearDispRecent = ta.barssince(bearDisp) >= 0 and ta.barssince(bearDisp) <= 6
-bullStructRecent6 = ta.barssince(bullBOS or bullCHOCH) >= 0 and ta.barssince(bullBOS or bullCHOCH) <= 6
-bearStructRecent6 = ta.barssince(bearBOS or bearCHOCH) >= 0 and ta.barssince(bearBOS or bearCHOCH) <= 6
-
-aPlusBullCount =
-     (bullDispRecent ? 1 : 0) +
-     (bullFVGRecent ? 1 : 0) +
-     (bullOBTouch ? 1 : 0) +
-     (inBullOTE ? 1 : 0) +
-     (bullLiquidityQualityRecent >= 1.5 ? 1 : 0) +
-     (bullStructRecent6 ? 1 : 0) +
-     (inLondonKZ or inNYKZ ? 1 : 0) +
-     (k > d ? 1 : 0) +
-     (close > bbBasis ? 1 : 0)
-
-aPlusBearCount =
-     (bearDispRecent ? 1 : 0) +
-     (bearFVGRecent ? 1 : 0) +
-     (bearOBTouch ? 1 : 0) +
-     (inBearOTE ? 1 : 0) +
-     (bearLiquidityQualityRecent >= 1.5 ? 1 : 0) +
-     (bearStructRecent6 ? 1 : 0) +
-     (inLondonKZ or inNYKZ ? 1 : 0) +
-     (k < d ? 1 : 0) +
-     (close < bbBasis ? 1 : 0)
-
-continuationAPlusBull = tf240 == 1 and tf120 == 1 and tf60 == 1 and tf30 == 1 and tf15 == 1 and tf5 == 1 and bullDispRecent and aPlusBullCount >= 5 and (bullOBTouch or inBullOTE or bullLiquidityQualityRecent >= 1.5)
-continuationAPlusBear = tf240 == -1 and tf120 == -1 and tf60 == -1 and tf30 == -1 and tf15 == -1 and tf5 == -1 and bearDispRecent and aPlusBearCount >= 5 and (bearOBTouch or inBearOTE or bearLiquidityQualityRecent >= 1.5)
-
-plotshape(continuationAPlusBull, "A+ BUY continuation", shape.labelup, location.belowbar, color=color.new(color.lime, 0), textcolor=color.black, text="A+ BUY", size=size.tiny)
-plotshape(continuationAPlusBear, "A+ SELL continuation", shape.labeldown, location.abovebar, color=color.new(color.fuchsia, 0), textcolor=color.white, text="A+ SELL", size=size.tiny)
+rawLong=(continuationLong or strictRevLong) and bullScore100>=minScoreTrade
+rawShort=(continuationShort or strictRevShort) and bearScore100>=minScoreTrade
+longEdge=rawLong and not rawLong[1]
+shortEdge=rawShort and not rawShort[1]
 
 // ---------- Dynamic management ----------
-var float peakSinceEntry = na
-var float troughSinceEntry = na
-var bool protected = false
-var bool reversalTrade = false
+var float peak=na
+var float trough=na
+var bool protected=false
+var bool reversalTrade=false
 
-if strategy.position_size == 0 and rearmGapOK
-    peakSinceEntry := na
-    troughSinceEntry := na
-    protected := false
-    if longEdge and freshBullSetup
-        strategy.entry("BUY", strategy.long)
-        lastBullUsed := bullSetupGen
-    else if shortEdge and freshBearSetup
-        strategy.entry("SELL", strategy.short)
-        lastBearUsed := bearSetupGen
+if strategy.position_size==0 and gapOK
+    peak:=na
+    trough:=na
+    protected:=false
+    if longEdge and freshBull
+        reversalTrade:=strictRevLong and not continuationLong
+        strategy.entry("BUY",strategy.long)
+        lastBullUsed:=bullGeneration
+    else if shortEdge and freshBear
+        reversalTrade:=strictRevShort and not continuationShort
+        strategy.entry("SELL",strategy.short)
+        lastBearUsed:=bearGeneration
 
-if strategy.position_size > 0
-    peakSinceEntry := na(peakSinceEntry) ? high : math.max(peakSinceEntry, high)
-    protected := protected or peakSinceEntry - strategy.position_avg_price >= protectTrigger
-
-    // Natural-liquidity partial: last confirmed swing high.
-    if not na(lastSwingHigh) and lastSwingHigh > strategy.position_avg_price
-        strategy.exit("BUY PARTIAL", "BUY", limit=lastSwingHigh, qty_percent=partialQty)
-
-    float activeEmergency = reversalTrade ? math.min(emergencyStop, 8.0) : emergencyStop
-    float activeTrail = reversalTrade ? math.min(trailATR, 0.50) : trailATR
-    float activeProtect = reversalTrade ? math.min(protectTrigger, 6.0) : protectTrigger
-    protected := protected or peakSinceEntry - strategy.position_avg_price >= activeProtect
-    float longStop = strategy.position_avg_price - activeEmergency
+if strategy.position_size>0
+    peak:=na(peak)?high:math.max(peak,high)
+    activeEmergency=reversalTrade?reversalEmergency:emergencyStop
+    activeProtect=reversalTrade?reversalProtect:protectTrigger
+    activeTrail=reversalTrade?reversalTrailATR:trailATR
+    activePartial=reversalTrade?reversalPartialQty:partialQty
+    protected:=protected or peak-strategy.position_avg_price>=activeProtect
+    if not na(lastSwingHigh) and lastSwingHigh>strategy.position_avg_price
+        strategy.exit("BUY PARTIAL","BUY",limit=lastSwingHigh,qty_percent=activePartial)
+    longStop=strategy.position_avg_price-activeEmergency
     if protected
-        longStop := math.max(strategy.position_avg_price, peakSinceEntry - atr14 * activeTrail)
-    strategy.exit("BUY PROTECT", "BUY", stop=longStop)
+        longStop:=math.max(strategy.position_avg_price,peak-atr14*activeTrail)
+    strategy.exit("BUY PROTECT","BUY",stop=longStop)
+    if bearCHOCH or (close<bbBasis and stK<stD)
+        strategy.close("BUY",comment="Structure exit")
 
-    longInvalid = bearCHOCH or (close < bbBasis and k < d)
-    if longInvalid
-        strategy.close("BUY", comment="Structure exit")
-
-if strategy.position_size < 0
-    troughSinceEntry := na(troughSinceEntry) ? low : math.min(troughSinceEntry, low)
-    protected := protected or strategy.position_avg_price - troughSinceEntry >= protectTrigger
-
-    if not na(lastSwingLow) and lastSwingLow < strategy.position_avg_price
-        strategy.exit("SELL PARTIAL", "SELL", limit=lastSwingLow, qty_percent=partialQty)
-
-    float activeEmergencyS = reversalTrade ? math.min(emergencyStop, 8.0) : emergencyStop
-    float activeTrailS = reversalTrade ? math.min(trailATR, 0.50) : trailATR
-    float activeProtectS = reversalTrade ? math.min(protectTrigger, 6.0) : protectTrigger
-    protected := protected or strategy.position_avg_price - troughSinceEntry >= activeProtectS
-    float shortStop = strategy.position_avg_price + activeEmergencyS
+if strategy.position_size<0
+    trough:=na(trough)?low:math.min(trough,low)
+    activeEmergencyS=reversalTrade?reversalEmergency:emergencyStop
+    activeProtectS=reversalTrade?reversalProtect:protectTrigger
+    activeTrailS=reversalTrade?reversalTrailATR:trailATR
+    activePartialS=reversalTrade?reversalPartialQty:partialQty
+    protected:=protected or strategy.position_avg_price-trough>=activeProtectS
+    if not na(lastSwingLow) and lastSwingLow<strategy.position_avg_price
+        strategy.exit("SELL PARTIAL","SELL",limit=lastSwingLow,qty_percent=activePartialS)
+    shortStop=strategy.position_avg_price+activeEmergencyS
     if protected
-        shortStop := math.min(strategy.position_avg_price, troughSinceEntry + atr14 * activeTrailS)
-    strategy.exit("SELL PROTECT", "SELL", stop=shortStop)
+        shortStop:=math.min(strategy.position_avg_price,trough+atr14*activeTrailS)
+    strategy.exit("SELL PROTECT","SELL",stop=shortStop)
+    if bullCHOCH or (close>bbBasis and stK>stD)
+        strategy.close("SELL",comment="Structure exit")
 
-    shortInvalid = bullCHOCH or (close > bbBasis and k > d)
-    if shortInvalid
-        strategy.close("SELL", comment="Structure exit")
+// ---------- Visual signals ----------
+isBullAPlus=bullScore100>=aPlusScore or continuationAPlusBull
+isBearAPlus=bearScore100>=aPlusScore or continuationAPlusBear
+plotshape(longEdge and gapOK and freshBull, "BUY", shape.labelup, location.belowbar,
+     color=isBullAPlus?color.lime:color.green,textcolor=isBullAPlus?color.black:color.white,
+     text=isBullAPlus?"A+ BUY":"BUY",size=size.small)
+plotshape(shortEdge and gapOK and freshBear, "SELL", shape.labeldown, location.abovebar,
+     color=isBearAPlus?color.fuchsia:color.red,textcolor=color.white,
+     text=isBearAPlus?"A+ SELL":"SELL",size=size.small)
+plotshape(strictRevLong, "REV BUY", shape.circle, location.belowbar, color=color.aqua, size=size.tiny, text="REV")
+plotshape(strictRevShort, "REV SELL", shape.circle, location.abovebar, color=color.yellow, size=size.tiny, text="REV")
 
-// ---------- Visuals ----------
-plotshape(longEdge and rearmGapOK and freshBullSetup, "BUY setup", shape.labelup, location.belowbar, color=color.green, textcolor=color.white, text="BUY", size=size.small)
-plotshape(shortEdge and rearmGapOK and freshBearSetup, "SELL setup", shape.labeldown, location.abovebar, color=color.red, textcolor=color.white, text="SELL", size=size.small)
+if showScoreLabels and (longEdge or shortEdge)
+    label.new(bar_index,longEdge?low:high,
+       (longEdge?"BUY ":"SELL ")+str.tostring(longEdge?bullScore100:bearScore100)+"/100",
+       style=longEdge?label.style_label_up:label.style_label_down,
+       color=longEdge?color.new(color.green,15):color.new(color.red,15),
+       textcolor=color.white,size=size.tiny)
 
-var table dash = table.new(position.top_right, 2, 9, border_width=1)
+// ---------- Dashboard ----------
+var table dash=table.new(position.top_right,2,12,border_width=1)
 if barstate.islast
     table.cell(dash,0,0,"XAUUSD",bgcolor=color.black,text_color=color.white)
-    table.cell(dash,1,0,"INTER-STYLE",bgcolor=color.black,text_color=color.white)
+    table.cell(dash,1,0,"INTER v3",bgcolor=color.black,text_color=color.white)
     table.cell(dash,0,1,"H4/H1 Bias")
     table.cell(dash,1,1,biasBull?"BULL":biasBear?"BEAR":"MIXED")
     table.cell(dash,0,2,"H2/M30")
     table.cell(dash,1,2,confirmBull?"BULL":confirmBear?"BEAR":"WAIT")
     table.cell(dash,0,3,"M15/M5")
     table.cell(dash,1,3,triggerBull?"BULL":triggerBear?"BEAR":"WAIT")
-    table.cell(dash,0,4,"Bull Quality")
-    table.cell(dash,1,4,str.tostring(bullQuality,"#.##"))
-    table.cell(dash,0,5,"Bear Quality")
-    table.cell(dash,1,5,str.tostring(bearQuality,"#.##"))
-    table.cell(dash,0,6,"Setup Lock")
-    table.cell(dash,1,6,rearmGapOK?"READY":"LOCKED")
-    table.cell(dash,0,7,"Setup Type")
-    table.cell(dash,1,7,continuationLong or continuationShort?"CONT":strictReversalLong or strictReversalShort?"REV":"NONE")
-    table.cell(dash,0,8,"Decision")
-    table.cell(dash,1,7,longEdge and rearmGapOK and freshBullSetup?"BUY":shortEdge and rearmGapOK and freshBearSetup?"SELL":"WAIT",
-      bgcolor=longEdge and rearmGapOK and freshBullSetup?color.new(color.green,20):shortEdge and rearmGapOK and freshBearSetup?color.new(color.red,20):color.new(color.gray,75),
-      text_color=color.white)
+    table.cell(dash,0,4,"Bull score")
+    table.cell(dash,1,4,str.tostring(bullScore100)+"/100",
+       bgcolor=bullScore100>=aPlusScore?color.new(color.green,20):color.new(color.gray,80),text_color=color.white)
+    table.cell(dash,0,5,"Bear score")
+    table.cell(dash,1,5,str.tostring(bearScore100)+"/100",
+       bgcolor=bearScore100>=aPlusScore?color.new(color.red,20):color.new(color.gray,80),text_color=color.white)
+    table.cell(dash,0,6,"Liquidity B/S")
+    table.cell(dash,1,6,str.tostring(bullLiquidityRecent,"#.##")+" / "+str.tostring(bearLiquidityRecent,"#.##"))
+    table.cell(dash,0,7,"ICT B/S")
+    table.cell(dash,1,7,str.tostring(bullICTScore,"#")+" / "+str.tostring(bearICTScore,"#"))
+    table.cell(dash,0,8,"MTF B/S")
+    table.cell(dash,1,8,str.tostring(bullMTFCount)+" / "+str.tostring(bearMTFCount))
+    table.cell(dash,0,9,"Setup")
+    table.cell(dash,1,9,strictRevLong or strictRevShort?"REV":continuationAPlusBull or continuationAPlusBear?"A+ CONT":continuationLong or continuationShort?"CONT":"NONE")
+    table.cell(dash,0,10,"Lock")
+    table.cell(dash,1,10,gapOK?"READY":"LOCKED")
+    table.cell(dash,0,11,"Decision")
+    table.cell(dash,1,11,longEdge and gapOK and freshBull?"BUY":shortEdge and gapOK and freshBear?"SELL":"WAIT",
+       bgcolor=longEdge and gapOK and freshBull?color.new(color.green,20):shortEdge and gapOK and freshBear?color.new(color.red,20):color.new(color.gray,80),
+       text_color=color.white)
 
-alertcondition(longEdge and rearmGapOK and freshBullSetup, "XAUUSD BUY", "XAUUSD Inter-style BUY setup")
-alertcondition(shortEdge and rearmGapOK and freshBearSetup, "XAUUSD SELL", "XAUUSD Inter-style SELL setup")
+alertcondition(longEdge and gapOK and freshBull,"XAUUSD BUY","XAUUSD Inter-style BUY")
+alertcondition(shortEdge and gapOK and freshBear,"XAUUSD SELL","XAUUSD Inter-style SELL")
+alertcondition(continuationAPlusBull,"XAUUSD A+ BUY","XAUUSD A+ continuation BUY")
+alertcondition(continuationAPlusBear,"XAUUSD A+ SELL","XAUUSD A+ continuation SELL")
+alertcondition(strictRevLong,"XAUUSD REV BUY","XAUUSD strict reversal BUY")
+alertcondition(strictRevShort,"XAUUSD REV SELL","XAUUSD strict reversal SELL")
