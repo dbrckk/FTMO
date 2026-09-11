@@ -58,6 +58,19 @@ trailATR3 = input.float(0.50, "ATR trail after tier 2", minval=.1, step=.05, gro
 maxHoldBars = input.int(48, "Maximum hold bars on M5", minval=1, group=gMgmt)
 minRearmBars = input.int(12, "Minimum M5-equivalent setup gap", minval=0, group=gMgmt)
 
+gBC = "BC+ Breakout Continuation"
+enableBCPlus = input.bool(true, "Enable BC+ engine", group=gBC)
+bcOnlyM5 = input.bool(true, "BC+ signals only on M5", group=gBC)
+bcSLFloor = input.float(15.0, "SL floor (Gold points)", minval=1, step=.5, group=gBC)
+bcSLATR = input.float(6.0, "SL ATR multiplier", minval=.5, step=.5, group=gBC)
+bcSLCap = input.float(25.0, "SL cap (Gold points)", minval=1, step=.5, group=gBC)
+bcTPFloor = input.float(30.0, "TP floor (Gold points)", minval=1, step=.5, group=gBC)
+bcTPATR = input.float(6.0, "TP ATR multiplier", minval=.5, step=.5, group=gBC)
+bcNYMult = input.float(1.30, "NY-only TP multiplier", minval=.5, step=.05, group=gBC)
+bcOverlapMult = input.float(1.20, "London/NY overlap TP multiplier", minval=.5, step=.05, group=gBC)
+bcMaxHoldBars = input.int(72, "Maximum BC+ hold bars on M5", minval=1, group=gBC)
+showBCLevels = input.bool(true, "Plot active BC+ TP/SL", group=gBC)
+
 gOsc = "Gold Filters"
 stLen = input.int(14, "Stochastic length", minval=5, group=gOsc)
 bbLen = input.int(20, "Bollinger EMA length", minval=5, group=gOsc)
@@ -437,6 +450,28 @@ sTierShort = bearScore100 >= sTierScore and bearDispRecent and eliteShort
 longEdge=rawLong and not rawLong[1]
 shortEdge=rawShort and not rawShort[1]
 
+// ---------- BC+ breakout continuation engine ----------
+// Reverse-engineered from all >=15-point M5 session expansions since 2020.
+// Validation split: 2020-2023 vs 2024-2026.
+// Entry: M5 breakout of prior 6 bars + recent displacement + all five higher TFs aligned
+//        + EMA8/EMA20 direction + stochastic direction, London/NY sessions only.
+// Management is intentionally simple: dynamic ATR/session TP/SL, no early BE/trailing.
+bcSessionOK = inLondon or inNY
+bcTFOK = not bcOnlyM5 or timeframe.period == "5"
+bcEMA8 = ta.ema(close, 8)
+bcBreakLong = close > ta.highest(high[1], 6)
+bcBreakShort = close < ta.lowest(low[1], 6)
+bcHTFLong = tf15 == 1 and tf30 == 1 and tf60 == 1 and tf120 == 1 and tf240 == 1
+bcHTFShort = tf15 == -1 and tf30 == -1 and tf60 == -1 and tf120 == -1 and tf240 == -1
+bcLongRaw = enableBCPlus and bcTFOK and bcSessionOK and bcBreakLong and bullDispRecent and bcHTFLong and bcEMA8 > bbBasis and stK > stD
+bcShortRaw = enableBCPlus and bcTFOK and bcSessionOK and bcBreakShort and bearDispRecent and bcHTFShort and bcEMA8 < bbBasis and stK < stD
+bcLongEdge = bcLongRaw and not bcLongRaw[1]
+bcShortEdge = bcShortRaw and not bcShortRaw[1]
+
+bcTPMult = nyOnly ? bcNYMult : overlapSession ? bcOverlapMult : 1.0
+bcSignalSL = math.min(bcSLCap, math.max(bcSLFloor, atr14 * bcSLATR))
+bcSignalTP = math.max(bcTPFloor, atr14 * bcTPATR * bcTPMult)
+
 // ---------- Liquidity target selection ----------
 f_nearest_above(float entry, float minDist) =>
     float t = na
@@ -473,6 +508,10 @@ var bool protected=false
 var bool reversalTrade=false
 var float activeLiqTarget=na
 var bool liquidityTaken=false
+var bool bcTrade=false
+var float bcActiveSL=na
+var float bcActiveTP=na
+
 
 if strategy.position_size==0 and gapOK
     peak:=na
@@ -480,7 +519,22 @@ if strategy.position_size==0 and gapOK
     protected:=false
     liquidityTaken:=false
     activeLiqTarget:=na
-    if longEdge and freshBull
+    bcTrade:=false
+    bcActiveSL:=na
+    bcActiveTP:=na
+    if bcLongEdge
+        bcTrade:=true
+        reversalTrade:=false
+        bcActiveSL:=bcSignalSL
+        bcActiveTP:=bcSignalTP
+        strategy.entry("BC+ BUY",strategy.long)
+    else if bcShortEdge
+        bcTrade:=true
+        reversalTrade:=false
+        bcActiveSL:=bcSignalSL
+        bcActiveTP:=bcSignalTP
+        strategy.entry("BC+ SELL",strategy.short)
+    else if longEdge and freshBull
         reversalTrade:=strictRevLong and not continuationLong
         strategy.entry("BUY",strategy.long)
         activeLiqTarget:=f_nearest_above(close,liqTargetMinDist)
@@ -492,46 +546,60 @@ if strategy.position_size==0 and gapOK
         lastBearUsed:=bearGeneration
 
 if strategy.position_size>0
-    peak:=na(peak)?high:math.max(peak,high)
-    float mfeNow=peak-strategy.position_avg_price
-    float activeEmergency=reversalTrade?reversalEmergency:emergencyStop
-    float activeProtect=reversalTrade?reversalProtect:protectTrigger
-    protected:=protected or mfeNow>=activeProtect
-    liquidityTaken:=liquidityTaken or (not na(activeLiqTarget) and high>=activeLiqTarget)
-    float trailNow=reversalTrade?reversalTrailATR:trailATR
-    if not reversalTrade
-        trailNow:=mfeNow>=trailTier2?trailATR3:mfeNow>=trailTier1?trailATR2:trailATR
-    if liquidityTaken
-        trailNow:=liqTrailATR
-    float longStop=strategy.position_avg_price-activeEmergency
-    if protected
-        longStop:=math.max(strategy.position_avg_price,peak-atr14*trailNow)
-    strategy.exit("BUY PROTECT","BUY",stop=longStop)
-    if bearCHOCH or (close<bbBasis and stK<stD)
-        strategy.close("BUY",comment="Structure exit")
-    if strategy.opentrades>0 and bar_index-strategy.opentrades.entry_bar_index(0)>=maxHoldBars
-        strategy.close("BUY",comment="Max hold exit")
+    if bcTrade
+        float bcLongStop=strategy.position_avg_price-bcActiveSL
+        float bcLongTP=strategy.position_avg_price+bcActiveTP
+        strategy.exit("BC+ BUY EXIT","BC+ BUY",stop=bcLongStop,limit=bcLongTP)
+        if strategy.opentrades>0 and bar_index-strategy.opentrades.entry_bar_index(0)>=bcMaxHoldBars
+            strategy.close("BC+ BUY",comment="BC+ max hold")
+    else
+        peak:=na(peak)?high:math.max(peak,high)
+        float mfeNow=peak-strategy.position_avg_price
+        float activeEmergency=reversalTrade?reversalEmergency:emergencyStop
+        float activeProtect=reversalTrade?reversalProtect:protectTrigger
+        protected:=protected or mfeNow>=activeProtect
+        liquidityTaken:=liquidityTaken or (not na(activeLiqTarget) and high>=activeLiqTarget)
+        float trailNow=reversalTrade?reversalTrailATR:trailATR
+        if not reversalTrade
+            trailNow:=mfeNow>=trailTier2?trailATR3:mfeNow>=trailTier1?trailATR2:trailATR
+        if liquidityTaken
+            trailNow:=liqTrailATR
+        float longStop=strategy.position_avg_price-activeEmergency
+        if protected
+            longStop:=math.max(strategy.position_avg_price,peak-atr14*trailNow)
+        strategy.exit("BUY PROTECT","BUY",stop=longStop)
+        if bearCHOCH or (close<bbBasis and stK<stD)
+            strategy.close("BUY",comment="Structure exit")
+        if strategy.opentrades>0 and bar_index-strategy.opentrades.entry_bar_index(0)>=maxHoldBars
+            strategy.close("BUY",comment="Max hold exit")
 
 if strategy.position_size<0
-    trough:=na(trough)?low:math.min(trough,low)
-    float mfeNowS=strategy.position_avg_price-trough
-    float activeEmergencyS=reversalTrade?reversalEmergency:emergencyStop
-    float activeProtectS=reversalTrade?reversalProtect:protectTrigger
-    protected:=protected or mfeNowS>=activeProtectS
-    liquidityTaken:=liquidityTaken or (not na(activeLiqTarget) and low<=activeLiqTarget)
-    float trailNowS=reversalTrade?reversalTrailATR:trailATR
-    if not reversalTrade
-        trailNowS:=mfeNowS>=trailTier2?trailATR3:mfeNowS>=trailTier1?trailATR2:trailATR
-    if liquidityTaken
-        trailNowS:=liqTrailATR
-    float shortStop=strategy.position_avg_price+activeEmergencyS
-    if protected
-        shortStop:=math.min(strategy.position_avg_price,trough+atr14*trailNowS)
-    strategy.exit("SELL PROTECT","SELL",stop=shortStop)
-    if bullCHOCH or (close>bbBasis and stK>stD)
-        strategy.close("SELL",comment="Structure exit")
-    if strategy.opentrades>0 and bar_index-strategy.opentrades.entry_bar_index(0)>=maxHoldBars
-        strategy.close("SELL",comment="Max hold exit")
+    if bcTrade
+        float bcShortStop=strategy.position_avg_price+bcActiveSL
+        float bcShortTP=strategy.position_avg_price-bcActiveTP
+        strategy.exit("BC+ SELL EXIT","BC+ SELL",stop=bcShortStop,limit=bcShortTP)
+        if strategy.opentrades>0 and bar_index-strategy.opentrades.entry_bar_index(0)>=bcMaxHoldBars
+            strategy.close("BC+ SELL",comment="BC+ max hold")
+    else
+        trough:=na(trough)?low:math.min(trough,low)
+        float mfeNowS=strategy.position_avg_price-trough
+        float activeEmergencyS=reversalTrade?reversalEmergency:emergencyStop
+        float activeProtectS=reversalTrade?reversalProtect:protectTrigger
+        protected:=protected or mfeNowS>=activeProtectS
+        liquidityTaken:=liquidityTaken or (not na(activeLiqTarget) and low<=activeLiqTarget)
+        float trailNowS=reversalTrade?reversalTrailATR:trailATR
+        if not reversalTrade
+            trailNowS:=mfeNowS>=trailTier2?trailATR3:mfeNowS>=trailTier1?trailATR2:trailATR
+        if liquidityTaken
+            trailNowS:=liqTrailATR
+        float shortStop=strategy.position_avg_price+activeEmergencyS
+        if protected
+            shortStop:=math.min(strategy.position_avg_price,trough+atr14*trailNowS)
+        strategy.exit("SELL PROTECT","SELL",stop=shortStop)
+        if bullCHOCH or (close>bbBasis and stK>stD)
+            strategy.close("SELL",comment="Structure exit")
+        if strategy.opentrades>0 and bar_index-strategy.opentrades.entry_bar_index(0)>=maxHoldBars
+            strategy.close("SELL",comment="Max hold exit")
 
 // ---------- Pre-expansion >=15 Gold points (M5 research layer) ----------
 // Trained on 2020-2023 and checked on 2024-2026. This is a WATCH/TRIGGER layer,
@@ -669,6 +737,16 @@ plotshape(preWarnShort, "PRE15 WATCH SHORT", shape.circle, location.abovebar, co
 plotshape(pre15Long, "PRE15 LONG TRIGGER", shape.triangleup, location.belowbar, color=color.aqua, size=size.small, text="15L")
 plotshape(pre15Short, "PRE15 SHORT TRIGGER", shape.triangledown, location.abovebar, color=color.orange, size=size.small, text="15S")
 
+// ---------- BC+ visuals ----------
+bcLongPlotTP = strategy.position_size > 0 and bcTrade ? strategy.position_avg_price + bcActiveTP : na
+bcLongPlotSL = strategy.position_size > 0 and bcTrade ? strategy.position_avg_price - bcActiveSL : na
+bcShortPlotTP = strategy.position_size < 0 and bcTrade ? strategy.position_avg_price - bcActiveTP : na
+bcShortPlotSL = strategy.position_size < 0 and bcTrade ? strategy.position_avg_price + bcActiveSL : na
+plot(showBCLevels ? (not na(bcLongPlotTP) ? bcLongPlotTP : bcShortPlotTP) : na, "BC+ TP", color=color.new(color.lime,0), linewidth=2, style=plot.style_linebr)
+plot(showBCLevels ? (not na(bcLongPlotSL) ? bcLongPlotSL : bcShortPlotSL) : na, "BC+ SL", color=color.new(color.red,0), linewidth=2, style=plot.style_linebr)
+plotshape(bcLongEdge and gapOK, "BC+ BUY", shape.labelup, location.belowbar, color=color.new(color.aqua,0), textcolor=color.black, text="BC+", size=size.small)
+plotshape(bcShortEdge and gapOK, "BC+ SELL", shape.labeldown, location.abovebar, color=color.new(color.orange,0), textcolor=color.black, text="BC+", size=size.small)
+
 // ---------- Visual signals ----------
 isBullAPlus=bullScore100>=aPlusScore or continuationAPlusBull
 isBearAPlus=bearScore100>=aPlusScore or continuationAPlusBear
@@ -726,6 +804,8 @@ if barstate.islast
        bgcolor=longEdge and gapOK and freshBull?color.new(color.green,20):shortEdge and gapOK and freshBear?color.new(color.red,20):color.new(color.gray,80),
        text_color=color.white)
 
+alertcondition(bcLongEdge and gapOK,"XAUUSD BC+ BUY","XAUUSD BC+ breakout-continuation BUY")
+alertcondition(bcShortEdge and gapOK,"XAUUSD BC+ SELL","XAUUSD BC+ breakout-continuation SELL")
 alertcondition(longEdge and gapOK and freshBull,"XAUUSD BUY","XAUUSD Inter-style BUY")
 alertcondition(shortEdge and gapOK and freshBear,"XAUUSD SELL","XAUUSD Inter-style SELL")
 alertcondition(continuationAPlusBull,"XAUUSD A+ BUY","XAUUSD A+ continuation BUY")
