@@ -464,9 +464,9 @@ shortEdge=rawShort and not rawShort[1]
 // ---------- BC+ breakout continuation engine ----------
 // Reverse-engineered from all >=15-point M5 session expansions since 2020.
 // Validation split: 2020-2023 vs 2024-2026.
-// Entry: M5 breakout of prior 6 bars + recent displacement + all five higher TFs aligned
-//        + EMA8/EMA20 direction + stochastic direction, London/NY sessions only.
-// Management is intentionally simple: dynamic ATR/session TP/SL, no early BE/trailing.
+// Entry: breakout of prior 6 M5 bars + recent displacement + M15/M30/H1/H2/H4 alignment
+//        + EMA8/EMA20 + stochastic. London-only is disabled by default.
+// 30-minute NY-local windows are filtered independently for NY-only and overlap.
 bcLondonOnly = inLondon and not inNY
 bcNYOnly = inNY and not inLondon
 bcOverlap = inLondon and inNY
@@ -477,14 +477,42 @@ bcBreakLong = close > ta.highest(high[1], 6)
 bcBreakShort = close < ta.lowest(low[1], 6)
 bcHTFLong = tf15 == 1 and tf30 == 1 and tf60 == 1 and tf120 == 1 and tf240 == 1
 bcHTFShort = tf15 == -1 and tf30 == -1 and tf60 == -1 and tf120 == -1 and tf240 == -1
-bcLongRaw = enableBCPlus and bcTFOK and bcSessionOK and bcOverlapLongOK and bcBreakLong and bullDispRecent and bcHTFLong and bcEMA8 > bbBasis and stK > stD
-bcShortRaw = enableBCPlus and bcTFOK and bcSessionOK and bcOverlapShortOK and bcBreakShort and bearDispRecent and bcHTFShort and bcEMA8 < bbBasis and stK < stD
+
+// NY-only robust windows (New York local time):
+// LONG 12:00-13:30 and 14:00-16:30; SHORT 12:00-12:30.
+bcNYLongTimeOK = (nyMinutes >= 720 and nyMinutes < 810) or (nyMinutes >= 840 and nyMinutes < 990)
+bcNYShortTimeOK = nyMinutes >= 720 and nyMinutes < 750
+
+// Overlap robust windows (New York local time):
+// LONG 08:00-08:30, 09:00-11:00, 11:30-12:00; SHORT 11:00-11:30.
+bcOverlapLongTimeOK = (nyMinutes >= 480 and nyMinutes < 510) or
+                      (nyMinutes >= 540 and nyMinutes < 660) or
+                      (nyMinutes >= 690 and nyMinutes < 720)
+bcOverlapShortTimeOK = nyMinutes >= 660 and nyMinutes < 690
+
+// London-only remains available as a manual fallback when explicitly enabled.
+bcLongTimeOK = bcLondonOnly ? bcAllowLondonOnly :
+               bcNYOnly ? bcNYLongTimeOK :
+               bcOverlap ? bcOverlapLongTimeOK : false
+bcShortTimeOK = bcLondonOnly ? bcAllowLondonOnly :
+                bcNYOnly ? bcNYShortTimeOK :
+                bcOverlap ? bcOverlapShortTimeOK : false
+
+bcLongRaw = enableBCPlus and bcTFOK and bcSessionOK and bcLongTimeOK and bcBreakLong and bullDispRecent and bcHTFLong and bcEMA8 > bbBasis and stK > stD
+bcShortRaw = enableBCPlus and bcTFOK and bcSessionOK and bcShortTimeOK and bcBreakShort and bearDispRecent and bcHTFShort and bcEMA8 < bbBasis and stK < stD
 bcLongEdge = bcLongRaw and not bcLongRaw[1]
 bcShortEdge = bcShortRaw and not bcShortRaw[1]
 
-bcTPMult = bcNYOnly ? bcNYMult : bcOverlap ? bcOverlapMult : 1.0
-bcSignalSL = math.min(bcSLCap, math.max(bcSLFloor, atr14 * bcSLATR))
-bcSignalTP = math.max(bcTPFloor, atr14 * bcTPATR * bcTPMult)
+// Segment-specific management frozen from the robust grids.
+bcSignalSL = bcNYOnly ? math.min(bcNYSLCap, math.max(bcNYSLFloor, atr14 * bcNYSLATR)) :
+             bcOverlap ? math.min(bcOverlapSLCap, math.max(bcOverlapSLFloor, atr14 * bcOverlapSLATR)) :
+             math.min(25.0, math.max(15.0, atr14 * 6.0))
+bcSignalTP = bcNYOnly ? math.max(bcNYTPFloor, atr14 * bcNYTPATR) :
+             bcOverlap ? math.max(bcOverlapTPFloor, atr14 * bcOverlapTPATR) :
+             math.max(30.0, atr14 * 6.0)
+bcSignalMaxHold = bcNYOnly ? bcNYMaxHoldBars :
+                  bcOverlap ? bcOverlapMaxHoldBars :
+                  bcMaxHoldBars
 
 // ---------- Liquidity target selection ----------
 f_nearest_above(float entry, float minDist) =>
