@@ -418,6 +418,15 @@ freshBear=bearGeneration>lastBearUsed
 
 rawLong=(continuationLong or strictRevLong) and bullScore100>=minScoreTrade
 rawShort=(continuationShort or strictRevShort) and bearScore100>=minScoreTrade
+
+// Quality tiers validated by chronological walk-forward research.
+// Elite context: LONG during NY-only; SHORT during London/NY overlap.
+nyOnly = inNY and not inLondon
+overlapSession = inNY and inLondon
+eliteLong = bullScore100 >= eliteScore and nyOnly
+eliteShort = bearScore100 >= eliteScore and overlapSession
+sTierLong = bullScore100 >= sTierScore and bullDispRecent and eliteLong
+sTierShort = bearScore100 >= sTierScore and bearDispRecent and eliteShort
 longEdge=rawLong and not rawLong[1]
 shortEdge=rawShort and not rawShort[1]
 
@@ -477,12 +486,16 @@ isBullAPlus=bullScore100>=aPlusScore or continuationAPlusBull
 isBearAPlus=bearScore100>=aPlusScore or continuationAPlusBear
 plotshape(longEdge and gapOK and freshBull, "BUY", shape.labelup, location.belowbar,
      color=isBullAPlus?color.lime:color.green,textcolor=isBullAPlus?color.black:color.white,
-     text=isBullAPlus?"A+ BUY":"BUY",size=size.small)
+     text=sTierLong?"S BUY":eliteLong?"ELITE BUY":isBullAPlus?"A+ BUY":"BUY",size=size.small)
 plotshape(shortEdge and gapOK and freshBear, "SELL", shape.labeldown, location.abovebar,
      color=isBearAPlus?color.fuchsia:color.red,textcolor=color.white,
-     text=isBearAPlus?"A+ SELL":"SELL",size=size.small)
+     text=sTierShort?"S SELL":eliteShort?"ELITE SELL":isBearAPlus?"A+ SELL":"SELL",size=size.small)
 plotshape(strictRevLong, "REV BUY", shape.circle, location.belowbar, color=color.aqua, size=size.tiny, text="REV")
 plotshape(strictRevShort, "REV SELL", shape.circle, location.abovebar, color=color.yellow, size=size.tiny, text="REV")
+plotshape(eliteLong and not sTierLong, "ELITE LONG", shape.diamond, location.belowbar, color=color.new(color.green,0), size=size.tiny, text="E")
+plotshape(eliteShort and not sTierShort, "ELITE SHORT", shape.diamond, location.abovebar, color=color.new(color.red,0), size=size.tiny, text="E")
+plotshape(sTierLong, "S-TIER LONG", shape.star, location.belowbar, color=color.new(color.lime,0), size=size.small, text="S")
+plotshape(sTierShort, "S-TIER SHORT", shape.star, location.abovebar, color=color.new(color.fuchsia,0), size=size.small, text="S")
 
 if showScoreLabels and (longEdge or shortEdge)
     label.new(bar_index,longEdge?low:high,
@@ -492,7 +505,7 @@ if showScoreLabels and (longEdge or shortEdge)
        textcolor=color.white,size=size.tiny)
 
 // ---------- Dashboard ----------
-var table dash=table.new(position.top_right,2,12,border_width=1)
+var table dash=table.new(position.top_right,2,13,border_width=1)
 if barstate.islast
     table.cell(dash,0,0,"XAUUSD",bgcolor=color.black,text_color=color.white)
     table.cell(dash,1,0,"INTER v3",bgcolor=color.black,text_color=color.white)
@@ -518,8 +531,10 @@ if barstate.islast
     table.cell(dash,1,9,strictRevLong or strictRevShort?"REV":continuationAPlusBull or continuationAPlusBear?"A+ CONT":continuationLong or continuationShort?"CONT":"NONE")
     table.cell(dash,0,10,"Lock")
     table.cell(dash,1,10,gapOK?"READY":"LOCKED")
-    table.cell(dash,0,11,"Decision")
-    table.cell(dash,1,11,longEdge and gapOK and freshBull?"BUY":shortEdge and gapOK and freshBear?"SELL":"WAIT",
+    table.cell(dash,0,11,"Tier")
+    table.cell(dash,1,11,sTierLong or sTierShort?"S-TIER":eliteLong or eliteShort?"ELITE":bullScore100>=aPlusScore or bearScore100>=aPlusScore?"A+":"STANDARD")
+    table.cell(dash,0,12,"Decision")
+    table.cell(dash,1,12,longEdge and gapOK and freshBull?"BUY":shortEdge and gapOK and freshBear?"SELL":"WAIT",
        bgcolor=longEdge and gapOK and freshBull?color.new(color.green,20):shortEdge and gapOK and freshBear?color.new(color.red,20):color.new(color.gray,80),
        text_color=color.white)
 
@@ -529,3 +544,7 @@ alertcondition(continuationAPlusBull,"XAUUSD A+ BUY","XAUUSD A+ continuation BUY
 alertcondition(continuationAPlusBear,"XAUUSD A+ SELL","XAUUSD A+ continuation SELL")
 alertcondition(strictRevLong,"XAUUSD REV BUY","XAUUSD strict reversal BUY")
 alertcondition(strictRevShort,"XAUUSD REV SELL","XAUUSD strict reversal SELL")
+alertcondition(eliteLong,"XAUUSD ELITE BUY","XAUUSD Elite BUY score >= 90")
+alertcondition(eliteShort,"XAUUSD ELITE SELL","XAUUSD Elite SELL score >= 90")
+alertcondition(sTierLong,"XAUUSD S-TIER BUY","XAUUSD S-tier BUY score >= 96 + displacement")
+alertcondition(sTierShort,"XAUUSD S-TIER SELL","XAUUSD S-tier SELL score >= 96 + displacement")
