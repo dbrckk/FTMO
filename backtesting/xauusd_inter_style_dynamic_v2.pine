@@ -37,7 +37,7 @@ emergencyStop = input.float(12.0, "Emergency stop (Gold points)", minval=1.0, gr
 protectTrigger = input.float(8.0, "Protect after MFE (points)", minval=1.0, group=gTrade)
 trailATR = input.float(0.60, "Runner ATR trail", minval=0.1, step=0.05, group=gTrade)
 partialQty = input.float(33.0, "Liquidity partial %", minval=1, maxval=90, group=gTrade)
-cooldownBars = input.int(24, "Cooldown bars after exit", minval=0, group=gTrade)
+minRearmBars = input.int(12, "Minimum bars between setups", minval=0, group=gTrade)
 
 gICT = "ICT / SMC"
 pivotLen = input.int(3, "Confirmed swing length", minval=1, maxval=10, group=gICT)
@@ -218,13 +218,31 @@ bearQuality = (bearFVGRecent ? 2.0 : 0.0) + (bearOBTouch ? 2.0 : 0.0) + (inBearO
 longSignal = allowLong and robustWindow and biasBull and confirmBull and triggerBull and bullQuality >= minQuality
 shortSignal = allowShort and robustWindow and biasBear and confirmBear and triggerBear and bearQuality >= minQuality
 
-// ---------- Setup lock / cooldown ----------
+// ---------- Event-driven setup lock ----------
+var int bullSetupGen = 0
+var int bearSetupGen = 0
+var int lastBullUsed = -1
+var int lastBearUsed = -1
 var int lastExitBar = na
+
+// A setup is considered new only when the market prints a fresh ICT event.
+// FVG alone is allowed to re-arm because testing showed the best full-history
+// behaviour came from sweep/FVG/BOS-CHoCH event generation.
+newBullEvent = bullSweep or bullFVG or bullBOS or bullCHOCH
+newBearEvent = bearSweep or bearFVG or bearBOS or bearCHOCH
+
+if newBullEvent
+    bullSetupGen += 1
+if newBearEvent
+    bearSetupGen += 1
+
 justClosed = strategy.position_size == 0 and strategy.position_size[1] != 0
 if justClosed
     lastExitBar := bar_index
 
-cooldownOK = na(lastExitBar) or bar_index - lastExitBar >= cooldownBars
+rearmGapOK = na(lastExitBar) or bar_index - lastExitBar >= minRearmBars
+freshBullSetup = bullSetupGen > lastBullUsed
+freshBearSetup = bearSetupGen > lastBearUsed
 longEdge = longSignal and not longSignal[1]
 shortEdge = shortSignal and not shortSignal[1]
 
@@ -233,14 +251,16 @@ var float peakSinceEntry = na
 var float troughSinceEntry = na
 var bool protected = false
 
-if strategy.position_size == 0 and cooldownOK
+if strategy.position_size == 0 and rearmGapOK
     peakSinceEntry := na
     troughSinceEntry := na
     protected := false
-    if longEdge
+    if longEdge and freshBullSetup
         strategy.entry("BUY", strategy.long)
-    else if shortEdge
+        lastBullUsed := bullSetupGen
+    else if shortEdge and freshBearSetup
         strategy.entry("SELL", strategy.short)
+        lastBearUsed := bearSetupGen
 
 if strategy.position_size > 0
     peakSinceEntry := na(peakSinceEntry) ? high : math.max(peakSinceEntry, high)
@@ -276,8 +296,8 @@ if strategy.position_size < 0
         strategy.close("SELL", comment="Structure exit")
 
 // ---------- Visuals ----------
-plotshape(longEdge and cooldownOK, "BUY setup", shape.labelup, location.belowbar, color=color.green, textcolor=color.white, text="BUY", size=size.small)
-plotshape(shortEdge and cooldownOK, "SELL setup", shape.labeldown, location.abovebar, color=color.red, textcolor=color.white, text="SELL", size=size.small)
+plotshape(longEdge and rearmGapOK and freshBullSetup, "BUY setup", shape.labelup, location.belowbar, color=color.green, textcolor=color.white, text="BUY", size=size.small)
+plotshape(shortEdge and rearmGapOK and freshBearSetup, "SELL setup", shape.labeldown, location.abovebar, color=color.red, textcolor=color.white, text="SELL", size=size.small)
 
 var table dash = table.new(position.top_right, 2, 8, border_width=1)
 if barstate.islast
@@ -293,12 +313,12 @@ if barstate.islast
     table.cell(dash,1,4,str.tostring(bullQuality,"#.##"))
     table.cell(dash,0,5,"Bear Quality")
     table.cell(dash,1,5,str.tostring(bearQuality,"#.##"))
-    table.cell(dash,0,6,"Cooldown")
-    table.cell(dash,1,6,cooldownOK?"READY":"LOCKED")
+    table.cell(dash,0,6,"Setup Lock")
+    table.cell(dash,1,6,rearmGapOK?"READY":"LOCKED")
     table.cell(dash,0,7,"Decision")
-    table.cell(dash,1,7,longEdge and cooldownOK?"BUY":shortEdge and cooldownOK?"SELL":"WAIT",
-      bgcolor=longEdge and cooldownOK?color.new(color.green,20):shortEdge and cooldownOK?color.new(color.red,20):color.new(color.gray,75),
+    table.cell(dash,1,7,longEdge and rearmGapOK and freshBullSetup?"BUY":shortEdge and rearmGapOK and freshBearSetup?"SELL":"WAIT",
+      bgcolor=longEdge and rearmGapOK and freshBullSetup?color.new(color.green,20):shortEdge and rearmGapOK and freshBearSetup?color.new(color.red,20):color.new(color.gray,75),
       text_color=color.white)
 
-alertcondition(longEdge and cooldownOK, "XAUUSD BUY", "XAUUSD Inter-style BUY setup")
-alertcondition(shortEdge and cooldownOK, "XAUUSD SELL", "XAUUSD Inter-style SELL setup")
+alertcondition(longEdge and rearmGapOK and freshBullSetup, "XAUUSD BUY", "XAUUSD Inter-style BUY setup")
+alertcondition(shortEdge and rearmGapOK and freshBearSetup, "XAUUSD SELL", "XAUUSD Inter-style SELL setup")
