@@ -1,9 +1,9 @@
 source: dbrckk/repo-standards
-ref: v9
-version: 9
+ref: v10
+version: 10
 adopted: true
 workflow_mode: unified-single-commit
-repo_brain: dbrckk/repo-brain@v4
+repo_brain: dbrckk/repo-brain@v5
 repo_brain_fallback: portable-full-rebuild
 ai_context:
   index: .ai/index.md
@@ -19,6 +19,8 @@ ai_context:
   brain_incremental_state: .ai/brain/incremental-state.json
   brain_impact: .ai/brain/impact.json
   brain_selected_tests: .ai/brain/selected-tests.json
+  brain_references: .ai/brain/references.json
+  brain_symbol_dependencies: .ai/brain/symbol-dependencies.json
   brain_capabilities: .ai/brain/capabilities.json
   brain_ast_routing: .ai/brain/ast-routing.json
   brain_ast_symbols: .ai/brain/ast-symbols/
