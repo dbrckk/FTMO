@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "generated_by": "dbrckk/repo-brain",
+  "scope": "symbols defined in changed source files",
+  "semantic": false,
+  "note": "Dependencies are known symbol names lexically present inside the symbol's AST/source range.",
+  "symbols": {}
+}

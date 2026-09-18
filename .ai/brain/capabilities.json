@@ -1,8 +1,10 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "generated_by": "dbrckk/repo-brain",
   "portable_index": true,
   "ast_grep_outline": true,
+  "ast_index_mode": "incremental",
+  "ast_reparsed_files": 0,
   "ast_grep_outline_files": 50,
   "ast_grep_outline_items": 956,
   "ast_grep_member_items": 20,

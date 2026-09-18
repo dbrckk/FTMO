@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "generated_by": "dbrckk/repo-brain",
+  "scope": "symbols defined in changed source files",
+  "semantic": false,
+  "note": "Occurrences are lexical word matches; verify source/LSP/compiler data before relying on them.",
+  "symbols": {}
+}

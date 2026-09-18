@@ -8,8 +8,8 @@
     "javascript": 50,
     "python": 1
   },
-  "index_mode": "full",
-  "reparsed_files": 51,
+  "index_mode": "incremental",
+  "reparsed_files": 0,
   "top_symbol_files": [
     {
       "file": "functions/api/paper-run.js",

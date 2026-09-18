@@ -1,10 +1,18 @@
 {
   "schema_version": 1,
   "generated_by": "dbrckk/repo-brain",
-  "base": "HEAD~1",
-  "head": "26e3eee9bcd4c8102bf1f4d9ad8084b4692c8498",
-  "index_mode": "full",
+  "base": "26e3eee9bcd4c8102bf1f4d9ad8084b4692c8498",
+  "head": "513f80fec5999c3a971daa4e72403963d6856192",
+  "index_mode": "incremental",
   "changed_files": [
+    {
+      "path": ".github/workflows/ai-repo-map.yml",
+      "status": "M"
+    },
+    {
+      "path": ".repo-standards.yml",
+      "status": "M"
+    },
     {
       "path": "AGENTS.md",
       "status": "M"
