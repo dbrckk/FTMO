@@ -7,14 +7,29 @@
       "type": "imports"
     },
     {
+      "source": "functions/api/correlation-matrix.js",
+      "target": "backtesting/vectorbt_service.py",
+      "type": "symbol-reference"
+    },
+    {
       "source": "functions/api/ftmo-status.js",
       "target": "functions/_shared/ftmo-guardian.js",
       "type": "imports"
     },
     {
+      "source": "functions/api/market-data.js",
+      "target": "backtesting/vectorbt_service.py",
+      "type": "symbol-reference"
+    },
+    {
       "source": "functions/api/news-events.js",
       "target": "functions/_shared/news-filter.js",
       "type": "imports"
+    },
+    {
+      "source": "functions/api/paper-run.js",
+      "target": "backtesting/vectorbt_service.py",
+      "type": "symbol-reference"
     },
     {
       "source": "functions/api/paper-run.js",
@@ -40,6 +55,21 @@
       "source": "functions/api/paper-run.js",
       "target": "functions/_shared/realistic-execution.js",
       "type": "imports"
+    },
+    {
+      "source": "functions/api/sync-market.js",
+      "target": "backtesting/vectorbt_service.py",
+      "type": "symbol-reference"
+    },
+    {
+      "source": "functions/api/timeframe-summary.js",
+      "target": "backtesting/vectorbt_service.py",
+      "type": "symbol-reference"
+    },
+    {
+      "source": "functions/api/vectorbt-score.js",
+      "target": "backtesting/vectorbt_service.py",
+      "type": "symbol-reference"
     }
   ],
   "schema_version": 1

@@ -3041,6 +3041,8 @@ repo_brain: dbrckk/repo-brain@main
 repo_brain_fallback: portable-full-rebuild
 hotset_fallback: recent-project-state
 graph_routing: compact-sharded-reverse-deps
+graph_resolver: java-kotlin-tail-v2
+graph_enrichment: unique-type-symbol-references-v1
 ai_context:
   index: .ai/index.md
   project_state: .ai/project-state.md
@@ -3065,6 +3067,7 @@ ai_context:
   brain_symbols: .ai/brain/symbols.json
   brain_graph: .ai/brain/code-graph.json
   brain_graph_index: .ai/brain/graph-index.json
+  brain_graph_enrichment: .ai/brain/graph-enrichment.json
   brain_graph_manifest: .ai/brain/graph-manifest.json
   brain_graph_shards: .ai/brain/graph-shards/
   brain_reverse_deps: .ai/brain/reverse-deps.json

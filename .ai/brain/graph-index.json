@@ -4,6 +4,7 @@
     "api.js",
     "app.js",
     "archive-engine.js",
+    "backtesting",
     "chart.js",
     "config.js",
     "functions",
@@ -17,6 +18,24 @@
     "utils.js"
   ],
   "central_files": [
+    {
+      "dependencies": [],
+      "dependents": [
+        "chart.js",
+        "functions/api/correlation-matrix.js",
+        "functions/api/market-data.js",
+        "functions/api/paper-run.js",
+        "functions/api/sync-market.js",
+        "functions/api/timeframe-summary.js",
+        "functions/api/vectorbt-score.js",
+        "paper-engine.js",
+        "scan.js",
+        "setup-classifier.js"
+      ],
+      "in_degree": 10,
+      "out_degree": 0,
+      "path": "backtesting/vectorbt_service.py"
+    },
     {
       "dependencies": [
         "api.js",
@@ -83,6 +102,7 @@
     {
       "dependencies": [
         "api.js",
+        "backtesting/vectorbt_service.py",
         "config.js",
         "setup-classifier.js",
         "state.js"
@@ -91,11 +111,12 @@
         "app.js"
       ],
       "in_degree": 1,
-      "out_degree": 4,
+      "out_degree": 5,
       "path": "scan.js"
     },
     {
       "dependencies": [
+        "backtesting/vectorbt_service.py",
         "functions/_shared/archive-intelligence.js",
         "functions/_shared/ftmo-guardian.js",
         "functions/_shared/model-rules.js",
@@ -104,8 +125,22 @@
       ],
       "dependents": [],
       "in_degree": 0,
-      "out_degree": 5,
+      "out_degree": 6,
       "path": "functions/api/paper-run.js"
+    },
+    {
+      "dependencies": [
+        "api.js",
+        "backtesting/vectorbt_service.py",
+        "state.js"
+      ],
+      "dependents": [
+        "app.js",
+        "render.js"
+      ],
+      "in_degree": 2,
+      "out_degree": 3,
+      "path": "paper-engine.js"
     },
     {
       "dependencies": [],
@@ -118,19 +153,6 @@
       "in_degree": 4,
       "out_degree": 0,
       "path": "config.js"
-    },
-    {
-      "dependencies": [
-        "api.js",
-        "state.js"
-      ],
-      "dependents": [
-        "app.js",
-        "render.js"
-      ],
-      "in_degree": 2,
-      "out_degree": 2,
-      "path": "paper-engine.js"
     },
     {
       "dependencies": [
@@ -157,13 +179,15 @@
       "path": "utils.js"
     },
     {
-      "dependencies": [],
+      "dependencies": [
+        "backtesting/vectorbt_service.py"
+      ],
       "dependents": [
         "app.js",
         "render.js"
       ],
       "in_degree": 2,
-      "out_degree": 0,
+      "out_degree": 1,
       "path": "chart.js"
     },
     {
@@ -197,6 +221,17 @@
       "path": "functions/_shared/news-filter.js"
     },
     {
+      "dependencies": [
+        "backtesting/vectorbt_service.py"
+      ],
+      "dependents": [
+        "scan.js"
+      ],
+      "in_degree": 1,
+      "out_degree": 1,
+      "path": "setup-classifier.js"
+    },
+    {
       "dependencies": [],
       "dependents": [
         "integration-patch.js"
@@ -224,15 +259,6 @@
       "path": "functions/_shared/realistic-execution.js"
     },
     {
-      "dependencies": [],
-      "dependents": [
-        "scan.js"
-      ],
-      "in_degree": 1,
-      "out_degree": 0,
-      "path": "setup-classifier.js"
-    },
-    {
       "dependencies": [
         "utils.js"
       ],
@@ -252,12 +278,30 @@
     },
     {
       "dependencies": [
+        "backtesting/vectorbt_service.py"
+      ],
+      "dependents": [],
+      "in_degree": 0,
+      "out_degree": 1,
+      "path": "functions/api/correlation-matrix.js"
+    },
+    {
+      "dependencies": [
         "functions/_shared/ftmo-guardian.js"
       ],
       "dependents": [],
       "in_degree": 0,
       "out_degree": 1,
       "path": "functions/api/ftmo-status.js"
+    },
+    {
+      "dependencies": [
+        "backtesting/vectorbt_service.py"
+      ],
+      "dependents": [],
+      "in_degree": 0,
+      "out_degree": 1,
+      "path": "functions/api/market-data.js"
     },
     {
       "dependencies": [
@@ -270,6 +314,33 @@
     },
     {
       "dependencies": [
+        "backtesting/vectorbt_service.py"
+      ],
+      "dependents": [],
+      "in_degree": 0,
+      "out_degree": 1,
+      "path": "functions/api/sync-market.js"
+    },
+    {
+      "dependencies": [
+        "backtesting/vectorbt_service.py"
+      ],
+      "dependents": [],
+      "in_degree": 0,
+      "out_degree": 1,
+      "path": "functions/api/timeframe-summary.js"
+    },
+    {
+      "dependencies": [
+        "backtesting/vectorbt_service.py"
+      ],
+      "dependents": [],
+      "in_degree": 0,
+      "out_degree": 1,
+      "path": "functions/api/vectorbt-score.js"
+    },
+    {
+      "dependencies": [
         "advanced-engine.js"
       ],
       "dependents": [],
@@ -278,8 +349,8 @@
       "path": "integration-patch.js"
     }
   ],
-  "edge_count": 35,
+  "edge_count": 45,
   "generated_by": "dbrckk/repo-brain-v7-graph",
-  "node_count": 23,
+  "node_count": 29,
   "schema_version": 1
 }

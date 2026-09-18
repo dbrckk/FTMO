@@ -45,14 +45,33 @@
       "in_degree": 0,
       "out_degree": 1
     },
-    "chart.js": {
+    "backtesting/vectorbt_service.py": {
       "dependencies": [],
+      "dependents": [
+        "chart.js",
+        "functions/api/correlation-matrix.js",
+        "functions/api/market-data.js",
+        "functions/api/paper-run.js",
+        "functions/api/sync-market.js",
+        "functions/api/timeframe-summary.js",
+        "functions/api/vectorbt-score.js",
+        "paper-engine.js",
+        "scan.js",
+        "setup-classifier.js"
+      ],
+      "in_degree": 10,
+      "out_degree": 0
+    },
+    "chart.js": {
+      "dependencies": [
+        "backtesting/vectorbt_service.py"
+      ],
       "dependents": [
         "app.js",
         "render.js"
       ],
       "in_degree": 2,
-      "out_degree": 0
+      "out_degree": 1
     },
     "config.js": {
       "dependencies": [],
@@ -116,9 +135,25 @@
       "in_degree": 0,
       "out_degree": 1
     },
+    "functions/api/correlation-matrix.js": {
+      "dependencies": [
+        "backtesting/vectorbt_service.py"
+      ],
+      "dependents": [],
+      "in_degree": 0,
+      "out_degree": 1
+    },
     "functions/api/ftmo-status.js": {
       "dependencies": [
         "functions/_shared/ftmo-guardian.js"
+      ],
+      "dependents": [],
+      "in_degree": 0,
+      "out_degree": 1
+    },
+    "functions/api/market-data.js": {
+      "dependencies": [
+        "backtesting/vectorbt_service.py"
       ],
       "dependents": [],
       "in_degree": 0,
@@ -134,6 +169,7 @@
     },
     "functions/api/paper-run.js": {
       "dependencies": [
+        "backtesting/vectorbt_service.py",
         "functions/_shared/archive-intelligence.js",
         "functions/_shared/ftmo-guardian.js",
         "functions/_shared/model-rules.js",
@@ -142,7 +178,31 @@
       ],
       "dependents": [],
       "in_degree": 0,
-      "out_degree": 5
+      "out_degree": 6
+    },
+    "functions/api/sync-market.js": {
+      "dependencies": [
+        "backtesting/vectorbt_service.py"
+      ],
+      "dependents": [],
+      "in_degree": 0,
+      "out_degree": 1
+    },
+    "functions/api/timeframe-summary.js": {
+      "dependencies": [
+        "backtesting/vectorbt_service.py"
+      ],
+      "dependents": [],
+      "in_degree": 0,
+      "out_degree": 1
+    },
+    "functions/api/vectorbt-score.js": {
+      "dependencies": [
+        "backtesting/vectorbt_service.py"
+      ],
+      "dependents": [],
+      "in_degree": 0,
+      "out_degree": 1
     },
     "integration-patch.js": {
       "dependencies": [
@@ -155,6 +215,7 @@
     "paper-engine.js": {
       "dependencies": [
         "api.js",
+        "backtesting/vectorbt_service.py",
         "state.js"
       ],
       "dependents": [
@@ -162,7 +223,7 @@
         "render.js"
       ],
       "in_degree": 2,
-      "out_degree": 2
+      "out_degree": 3
     },
     "render.js": {
       "dependencies": [
@@ -182,6 +243,7 @@
     "scan.js": {
       "dependencies": [
         "api.js",
+        "backtesting/vectorbt_service.py",
         "config.js",
         "setup-classifier.js",
         "state.js"
@@ -190,15 +252,17 @@
         "app.js"
       ],
       "in_degree": 1,
-      "out_degree": 4
+      "out_degree": 5
     },
     "setup-classifier.js": {
-      "dependencies": [],
+      "dependencies": [
+        "backtesting/vectorbt_service.py"
+      ],
       "dependents": [
         "scan.js"
       ],
       "in_degree": 1,
-      "out_degree": 0
+      "out_degree": 1
     },
     "state.js": {
       "dependencies": [

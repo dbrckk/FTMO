@@ -13,6 +13,11 @@
     },
     {
       "source": "scan.js",
+      "target": "backtesting/vectorbt_service.py",
+      "type": "symbol-reference"
+    },
+    {
+      "source": "scan.js",
       "target": "config.js",
       "type": "imports"
     },

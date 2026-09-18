@@ -22,20 +22,19 @@ Status: active
 <!-- AUTO:START -->
 ## Automatic repository state
 
-Generated: 2026-09-18T20:12:12Z
+Generated: 2026-09-18T20:51:33Z
 
 ### Git
 - Branch: `main`
-- Head: `6f9f94957aa5`
-- Commit date: 2026-09-18T22:09:40+02:00
-- Commit: chore(ai): adopt repo standards v14
-- Tracked files: 140
+- Head: `27266fba5d1c`
+- Commit date: 2026-09-18T22:50:57+02:00
+- Commit: chore(ai): enable same-package symbol graph enrichment
+- Tracked files: 183
 
 ### Recently changed files
 - `.repo-standards.yml`
 - `.github/workflows/semantic-refresh.yml`
 - `AGENTS.md`
-- `.github/workflows/ai-repo-map.yml`
 
 ### Project signals
 - `package.json`

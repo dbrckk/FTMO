@@ -1,0 +1,56 @@
+{
+  "area": "backtesting",
+  "edges": [
+    {
+      "source": "chart.js",
+      "target": "backtesting/vectorbt_service.py",
+      "type": "symbol-reference"
+    },
+    {
+      "source": "functions/api/correlation-matrix.js",
+      "target": "backtesting/vectorbt_service.py",
+      "type": "symbol-reference"
+    },
+    {
+      "source": "functions/api/market-data.js",
+      "target": "backtesting/vectorbt_service.py",
+      "type": "symbol-reference"
+    },
+    {
+      "source": "functions/api/paper-run.js",
+      "target": "backtesting/vectorbt_service.py",
+      "type": "symbol-reference"
+    },
+    {
+      "source": "functions/api/sync-market.js",
+      "target": "backtesting/vectorbt_service.py",
+      "type": "symbol-reference"
+    },
+    {
+      "source": "functions/api/timeframe-summary.js",
+      "target": "backtesting/vectorbt_service.py",
+      "type": "symbol-reference"
+    },
+    {
+      "source": "functions/api/vectorbt-score.js",
+      "target": "backtesting/vectorbt_service.py",
+      "type": "symbol-reference"
+    },
+    {
+      "source": "paper-engine.js",
+      "target": "backtesting/vectorbt_service.py",
+      "type": "symbol-reference"
+    },
+    {
+      "source": "scan.js",
+      "target": "backtesting/vectorbt_service.py",
+      "type": "symbol-reference"
+    },
+    {
+      "source": "setup-classifier.js",
+      "target": "backtesting/vectorbt_service.py",
+      "type": "symbol-reference"
+    }
+  ],
+  "schema_version": 1
+}

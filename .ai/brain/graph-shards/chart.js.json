@@ -7,6 +7,11 @@
       "type": "imports"
     },
     {
+      "source": "chart.js",
+      "target": "backtesting/vectorbt_service.py",
+      "type": "symbol-reference"
+    },
+    {
       "source": "render.js",
       "target": "chart.js",
       "type": "imports"

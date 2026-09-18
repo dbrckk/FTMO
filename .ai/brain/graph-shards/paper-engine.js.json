@@ -13,6 +13,11 @@
     },
     {
       "source": "paper-engine.js",
+      "target": "backtesting/vectorbt_service.py",
+      "type": "symbol-reference"
+    },
+    {
+      "source": "paper-engine.js",
       "target": "state.js",
       "type": "imports"
     },

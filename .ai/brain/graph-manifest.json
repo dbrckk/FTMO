@@ -23,8 +23,13 @@
       "path": ".ai/brain/graph-shards/archive-engine.js.json"
     },
     {
+      "area": "backtesting",
+      "edge_count": 10,
+      "path": ".ai/brain/graph-shards/backtesting.json"
+    },
+    {
       "area": "chart.js",
-      "edge_count": 2,
+      "edge_count": 3,
       "path": ".ai/brain/graph-shards/chart.js.json"
     },
     {
@@ -34,7 +39,7 @@
     },
     {
       "area": "functions",
-      "edge_count": 8,
+      "edge_count": 14,
       "path": ".ai/brain/graph-shards/functions.json"
     },
     {
@@ -44,7 +49,7 @@
     },
     {
       "area": "paper-engine.js",
-      "edge_count": 4,
+      "edge_count": 5,
       "path": ".ai/brain/graph-shards/paper-engine.js.json"
     },
     {
@@ -54,12 +59,12 @@
     },
     {
       "area": "scan.js",
-      "edge_count": 5,
+      "edge_count": 6,
       "path": ".ai/brain/graph-shards/scan.js.json"
     },
     {
       "area": "setup-classifier.js",
-      "edge_count": 1,
+      "edge_count": 2,
       "path": ".ai/brain/graph-shards/setup-classifier.js.json"
     },
     {
