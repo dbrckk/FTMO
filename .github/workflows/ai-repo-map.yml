@@ -17,4 +17,4 @@ concurrency:
 
 jobs:
   repository-standards:
-    uses: dbrckk/repo-standards/.github/workflows/reusable-unified.yml@v7
+    uses: dbrckk/repo-standards/.github/workflows/reusable-unified.yml@v8
