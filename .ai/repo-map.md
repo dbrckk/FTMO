@@ -3034,7 +3034,7 @@ function buildSql(rows)
 ````yaml
 source: dbrckk/repo-standards
 ref: main
-version: 14
+version: 15
 adopted: true
 workflow_mode: unified-single-commit
 repo_brain: dbrckk/repo-brain@main
@@ -3043,6 +3043,7 @@ hotset_fallback: recent-project-state
 graph_routing: compact-sharded-reverse-deps
 graph_resolver: java-kotlin-tail-v2
 graph_enrichment: unique-type-symbol-references-v1
+context_budget: confidence-dynamic-3-6-12
 ai_context:
   index: .ai/index.md
   project_state: .ai/project-state.md
