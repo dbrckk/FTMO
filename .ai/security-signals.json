@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "generated_by": "dbrckk/repo-standards",
+  "note": "Heuristic signals only. Values are intentionally never emitted.",
+  "potential_secret_locations": [],
+  "risky_tracked_filenames": [],
+  "finding_count": 0,
+  "high_severity_count": 0,
+  "medium_severity_count": 0,
+  "low_severity_count": 0,
+  "risky_filename_count": 0
+}

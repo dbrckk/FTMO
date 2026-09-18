@@ -1,0 +1,33 @@
+{
+  "schema_version": 2,
+  "generated_by": "dbrckk/repo-standards",
+  "manifests": [
+    "functions/api/requirements.txt",
+    "package.json",
+    "requirements.txt"
+  ],
+  "external_dependencies": [
+    "@tensorflow/tfjs",
+    "fastapi",
+    "flask",
+    "gunicorn",
+    "numba",
+    "numpy",
+    "pandas",
+    "pydantic",
+    "python-dotenv",
+    "requests",
+    "technicalindicators",
+    "uvicorn",
+    "vectorbt",
+    "wrangler"
+  ],
+  "inferred_imports": [
+    "node:fs",
+    "node:path"
+  ],
+  "internal_roots": [
+    "backtesting",
+    "functions"
+  ]
+}
