@@ -1,0 +1,19 @@
+name: Precise semantic refresh
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 3 * * 1"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: semantic-refresh-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semantic:
+    uses: dbrckk/repo-brain/.github/workflows/reusable-semantic.yml@main
+    with:
+      commit_changes: true
