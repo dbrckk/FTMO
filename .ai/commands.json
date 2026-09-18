@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "generated_by": "dbrckk/repo-standards",
+  "commands": [
+    {
+      "command": "npm run check",
+      "purpose": "check",
+      "source": "package.json",
+      "confidence": "high"
+    },
+    {
+      "command": "npm run dev",
+      "purpose": "dev",
+      "source": "package.json",
+      "confidence": "high"
+    }
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "schema_version": 2,
+  "generated_by": "dbrckk/repo-standards",
+  "project_types": [
+    "javascript",
+    "node",
+    "python"
+  ],
+  "descriptors": [
+    "package.json",
+    "requirements.txt"
+  ],
+  "dominant_extensions": [
+    {
+      "extension": ".js",
+      "count": 49
+    },
+    {
+      "extension": ".yml",
+      "count": 11
+    },
+    {
+      "extension": ".md",
+      "count": 6
+    },
+    {
+      "extension": ".pine",
+      "count": 3
+    },
+    {
+      "extension": ".html",
+      "count": 2
+    },
+    {
+      "extension": ".json",
+      "count": 2
+    },
+    {
+      "extension": ".txt",
+      "count": 2
+    },
+    {
+      "extension": ".css",
+      "count": 1
+    },
+    {
+      "extension": ".mjs",
+      "count": 1
+    },
+    {
+      "extension": ".py",
+      "count": 1
+    },
+    {
+      "extension": ".sql",
+      "count": 1
+    }
+  ],
+  "top_level_directories": [
+    ".serena",
+    "backtesting",
+    "functions",
+    "scripts"
+  ],
+  "source_roots": [
+    "(root)",
+    "backtesting",
+    "functions"
+  ],
+  "test_roots": [],
+  "entrypoint_candidates": [],
+  "context_files": {
+    "project_state": ".ai/project-state.md",
+    "repo_health": ".ai/repo-health.md",
+    "repo_map": ".ai/repo-map.md",
+    "commands": ".ai/commands.json",
+    "change_impact": ".ai/change-impact.md"
+  }
+}
