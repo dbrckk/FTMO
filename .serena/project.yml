@@ -1,0 +1,18 @@
+project_name: "FTMO"
+language_servers:
+  - typescript
+  - python
+ls_workspace_folders:
+  - "."
+ignore_all_files_in_gitignore: true
+ignored_paths:
+  - "**/node_modules/**"
+  - "**/.venv/**"
+  - "**/__pycache__/**"
+  - "**/dist/**"
+  - "**/build/**"
+read_only: false
+encoding: utf-8
+symbol_info_budget: 8
+initial_prompt: |
+  Use Serena's symbol and reference tools before reading whole files. Start with symbol overviews, find_symbol and find_referencing_symbols; fetch full file bodies only when required for the task. Prefer targeted edits and preserve the existing architecture.
