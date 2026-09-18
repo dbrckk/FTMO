@@ -1,0 +1,21 @@
+{
+  "fallback_order": [
+    "existing semantic-index.json",
+    "ast-grep",
+    "portable symbol lookup",
+    "compact graph",
+    "targeted text search"
+  ],
+  "generated_by": "dbrckk/repo-brain-semantic",
+  "schema_version": 1,
+  "scip": {
+    "enabled_by_default": false,
+    "modes": [],
+    "policy": "Generate precise SCIP only in a dedicated semantic refresh; keep routine context refresh fast."
+  },
+  "zoekt": {
+    "enabled_in_push_workflow": false,
+    "mode": "external-persistent-index",
+    "reason": "Zoekt is most useful with a persistent index/service; rebuilding it on every push defeats the latency goal."
+  }
+}

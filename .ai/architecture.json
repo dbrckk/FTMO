@@ -12,16 +12,16 @@
   ],
   "dominant_extensions": [
     {
+      "extension": ".json",
+      "count": 54
+    },
+    {
       "extension": ".js",
       "count": 49
     },
     {
-      "extension": ".json",
-      "count": 45
-    },
-    {
       "extension": ".yml",
-      "count": 11
+      "count": 12
     },
     {
       "extension": ".md",
@@ -45,6 +45,10 @@
     },
     {
       "extension": ".mjs",
+      "count": 1
+    },
+    {
+      "extension": ".mmd",
       "count": 1
     },
     {

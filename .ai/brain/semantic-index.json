@@ -1,0 +1,8 @@
+{
+  "available": false,
+  "files": {},
+  "generated_by": "dbrckk/repo-brain-semantic",
+  "reason": "No SCIP JSON input. Run dedicated semantic refresh to create it.",
+  "schema_version": 1,
+  "symbols": {}
+}

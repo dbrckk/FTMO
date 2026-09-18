@@ -1,15 +1,7 @@
 {
   "files": [
     {
-      "path": "AGENTS.md",
-      "reasons": [
-        "changed",
-        "recent-project-state"
-      ],
-      "score": 160
-    },
-    {
-      "path": ".github/workflows/ai-repo-map.yml",
+      "path": ".github/workflows/semantic-refresh.yml",
       "reasons": [
         "changed"
       ],
@@ -21,6 +13,13 @@
         "changed"
       ],
       "score": 100
+    },
+    {
+      "path": "AGENTS.md",
+      "reasons": [
+        "recent-project-state"
+      ],
+      "score": 60
     }
   ],
   "generated_by": "dbrckk/repo-brain-v6",

@@ -2,7 +2,7 @@
   "area": "github",
   "files": [
     {
-      "path": ".github/workflows/ai-repo-map.yml",
+      "path": ".github/workflows/semantic-refresh.yml",
       "reasons": [
         "changed"
       ],
