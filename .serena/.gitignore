@@ -1,0 +1,5 @@
+# Serena runtime state
+cache/
+memories/
+project.local.yml
+*.log
