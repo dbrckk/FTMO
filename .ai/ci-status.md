@@ -2,12 +2,12 @@
 
 Summary: 0 success / 5 failure / 1 active
 
-- Validate code: in_progress / pending (96b188cf)
+- Validate code: in_progress / pending (26e3eee9)
+- Validate code: completed / failure (c307fbc0)
+- Validate code: completed / failure (f74d49e2)
+- Validate code: completed / failure (96b188cf)
 - Validate code: completed / failure (880b513a)
 - Validate code: completed / failure (15bc7c47)
-- Validate code: completed / failure (ad7be709)
-- Validate code: completed / failure (3376f91b)
-- Validate code: completed / failure (1924f7ff)
 
 ## Latest failed run structure
 - Job: validate-code

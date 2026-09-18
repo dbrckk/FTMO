@@ -571,6 +571,20 @@
       "file": "backtesting/vectorbt_service.py",
       "language": "python",
       "kind": "function",
+      "name": "f",
+      "line": 140
+    },
+    {
+      "file": "backtesting/vectorbt_service.py",
+      "language": "python",
+      "kind": "function",
+      "name": "i",
+      "line": 147
+    },
+    {
+      "file": "backtesting/vectorbt_service.py",
+      "language": "python",
+      "kind": "function",
       "name": "compute_vectorbt_score",
       "line": 175
     },
@@ -608,20 +622,6 @@
       "kind": "function",
       "name": "run_backtest",
       "line": 229
-    },
-    {
-      "file": "backtesting/vectorbt_service.py",
-      "language": "python",
-      "kind": "function",
-      "name": "f",
-      "line": 140
-    },
-    {
-      "file": "backtesting/vectorbt_service.py",
-      "language": "python",
-      "kind": "function",
-      "name": "i",
-      "line": 147
     },
     {
       "file": "chart.js",

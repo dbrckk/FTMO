@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "generated_by": "dbrckk/repo-brain",
   "files_indexed": 51,
   "symbol_count": 825,
@@ -8,6 +8,8 @@
     "javascript": 50,
     "python": 1
   },
+  "index_mode": "full",
+  "reparsed_files": 51,
   "top_symbol_files": [
     {
       "file": "functions/api/paper-run.js",

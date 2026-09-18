@@ -1,8 +1,12 @@
 # Repo Brain
 
+- Index mode: full
 - Files indexed: 51
+- Files reparsed this run: 51
 - Symbols: 825
 - Internal import edges: 0
+- Impacted files: 0
+- Selected tests: 0
 
 ## Languages
 - javascript: 50 files
@@ -31,11 +35,10 @@
 - advanced-engine.js: 17 symbols
 
 ## Agent routing
-- Search lookup.json first for direct symbol-to-file routing.
-- Use symbols.json only when broader symbol metadata is needed.
-- Use code-graph.json to inspect likely internal import relationships.
-- Use imports.json when a changed file crosses module boundaries.
-- Treat graph edges as static hints; verify source before editing.
+- Read impact.json first after project/change context.
+- Use selected-tests.json before broad validation.
+- Search lookup.json for symbol routing; ast-grep enrichment may provide exact ranges.
+- Verify source before editing.
 
 ## ast-grep enrichment
 - ast-grep outline: available

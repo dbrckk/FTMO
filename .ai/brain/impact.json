@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "generated_by": "dbrckk/repo-brain",
+  "base": "HEAD~1",
+  "head": "26e3eee9bcd4c8102bf1f4d9ad8084b4692c8498",
+  "index_mode": "full",
+  "changed_files": [
+    {
+      "path": "AGENTS.md",
+      "status": "M"
+    }
+  ],
+  "changed_source_files": [],
+  "impacted_files": [],
+  "impacted_symbols": [],
+  "selected_tests": []
+}
