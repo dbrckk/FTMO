@@ -21,7 +21,11 @@
     },
     {
       "extension": ".md",
-      "count": 6
+      "count": 7
+    },
+    {
+      "extension": ".json",
+      "count": 4
     },
     {
       "extension": ".pine",
@@ -29,10 +33,6 @@
     },
     {
       "extension": ".html",
-      "count": 2
-    },
-    {
-      "extension": ".json",
       "count": 2
     },
     {
