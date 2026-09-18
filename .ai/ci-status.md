@@ -1,13 +1,13 @@
 # CI status
 
-Summary: 0 success / 6 failure / 0 active
+Summary: 0 success / 3 failure / 3 active
 
+- Validate code: queued / pending (e3e64d27)
+- Validate code: queued / pending (e284350e)
+- Validate code: queued / pending (2a7e765b)
 - Validate code: completed / failure (513f80fe)
 - Validate code: completed / failure (31c3ef87)
 - Validate code: completed / failure (57c524ec)
-- Validate code: completed / failure (26e3eee9)
-- Validate code: completed / failure (c307fbc0)
-- Validate code: completed / failure (f74d49e2)
 
 ## Latest failed run structure
 - Job: validate-code

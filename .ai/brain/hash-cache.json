@@ -1,0 +1,19 @@
+{
+  "files": {
+    ".github/workflows/ai-repo-map.yml": {
+      "sha256": "b513cf7b68f320113e044a8e51d65533f1dadd1acf0e8144885807c00ed836fb",
+      "size": 380
+    },
+    ".repo-standards.yml": {
+      "sha256": "7d73ed2ffd78f5e2ecb00ff2a11e66393f4a06c93a86c66517ab584c2a9e171b",
+      "size": 1850
+    },
+    "AGENTS.md": {
+      "sha256": "e07f466d4fc455ed6fb4a9e41212e7f313482ea9e1d21599a4e9aca90ffe85ba",
+      "size": 2646
+    }
+  },
+  "generated_by": "dbrckk/repo-brain-v6",
+  "schema_version": 1,
+  "scope": "hotset"
+}

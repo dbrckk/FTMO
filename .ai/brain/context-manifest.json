@@ -1,0 +1,21 @@
+{
+  "generated_by": "dbrckk/repo-brain-v6",
+  "packets": [
+    {
+      "area": "agents.md",
+      "file_count": 1,
+      "path": ".ai/brain/context/agents.md.json"
+    },
+    {
+      "area": "github",
+      "file_count": 1,
+      "path": ".ai/brain/context/github.json"
+    },
+    {
+      "area": "repo-standards.yml",
+      "file_count": 1,
+      "path": ".ai/brain/context/repo-standards.yml.json"
+    }
+  ],
+  "schema_version": 1
+}
