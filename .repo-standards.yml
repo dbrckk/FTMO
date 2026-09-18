@@ -1,9 +1,9 @@
 source: dbrckk/repo-standards
-ref: v7
-version: 7
+ref: v8
+version: 8
 adopted: true
 workflow_mode: unified-single-commit
-repo_brain: dbrckk/repo-brain@v2
+repo_brain: dbrckk/repo-brain@v3
 ai_context:
   index: .ai/index.md
   project_state: .ai/project-state.md
@@ -15,6 +15,10 @@ ai_context:
   security_signals: .ai/security-signals.json
   repo_health: .ai/repo-health.md
   brain_summary: .ai/brain/summary.md
+  brain_capabilities: .ai/brain/capabilities.json
+  brain_ast_routing: .ai/brain/ast-routing.json
+  brain_ast_symbols: .ai/brain/ast-symbols/
+  brain_file_outlines: .ai/brain/file-outlines/
   brain_lookup: .ai/brain/lookup.json
   brain_symbols: .ai/brain/symbols.json
   brain_graph: .ai/brain/code-graph.json
