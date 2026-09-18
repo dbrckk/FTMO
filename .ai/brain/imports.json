@@ -1,0 +1,78 @@
+{
+  "imports": {
+    "api.js": [
+      "./config.js",
+      "./state.js"
+    ],
+    "app.js": [
+      "./api.js",
+      "./chart.js",
+      "./config.js",
+      "./paper-engine.js",
+      "./render.js",
+      "./scan.js",
+      "./state.js",
+      "./trades.js"
+    ],
+    "archive-engine.js": [
+      "./utils.js"
+    ],
+    "backtesting/vectorbt_service.py": [
+      "fastapi",
+      "numpy",
+      "pandas",
+      "pydantic",
+      "typing",
+      "vectorbt"
+    ],
+    "functions/api/archive-stats.js": [
+      "../_shared/archive-intelligence.js"
+    ],
+    "functions/api/ftmo-status.js": [
+      "../_shared/ftmo-guardian.js"
+    ],
+    "functions/api/news-events.js": [
+      "../_shared/news-filter.js"
+    ],
+    "functions/api/paper-run.js": [
+      "../_shared/archive-intelligence.js",
+      "../_shared/ftmo-guardian.js",
+      "../_shared/model-rules.js",
+      "../_shared/news-filter.js",
+      "../_shared/realistic-execution.js"
+    ],
+    "integration-patch.js": [
+      "./advanced-engine.js",
+      "./integration-patch.js"
+    ],
+    "paper-engine.js": [
+      "./api.js",
+      "./state.js"
+    ],
+    "render.js": [
+      "./api.js",
+      "./chart.js",
+      "./paper-engine.js",
+      "./state.js",
+      "./trades.js",
+      "./utils.js"
+    ],
+    "scan.js": [
+      "./api.js",
+      "./config.js",
+      "./setup-classifier.js",
+      "./state.js"
+    ],
+    "scripts/import-dukascopy-csv-to-sql.mjs": [
+      "node:fs",
+      "node:path"
+    ],
+    "state.js": [
+      "./config.js"
+    ],
+    "trades.js": [
+      "./state.js",
+      "./utils.js"
+    ]
+  }
+}

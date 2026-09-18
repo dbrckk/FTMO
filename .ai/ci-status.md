@@ -2,12 +2,12 @@
 
 Summary: 0 success / 4 failure / 2 active
 
-- Validate code: queued / pending (ca5623e9)
-- Validate code: queued / pending (a306f467)
+- Validate code: queued / pending (ad7be709)
+- Validate code: queued / pending (3376f91b)
+- Validate code: completed / failure (1924f7ff)
+- Validate code: completed / failure (ca5623e9)
+- Validate code: completed / failure (a306f467)
 - Validate code: completed / failure (17a17b5d)
-- Validate code: completed / failure (b818ac25)
-- Validate code: completed / failure (940d40c4)
-- Validate code: completed / failure (cd8c92bc)
 
 ## Latest failed run structure
 - Job: validate-code

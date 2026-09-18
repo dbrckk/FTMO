@@ -1,0 +1,5779 @@
+{
+  "symbols": [
+    {
+      "file": "advanced-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "clamp",
+      "line": 1
+    },
+    {
+      "file": "advanced-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "num",
+      "line": 6
+    },
+    {
+      "file": "advanced-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "pctScore",
+      "line": 11
+    },
+    {
+      "file": "advanced-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "expectancyScore",
+      "line": 16
+    },
+    {
+      "file": "advanced-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "archiveConfidenceFactor",
+      "line": 21
+    },
+    {
+      "file": "advanced-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreArchiveEdge",
+      "line": 30
+    },
+    {
+      "file": "advanced-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreSession",
+      "line": 58
+    },
+    {
+      "file": "advanced-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreSmartMoney",
+      "line": 70
+    },
+    {
+      "file": "advanced-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreExecution",
+      "line": 86
+    },
+    {
+      "file": "advanced-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreEntryPrecision",
+      "line": 102
+    },
+    {
+      "file": "advanced-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreMomentumQuality",
+      "line": 113
+    },
+    {
+      "file": "advanced-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreSpread",
+      "line": 124
+    },
+    {
+      "file": "advanced-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreGoldStructure",
+      "line": 133
+    },
+    {
+      "file": "advanced-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreGoldDanger",
+      "line": 150
+    },
+    {
+      "file": "advanced-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreMlAdjusted",
+      "line": 162
+    },
+    {
+      "file": "advanced-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeUltraScore",
+      "line": 173
+    },
+    {
+      "file": "advanced-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getTradeFilterDecision",
+      "line": 236
+    },
+    {
+      "file": "api.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "fetchMlScore",
+      "line": 3
+    },
+    {
+      "file": "api.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "fetchVectorbtScore",
+      "line": 28
+    },
+    {
+      "file": "api.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "refreshAiDecision",
+      "line": 52
+    },
+    {
+      "file": "api.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scan",
+      "line": 57
+    },
+    {
+      "file": "api.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "fetchExitSuggestion",
+      "line": 123
+    },
+    {
+      "file": "api.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "fetchCorrelationMatrix",
+      "line": 176
+    },
+    {
+      "file": "api.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "fetchArchiveStatsBatch",
+      "line": 212
+    },
+    {
+      "file": "api.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "fetchServerPaperSnapshot",
+      "line": 244
+    },
+    {
+      "file": "api.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "fetchPaperHealth",
+      "line": 279
+    },
+    {
+      "file": "api.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "fetchTimeframeSummary",
+      "line": 311
+    },
+    {
+      "file": "api.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "saveClosedPaperTrade",
+      "line": 348
+    },
+    {
+      "file": "api.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "enrichScanWithMtf",
+      "line": 366
+    },
+    {
+      "file": "api.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getMtfForPair",
+      "line": 387
+    },
+    {
+      "file": "api.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildScanCacheKey",
+      "line": 394
+    },
+    {
+      "file": "api.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getJson",
+      "line": 403
+    },
+    {
+      "file": "api.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "postJson",
+      "line": 420
+    },
+    {
+      "file": "api.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "escapeHtml",
+      "line": 443
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "startApp",
+      "line": 49
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "bootstrapApp",
+      "line": 76
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "setupChartSafe",
+      "line": 84
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "cacheEls",
+      "line": 101
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "bindEvents",
+      "line": 160
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "refreshAll",
+      "line": 222
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "refreshMetaData",
+      "line": 290
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "refreshPostScanData",
+      "line": 303
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "refreshPaperData",
+      "line": 324
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scanPairWithTimeout",
+      "line": 336
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "enrichScan",
+      "line": 350
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "sortScans",
+      "line": 360
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "renderDashboardAfterScan",
+      "line": 376
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "renderAllSafe",
+      "line": 388
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "renderLoadingState",
+      "line": 405
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "applyBrowserPaperMtfGuard",
+      "line": 421
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getMtfForPair",
+      "line": 478
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "startPaperLoop",
+      "line": 485
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "renderTimeframeLabel",
+      "line": 497
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "clearScanCaches",
+      "line": 504
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildFallbackScan",
+      "line": 522
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getPairSymbol",
+      "line": 563
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "withTimeout",
+      "line": 571
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "showFatalError",
+      "line": 597
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "showPairListError",
+      "line": 602
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "setTextSafe",
+      "line": 613
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "sleep",
+      "line": 619
+    },
+    {
+      "file": "app.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "escapeHtml",
+      "line": 623
+    },
+    {
+      "file": "archive-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getSessionLabelFromDate",
+      "line": 2
+    },
+    {
+      "file": "archive-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeArchivedTrade",
+      "line": 23
+    },
+    {
+      "file": "archive-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildArchiveStats",
+      "line": 43
+    },
+    {
+      "file": "archive-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "pushClosedTradeToArchive",
+      "line": 107
+    },
+    {
+      "file": "archive-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeArchiveConfidence",
+      "line": 120
+    },
+    {
+      "file": "archive-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeWinRate",
+      "line": 140
+    },
+    {
+      "file": "archive-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeExpectancy",
+      "line": 147
+    },
+    {
+      "file": "archive-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "inferHour",
+      "line": 154
+    },
+    {
+      "file": "backtesting/vectorbt_service.py",
+      "language": "python",
+      "kind": "class",
+      "name": "Candle",
+      "line": 11
+    },
+    {
+      "file": "backtesting/vectorbt_service.py",
+      "language": "python",
+      "kind": "class",
+      "name": "BacktestPayload",
+      "line": 19
+    },
+    {
+      "file": "backtesting/vectorbt_service.py",
+      "language": "python",
+      "kind": "function",
+      "name": "build_dataframe",
+      "line": 40
+    },
+    {
+      "file": "backtesting/vectorbt_service.py",
+      "language": "python",
+      "kind": "function",
+      "name": "ema",
+      "line": 58
+    },
+    {
+      "file": "backtesting/vectorbt_service.py",
+      "language": "python",
+      "kind": "function",
+      "name": "rsi",
+      "line": 62
+    },
+    {
+      "file": "backtesting/vectorbt_service.py",
+      "language": "python",
+      "kind": "function",
+      "name": "atr",
+      "line": 75
+    },
+    {
+      "file": "backtesting/vectorbt_service.py",
+      "language": "python",
+      "kind": "function",
+      "name": "macd_hist",
+      "line": 85
+    },
+    {
+      "file": "backtesting/vectorbt_service.py",
+      "language": "python",
+      "kind": "function",
+      "name": "add_indicators",
+      "line": 91
+    },
+    {
+      "file": "backtesting/vectorbt_service.py",
+      "language": "python",
+      "kind": "function",
+      "name": "build_long_signals",
+      "line": 105
+    },
+    {
+      "file": "backtesting/vectorbt_service.py",
+      "language": "python",
+      "kind": "function",
+      "name": "build_short_signals",
+      "line": 122
+    },
+    {
+      "file": "backtesting/vectorbt_service.py",
+      "language": "python",
+      "kind": "function",
+      "name": "portfolio_stats_to_dict",
+      "line": 139
+    },
+    {
+      "file": "backtesting/vectorbt_service.py",
+      "language": "python",
+      "kind": "function",
+      "name": "compute_vectorbt_score",
+      "line": 175
+    },
+    {
+      "file": "backtesting/vectorbt_service.py",
+      "language": "python",
+      "kind": "function",
+      "name": "confidence_band",
+      "line": 201
+    },
+    {
+      "file": "backtesting/vectorbt_service.py",
+      "language": "python",
+      "kind": "function",
+      "name": "choose_best_side",
+      "line": 209
+    },
+    {
+      "file": "backtesting/vectorbt_service.py",
+      "language": "python",
+      "kind": "function",
+      "name": "root",
+      "line": 219
+    },
+    {
+      "file": "backtesting/vectorbt_service.py",
+      "language": "python",
+      "kind": "function",
+      "name": "health",
+      "line": 224
+    },
+    {
+      "file": "backtesting/vectorbt_service.py",
+      "language": "python",
+      "kind": "function",
+      "name": "run_backtest",
+      "line": 229
+    },
+    {
+      "file": "backtesting/vectorbt_service.py",
+      "language": "python",
+      "kind": "function",
+      "name": "f",
+      "line": 140
+    },
+    {
+      "file": "backtesting/vectorbt_service.py",
+      "language": "python",
+      "kind": "function",
+      "name": "i",
+      "line": 147
+    },
+    {
+      "file": "chart.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "setupChart",
+      "line": 4
+    },
+    {
+      "file": "chart.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "updateChart",
+      "line": 74
+    },
+    {
+      "file": "chart.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeCandles",
+      "line": 105
+    },
+    {
+      "file": "chart.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeTime",
+      "line": 139
+    },
+    {
+      "file": "chart.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "cleanupChart",
+      "line": 160
+    },
+    {
+      "file": "functions/_middleware.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequest",
+      "line": 1
+    },
+    {
+      "file": "functions/_middleware.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 47
+    },
+    {
+      "file": "functions/_shared/archive-intelligence.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "ensureArchiveColumns",
+      "line": 20
+    },
+    {
+      "file": "functions/_shared/archive-intelligence.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getArchiveStatsMap",
+      "line": 32
+    },
+    {
+      "file": "functions/_shared/archive-intelligence.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildHistoricalEdgeGate",
+      "line": 49
+    },
+    {
+      "file": "functions/_shared/archive-intelligence.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildArchiveIntelligence",
+      "line": 181
+    },
+    {
+      "file": "functions/_shared/archive-intelligence.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "queryStats",
+      "line": 282
+    },
+    {
+      "file": "functions/_shared/archive-intelligence.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "groupStats",
+      "line": 306
+    },
+    {
+      "file": "functions/_shared/archive-intelligence.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildWhere",
+      "line": 338
+    },
+    {
+      "file": "functions/_shared/archive-intelligence.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getTableColumns",
+      "line": 378
+    },
+    {
+      "file": "functions/_shared/archive-intelligence.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeStats",
+      "line": 389
+    },
+    {
+      "file": "functions/_shared/archive-intelligence.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "emptyStats",
+      "line": 411
+    },
+    {
+      "file": "functions/_shared/archive-intelligence.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeHistoricalEdgeScore",
+      "line": 429
+    },
+    {
+      "file": "functions/_shared/archive-intelligence.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreStats",
+      "line": 439
+    },
+    {
+      "file": "functions/_shared/archive-intelligence.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeConfidence",
+      "line": 453
+    },
+    {
+      "file": "functions/_shared/archive-intelligence.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "pickBest",
+      "line": 463
+    },
+    {
+      "file": "functions/_shared/archive-intelligence.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "toFrontendArchiveStats",
+      "line": 475
+    },
+    {
+      "file": "functions/_shared/archive-intelligence.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getGateProfile",
+      "line": 516
+    },
+    {
+      "file": "functions/_shared/archive-intelligence.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "inferSession",
+      "line": 573
+    },
+    {
+      "file": "functions/_shared/archive-intelligence.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "inferHour",
+      "line": 588
+    },
+    {
+      "file": "functions/_shared/archive-intelligence.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "round",
+      "line": 598
+    },
+    {
+      "file": "functions/_shared/archive-intelligence.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "clamp",
+      "line": 605
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "applyFtmoGuardianToScans",
+      "line": 21
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "evaluateFtmoTrade",
+      "line": 43
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildGuardianContext",
+      "line": 222
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildAccountConfig",
+      "line": 311
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "ensureFtmoGuardianTables",
+      "line": 340
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getOrCreateDailyAnchor",
+      "line": 371
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getTotalClosedPnl",
+      "line": 423
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getClosedStats",
+      "line": 436
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getConsecutiveLosses",
+      "line": 468
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getOpenTrades",
+      "line": 491
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "valueOpenTrades",
+      "line": 543
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getCurrentPrice",
+      "line": 591
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeCandidate",
+      "line": 608
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "estimateRiskPercentFromScore",
+      "line": 626
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeGuardianRiskPercent",
+      "line": 649
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeStatus",
+      "line": 693
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildCurrencyExposure",
+      "line": 780
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeCandidateExposure",
+      "line": 810
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildAllowedReason",
+      "line": 827
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getPairRiskGroups",
+      "line": 843
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getPhaseDefaults",
+      "line": 858
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "readNumber",
+      "line": 876
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getParisDateKey",
+      "line": 883
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeTimeframe",
+      "line": 898
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "percentOf",
+      "line": 904
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "roundByPair",
+      "line": 913
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "round",
+      "line": 926
+    },
+    {
+      "file": "functions/_shared/ftmo-guardian.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "money",
+      "line": 934
+    },
+    {
+      "file": "functions/_shared/model-rules.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "applyModelRulesToScans",
+      "line": 12
+    },
+    {
+      "file": "functions/_shared/model-rules.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "loadModelRules",
+      "line": 37
+    },
+    {
+      "file": "functions/_shared/model-rules.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "ensureModelRulesTable",
+      "line": 67
+    },
+    {
+      "file": "functions/_shared/model-rules.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "applyRulesToSingleScan",
+      "line": 82
+    },
+    {
+      "file": "functions/_shared/model-rules.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "ruleMatchesScan",
+      "line": 155
+    },
+    {
+      "file": "functions/_shared/model-rules.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeRuleImpact",
+      "line": 196
+    },
+    {
+      "file": "functions/_shared/model-rules.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeRule",
+      "line": 252
+    },
+    {
+      "file": "functions/_shared/model-rules.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "parsePayload",
+      "line": 265
+    },
+    {
+      "file": "functions/_shared/model-rules.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "formatRuleSummary",
+      "line": 277
+    },
+    {
+      "file": "functions/_shared/model-rules.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getScoreBucket",
+      "line": 288
+    },
+    {
+      "file": "functions/_shared/model-rules.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizePair",
+      "line": 300
+    },
+    {
+      "file": "functions/_shared/model-rules.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeText",
+      "line": 309
+    },
+    {
+      "file": "functions/_shared/model-rules.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeTarget",
+      "line": 315
+    },
+    {
+      "file": "functions/_shared/model-rules.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "inferHour",
+      "line": 322
+    },
+    {
+      "file": "functions/_shared/model-rules.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "clampScore",
+      "line": 332
+    },
+    {
+      "file": "functions/_shared/model-rules.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "clamp",
+      "line": 336
+    },
+    {
+      "file": "functions/_shared/news-filter.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "applyNewsFilterToScans",
+      "line": 34
+    },
+    {
+      "file": "functions/_shared/news-filter.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "evaluateNewsRisk",
+      "line": 69
+    },
+    {
+      "file": "functions/_shared/news-filter.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "ensureNewsTables",
+      "line": 79
+    },
+    {
+      "file": "functions/_shared/news-filter.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "addColumnIfMissing",
+      "line": 101
+    },
+    {
+      "file": "functions/_shared/news-filter.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "insertNewsEvent",
+      "line": 112
+    },
+    {
+      "file": "functions/_shared/news-filter.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "listNewsEvents",
+      "line": 180
+    },
+    {
+      "file": "functions/_shared/news-filter.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getRelevantNewsEvents",
+      "line": 213
+    },
+    {
+      "file": "functions/_shared/news-filter.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "parseEnvNewsEvents",
+      "line": 230
+    },
+    {
+      "file": "functions/_shared/news-filter.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "evaluateNewsRiskForScan",
+      "line": 271
+    },
+    {
+      "file": "functions/_shared/news-filter.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeDbEvent",
+      "line": 367
+    },
+    {
+      "file": "functions/_shared/news-filter.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getPairCurrencies",
+      "line": 381
+    },
+    {
+      "file": "functions/_shared/news-filter.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isEventRelevantForPair",
+      "line": 394
+    },
+    {
+      "file": "functions/_shared/news-filter.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isHighImpact",
+      "line": 406
+    },
+    {
+      "file": "functions/_shared/news-filter.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getDefaultBeforeMinutes",
+      "line": 415
+    },
+    {
+      "file": "functions/_shared/news-filter.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getDefaultAfterMinutes",
+      "line": 426
+    },
+    {
+      "file": "functions/_shared/news-filter.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isKeywordHighRisk",
+      "line": 437
+    },
+    {
+      "file": "functions/_shared/news-filter.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeImpact",
+      "line": 443
+    },
+    {
+      "file": "functions/_shared/news-filter.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeCurrency",
+      "line": 453
+    },
+    {
+      "file": "functions/_shared/realistic-execution.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildRealisticEntry",
+      "line": 60
+    },
+    {
+      "file": "functions/_shared/realistic-execution.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildRealisticExit",
+      "line": 155
+    },
+    {
+      "file": "functions/_shared/realistic-execution.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getExecutionProfile",
+      "line": 218
+    },
+    {
+      "file": "functions/_shared/realistic-execution.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "estimateExecutionPenaltyR",
+      "line": 252
+    },
+    {
+      "file": "functions/_shared/realistic-execution.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computePnlR",
+      "line": 268
+    },
+    {
+      "file": "functions/_shared/realistic-execution.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getOriginalRiskDistance",
+      "line": 280
+    },
+    {
+      "file": "functions/_shared/realistic-execution.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getFallbackRiskDistance",
+      "line": 292
+    },
+    {
+      "file": "functions/_shared/realistic-execution.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getPipSize",
+      "line": 305
+    },
+    {
+      "file": "functions/_shared/realistic-execution.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getDefaultRr",
+      "line": 315
+    },
+    {
+      "file": "functions/_shared/realistic-execution.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizePair",
+      "line": 324
+    },
+    {
+      "file": "functions/_shared/realistic-execution.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "roundByPair",
+      "line": 333
+    },
+    {
+      "file": "functions/_shared/realistic-execution.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "round",
+      "line": 346
+    },
+    {
+      "file": "functions/api/ai-decision.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestPost",
+      "line": 2
+    },
+    {
+      "file": "functions/api/ai-decision.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 38
+    },
+    {
+      "file": "functions/api/ai-decision.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeScan",
+      "line": 82
+    },
+    {
+      "file": "functions/api/ai-decision.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildDecision",
+      "line": 136
+    },
+    {
+      "file": "functions/api/ai-decision.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeDecisionScore",
+      "line": 185
+    },
+    {
+      "file": "functions/api/ai-decision.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getBlockers",
+      "line": 224
+    },
+    {
+      "file": "functions/api/ai-decision.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildTitle",
+      "line": 267
+    },
+    {
+      "file": "functions/api/ai-decision.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildReason",
+      "line": 293
+    },
+    {
+      "file": "functions/api/ai-decision.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildRiskMode",
+      "line": 327
+    },
+    {
+      "file": "functions/api/ai-decision.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildBadge",
+      "line": 343
+    },
+    {
+      "file": "functions/api/ai-decision.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildNotes",
+      "line": 350
+    },
+    {
+      "file": "functions/api/ai-decision.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getPairProfile",
+      "line": 375
+    },
+    {
+      "file": "functions/api/ai-decision.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getDefaultRr",
+      "line": 408
+    },
+    {
+      "file": "functions/api/ai-decision.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getTradingWindow",
+      "line": 415
+    },
+    {
+      "file": "functions/api/ai-decision.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getModelBias",
+      "line": 433
+    },
+    {
+      "file": "functions/api/ai-decision.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getPairLabel",
+      "line": 441
+    },
+    {
+      "file": "functions/api/ai-decision.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeTimeframe",
+      "line": 448
+    },
+    {
+      "file": "functions/api/ai-decision.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeJson",
+      "line": 456
+    },
+    {
+      "file": "functions/api/ai-decision.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeNumber",
+      "line": 470
+    },
+    {
+      "file": "functions/api/ai-decision.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "round",
+      "line": 476
+    },
+    {
+      "file": "functions/api/ai-decision.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "clamp",
+      "line": 484
+    },
+    {
+      "file": "functions/api/ai-decision.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 492
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 2
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestPost",
+      "line": 6
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "handleAnalytics",
+      "line": 10
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "ensureAnalyticsTables",
+      "line": 109
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "importPaperTradesIntoLearning",
+      "line": 169
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeOverallStats",
+      "line": 262
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeGroupedStats",
+      "line": 268
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computePairDirectionStats",
+      "line": 285
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeScoreBuckets",
+      "line": 302
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getLearningRows",
+      "line": 326
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildStats",
+      "line": 373
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildRecommendations",
+      "line": 412
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "saveAnalyticsSnapshot",
+      "line": 479
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreStats",
+      "line": 533
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "sortStats",
+      "line": 544
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "confidenceFromTrades",
+      "line": 550
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "maxDrawdown",
+      "line": 562
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizePair",
+      "line": 576
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "inferSession",
+      "line": 585
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "inferHour",
+      "line": 600
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "average",
+      "line": 612
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "percent",
+      "line": 618
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "round",
+      "line": 624
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "clamp",
+      "line": 632
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isAuthorized",
+      "line": 640
+    },
+    {
+      "file": "functions/api/analytics-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 651
+    },
+    {
+      "file": "functions/api/archive-stats.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 15
+    },
+    {
+      "file": "functions/api/archive-stats.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeDirections",
+      "line": 123
+    },
+    {
+      "file": "functions/api/archive-stats.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizePair",
+      "line": 139
+    },
+    {
+      "file": "functions/api/archive-stats.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeTimeframe",
+      "line": 145
+    },
+    {
+      "file": "functions/api/archive-stats.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeDirection",
+      "line": 151
+    },
+    {
+      "file": "functions/api/archive-stats.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "cleanText",
+      "line": 157
+    },
+    {
+      "file": "functions/api/archive-stats.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 161
+    },
+    {
+      "file": "functions/api/correlation-matrix.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestPost",
+      "line": 12
+    },
+    {
+      "file": "functions/api/correlation-matrix.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 62
+    },
+    {
+      "file": "functions/api/correlation-matrix.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getCandles",
+      "line": 124
+    },
+    {
+      "file": "functions/api/correlation-matrix.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeInputRow",
+      "line": 147
+    },
+    {
+      "file": "functions/api/correlation-matrix.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildCorrelationMatrix",
+      "line": 166
+    },
+    {
+      "file": "functions/api/correlation-matrix.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildCorrelationAlerts",
+      "line": 178
+    },
+    {
+      "file": "functions/api/correlation-matrix.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildRiskClusters",
+      "line": 207
+    },
+    {
+      "file": "functions/api/correlation-matrix.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "pushCluster",
+      "line": 230
+    },
+    {
+      "file": "functions/api/correlation-matrix.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeClusterAverageAbsCorrelation",
+      "line": 249
+    },
+    {
+      "file": "functions/api/correlation-matrix.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getCorrelationRiskType",
+      "line": 270
+    },
+    {
+      "file": "functions/api/correlation-matrix.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "toReturns",
+      "line": 298
+    },
+    {
+      "file": "functions/api/correlation-matrix.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "pearson",
+      "line": 313
+    },
+    {
+      "file": "functions/api/correlation-matrix.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "average",
+      "line": 344
+    },
+    {
+      "file": "functions/api/correlation-matrix.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizePair",
+      "line": 352
+    },
+    {
+      "file": "functions/api/correlation-matrix.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeTimeframe",
+      "line": 363
+    },
+    {
+      "file": "functions/api/correlation-matrix.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeLimit",
+      "line": 371
+    },
+    {
+      "file": "functions/api/correlation-matrix.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeJson",
+      "line": 381
+    },
+    {
+      "file": "functions/api/correlation-matrix.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "round",
+      "line": 395
+    },
+    {
+      "file": "functions/api/correlation-matrix.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 403
+    },
+    {
+      "file": "functions/api/exit-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestPost",
+      "line": 2
+    },
+    {
+      "file": "functions/api/exit-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 39
+    },
+    {
+      "file": "functions/api/exit-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeScan",
+      "line": 88
+    },
+    {
+      "file": "functions/api/exit-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeAi",
+      "line": 126
+    },
+    {
+      "file": "functions/api/exit-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildExitDecision",
+      "line": 135
+    },
+    {
+      "file": "functions/api/exit-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeExitPressure",
+      "line": 166
+    },
+    {
+      "file": "functions/api/exit-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreWeakness",
+      "line": 222
+    },
+    {
+      "file": "functions/api/exit-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeProtectionMode",
+      "line": 233
+    },
+    {
+      "file": "functions/api/exit-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getExitAction",
+      "line": 252
+    },
+    {
+      "file": "functions/api/exit-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildComment",
+      "line": 266
+    },
+    {
+      "file": "functions/api/exit-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildNotes",
+      "line": 304
+    },
+    {
+      "file": "functions/api/exit-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getPairProfile",
+      "line": 328
+    },
+    {
+      "file": "functions/api/exit-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getDefaultRr",
+      "line": 373
+    },
+    {
+      "file": "functions/api/exit-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeTimeframe",
+      "line": 380
+    },
+    {
+      "file": "functions/api/exit-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeJson",
+      "line": 388
+    },
+    {
+      "file": "functions/api/exit-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeNumber",
+      "line": 402
+    },
+    {
+      "file": "functions/api/exit-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "round",
+      "line": 408
+    },
+    {
+      "file": "functions/api/exit-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "clamp",
+      "line": 416
+    },
+    {
+      "file": "functions/api/exit-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 424
+    },
+    {
+      "file": "functions/api/ftmo-status.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 7
+    },
+    {
+      "file": "functions/api/ftmo-status.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestPost",
+      "line": 11
+    },
+    {
+      "file": "functions/api/ftmo-status.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "handleFtmoStatus",
+      "line": 15
+    },
+    {
+      "file": "functions/api/ftmo-status.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "ensureFtmoStatusTables",
+      "line": 239
+    },
+    {
+      "file": "functions/api/ftmo-status.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "addColumnIfMissing",
+      "line": 277
+    },
+    {
+      "file": "functions/api/ftmo-status.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildAccountOverrides",
+      "line": 288
+    },
+    {
+      "file": "functions/api/ftmo-status.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "readParam",
+      "line": 315
+    },
+    {
+      "file": "functions/api/ftmo-status.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeRecommendedRiskPercent",
+      "line": 325
+    },
+    {
+      "file": "functions/api/ftmo-status.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildDangerReport",
+      "line": 370
+    },
+    {
+      "file": "functions/api/ftmo-status.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeFtmoHealthScore",
+      "line": 446
+    },
+    {
+      "file": "functions/api/ftmo-status.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "saveStatusSnapshot",
+      "line": 473
+    },
+    {
+      "file": "functions/api/ftmo-status.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeTimeframe",
+      "line": 531
+    },
+    {
+      "file": "functions/api/ftmo-status.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "percentOf",
+      "line": 537
+    },
+    {
+      "file": "functions/api/ftmo-status.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "round",
+      "line": 546
+    },
+    {
+      "file": "functions/api/ftmo-status.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "clamp",
+      "line": 554
+    },
+    {
+      "file": "functions/api/ftmo-status.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isAuthorized",
+      "line": 562
+    },
+    {
+      "file": "functions/api/ftmo-status.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeJson",
+      "line": 573
+    },
+    {
+      "file": "functions/api/ftmo-status.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 587
+    },
+    {
+      "file": "functions/api/health.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 1
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 1
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestPost",
+      "line": 40
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "parseIncomingRequest",
+      "line": 117
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "insertRows",
+      "line": 167
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "parseCsv",
+      "line": 198
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "parseRowParts",
+      "line": 261
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "splitCsvLine",
+      "line": 347
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "detectDelimiter",
+      "line": 373
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "stripQuotes",
+      "line": 386
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "looksLikeIsoDateTime",
+      "line": 390
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "toUnixFromAnyDateTime",
+      "line": 396
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "containsDateTime",
+      "line": 401
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "splitDateTimeFlexible",
+      "line": 410
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "stripMilliseconds",
+      "line": 434
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "stripTimezone",
+      "line": 438
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeUnixTs",
+      "line": 445
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isNumeric",
+      "line": 454
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "looksLikeDate",
+      "line": 459
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "looksLikeTime",
+      "line": 469
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "looksLikeHeader",
+      "line": 475
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "toUnix",
+      "line": 489
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeDate",
+      "line": 498
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeTime",
+      "line": 515
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "toNum",
+      "line": 525
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "dedupeRows",
+      "line": 530
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "cleanPair",
+      "line": 541
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeTimeframe",
+      "line": 548
+    },
+    {
+      "file": "functions/api/import-market-csv.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 554
+    },
+    {
+      "file": "functions/api/journal-insights.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestPost",
+      "line": 1
+    },
+    {
+      "file": "functions/api/journal-insights.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "winRate",
+      "line": 66
+    },
+    {
+      "file": "functions/api/journal-insights.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeTrade",
+      "line": 106
+    },
+    {
+      "file": "functions/api/journal-insights.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computePnl",
+      "line": 118
+    },
+    {
+      "file": "functions/api/journal-insights.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "aggregateBy",
+      "line": 125
+    },
+    {
+      "file": "functions/api/journal-insights.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildInsights",
+      "line": 155
+    },
+    {
+      "file": "functions/api/journal-insights.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getSessionLabel",
+      "line": 192
+    },
+    {
+      "file": "functions/api/journal-insights.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "maxBy",
+      "line": 200
+    },
+    {
+      "file": "functions/api/journal-insights.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "minBy",
+      "line": 205
+    },
+    {
+      "file": "functions/api/journal-insights.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeDate",
+      "line": 210
+    },
+    {
+      "file": "functions/api/journal-insights.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "round",
+      "line": 216
+    },
+    {
+      "file": "functions/api/journal-insights.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "cleanText",
+      "line": 221
+    },
+    {
+      "file": "functions/api/journal-insights.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeJson",
+      "line": 226
+    },
+    {
+      "file": "functions/api/journal-insights.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 234
+    },
+    {
+      "file": "functions/api/macro-context.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 1
+    },
+    {
+      "file": "functions/api/macro-context.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildEconomicEvents",
+      "line": 63
+    },
+    {
+      "file": "functions/api/macro-context.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isRelevantForPair",
+      "line": 87
+    },
+    {
+      "file": "functions/api/macro-context.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "cleanPair",
+      "line": 94
+    },
+    {
+      "file": "functions/api/macro-context.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "clampInt",
+      "line": 101
+    },
+    {
+      "file": "functions/api/macro-context.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 107
+    },
+    {
+      "file": "functions/api/macro-feed.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 1
+    },
+    {
+      "file": "functions/api/macro-feed.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeFmpEvent",
+      "line": 66
+    },
+    {
+      "file": "functions/api/macro-feed.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeImpact",
+      "line": 84
+    },
+    {
+      "file": "functions/api/macro-feed.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildFallbackEvents",
+      "line": 91
+    },
+    {
+      "file": "functions/api/macro-feed.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "event",
+      "line": 112
+    },
+    {
+      "file": "functions/api/macro-feed.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "addDays",
+      "line": 121
+    },
+    {
+      "file": "functions/api/macro-feed.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "formatDate",
+      "line": 127
+    },
+    {
+      "file": "functions/api/macro-feed.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 131
+    },
+    {
+      "file": "functions/api/market-data.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 14
+    },
+    {
+      "file": "functions/api/market-data.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getCandles",
+      "line": 53
+    },
+    {
+      "file": "functions/api/market-data.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizePair",
+      "line": 93
+    },
+    {
+      "file": "functions/api/market-data.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeTimeframe",
+      "line": 104
+    },
+    {
+      "file": "functions/api/market-data.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeLimit",
+      "line": 112
+    },
+    {
+      "file": "functions/api/market-data.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "roundByPair",
+      "line": 122
+    },
+    {
+      "file": "functions/api/market-data.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 134
+    },
+    {
+      "file": "functions/api/ml-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestPost",
+      "line": 2
+    },
+    {
+      "file": "functions/api/ml-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 34
+    },
+    {
+      "file": "functions/api/ml-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeScan",
+      "line": 74
+    },
+    {
+      "file": "functions/api/ml-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreMl",
+      "line": 112
+    },
+    {
+      "file": "functions/api/ml-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getPairProfile",
+      "line": 173
+    },
+    {
+      "file": "functions/api/ml-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getTimeframeBoost",
+      "line": 217
+    },
+    {
+      "file": "functions/api/ml-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreDirectionQuality",
+      "line": 226
+    },
+    {
+      "file": "functions/api/ml-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreMomentum",
+      "line": 244
+    },
+    {
+      "file": "functions/api/ml-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreVolatility",
+      "line": 270
+    },
+    {
+      "file": "functions/api/ml-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreRsi",
+      "line": 302
+    },
+    {
+      "file": "functions/api/ml-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreConfluence",
+      "line": 324
+    },
+    {
+      "file": "functions/api/ml-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreArchive",
+      "line": 344
+    },
+    {
+      "file": "functions/api/ml-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "applyBtcAdjustment",
+      "line": 357
+    },
+    {
+      "file": "functions/api/ml-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "applyGoldAdjustment",
+      "line": 379
+    },
+    {
+      "file": "functions/api/ml-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getConfidenceBand",
+      "line": 392
+    },
+    {
+      "file": "functions/api/ml-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getModelBias",
+      "line": 403
+    },
+    {
+      "file": "functions/api/ml-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildNotes",
+      "line": 412
+    },
+    {
+      "file": "functions/api/ml-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeTimeframe",
+      "line": 441
+    },
+    {
+      "file": "functions/api/ml-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeJson",
+      "line": 449
+    },
+    {
+      "file": "functions/api/ml-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeNumber",
+      "line": 463
+    },
+    {
+      "file": "functions/api/ml-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "clamp",
+      "line": 469
+    },
+    {
+      "file": "functions/api/ml-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 477
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 2
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestPost",
+      "line": 6
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "handleMt5Sync",
+      "line": 10
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "ensureMt5Tables",
+      "line": 121
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "addColumnIfMissing",
+      "line": 232
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeAccount",
+      "line": 240
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeDeal",
+      "line": 261
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizePosition",
+      "line": 298
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "upsertAccount",
+      "line": 322
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "upsertDeal",
+      "line": 360
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "upsertLearningTradeFromDeal",
+      "line": 410
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "clearPositionsForAccount",
+      "line": 480
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "upsertPosition",
+      "line": 487
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getMt5Summary",
+      "line": 529
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeSymbol",
+      "line": 573
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeSide",
+      "line": 582
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeEntryType",
+      "line": 591
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeIsoDate",
+      "line": 603
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "inferSetupTypeFromComment",
+      "line": 621
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "inferSessionFromIso",
+      "line": 636
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "inferHourFromIso",
+      "line": 651
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "percent",
+      "line": 663
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "round",
+      "line": 669
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isAuthorized",
+      "line": 677
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeJson",
+      "line": 688
+    },
+    {
+      "file": "functions/api/mt5-sync.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 702
+    },
+    {
+      "file": "functions/api/news-events.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 9
+    },
+    {
+      "file": "functions/api/news-events.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestPost",
+      "line": 13
+    },
+    {
+      "file": "functions/api/news-events.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "handleNewsEvents",
+      "line": 17
+    },
+    {
+      "file": "functions/api/news-events.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isAuthorized",
+      "line": 109
+    },
+    {
+      "file": "functions/api/news-events.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeJson",
+      "line": 120
+    },
+    {
+      "file": "functions/api/news-events.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 134
+    },
+    {
+      "file": "functions/api/paper-health.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 24
+    },
+    {
+      "file": "functions/api/paper-health.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestPost",
+      "line": 28
+    },
+    {
+      "file": "functions/api/paper-health.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "handlePaperHealth",
+      "line": 32
+    },
+    {
+      "file": "functions/api/paper-health.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "checkPair",
+      "line": 179
+    },
+    {
+      "file": "functions/api/paper-health.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getMaxAgeSeconds",
+      "line": 234
+    },
+    {
+      "file": "functions/api/paper-health.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getMarketStatus",
+      "line": 248
+    },
+    {
+      "file": "functions/api/paper-health.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getParisParts",
+      "line": 285
+    },
+    {
+      "file": "functions/api/paper-health.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildStatusText",
+      "line": 315
+    },
+    {
+      "file": "functions/api/paper-health.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeTimeframe",
+      "line": 331
+    },
+    {
+      "file": "functions/api/paper-health.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "readBool",
+      "line": 337
+    },
+    {
+      "file": "functions/api/paper-health.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isAuthorized",
+      "line": 347
+    },
+    {
+      "file": "functions/api/paper-health.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 358
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 106
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestPost",
+      "line": 110
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "handlePaperRun",
+      "line": 114
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "ensurePaperTables",
+      "line": 279
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "ensurePaperColumns",
+      "line": 344
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "addColumnIfMissing",
+      "line": 382
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scanAllPairs",
+      "line": 390
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getCandles",
+      "line": 416
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getArchiveStats",
+      "line": 450
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeDirectionStats",
+      "line": 522
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildEmptyScan",
+      "line": 534
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildScan",
+      "line": 587
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "applyFinalGate",
+      "line": 850
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "blockScan",
+      "line": 878
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildBlockReason",
+      "line": 887
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getDirection",
+      "line": 905
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeTrendScore",
+      "line": 930
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeTimingScore",
+      "line": 954
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeRiskScore",
+      "line": 976
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeExecutionScore",
+      "line": 1004
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeSmartMoneyScore",
+      "line": 1034
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeArchiveScore",
+      "line": 1058
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getDirectionArchive",
+      "line": 1080
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeEntryQualityScore",
+      "line": 1091
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeExitPressureScore",
+      "line": 1141
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "classifySetup",
+      "line": 1188
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "emptySetup",
+      "line": 1363
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeWickRiskScore",
+      "line": 1379
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isLateImpulse",
+      "line": 1397
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getMaxDistanceEma20",
+      "line": 1403
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getImpulseMaxMultiplier",
+      "line": 1414
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getVolatilityRegime",
+      "line": 1424
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "labelSetup",
+      "line": 1448
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computePaperCandidateScore",
+      "line": 1462
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildBlockReason",
+      "line": 1476
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeRiskPercent",
+      "line": 1494
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getMaxBarsHold",
+      "line": 1515
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeRiskDistance",
+      "line": 1534
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getOriginalRiskDistance",
+      "line": 1557
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeLivePnlR",
+      "line": 1569
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computePnlR",
+      "line": 1581
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "improveStop",
+      "line": 1585
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildRiskGroupsFromTrades",
+      "line": 1593
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "wouldOverloadRiskGroup",
+      "line": 1607
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getPairRiskGroups",
+      "line": 1621
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getFreshness",
+      "line": 1634
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getWinrateTargetRr",
+      "line": 1656
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreWinRate",
+      "line": 1674
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreExpectancy",
+      "line": 1678
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeSessionScore",
+      "line": 1682
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isTradableSession",
+      "line": 1706
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "weakness",
+      "line": 1725
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "ema",
+      "line": 1736
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "rsi",
+      "line": 1751
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "atr",
+      "line": 1772
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeMomentum",
+      "line": 1794
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeVolatility",
+      "line": 1805
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "average",
+      "line": 1822
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "inferSession",
+      "line": 1830
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "inferHour",
+      "line": 1845
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildConfig",
+      "line": 1855
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "resolvePairs",
+      "line": 1871
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildPaperAccountConfig",
+      "line": 1894
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "publicConfig",
+      "line": 1912
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "publicScan",
+      "line": 1931
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizePair",
+      "line": 1974
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeTimeframe",
+      "line": 1983
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "extractSetupTypeFromTag",
+      "line": 1988
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "roundByPair",
+      "line": 2003
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "round",
+      "line": 2014
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "clamp",
+      "line": 2020
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "readNumber",
+      "line": 2026
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "readBool",
+      "line": 2035
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isAuthorized",
+      "line": 2052
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeJson",
+      "line": 2063
+    },
+    {
+      "file": "functions/api/paper-run.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 2077
+    },
+    {
+      "file": "functions/api/paper-trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 11
+    },
+    {
+      "file": "functions/api/paper-trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestPost",
+      "line": 55
+    },
+    {
+      "file": "functions/api/paper-trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getOpenTrades",
+      "line": 93
+    },
+    {
+      "file": "functions/api/paper-trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getRecentClosedTrades",
+      "line": 135
+    },
+    {
+      "file": "functions/api/paper-trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getPairStats",
+      "line": 179
+    },
+    {
+      "file": "functions/api/paper-trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getSummary",
+      "line": 214
+    },
+    {
+      "file": "functions/api/paper-trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getRuns",
+      "line": 241
+    },
+    {
+      "file": "functions/api/paper-trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "insertClosedTrade",
+      "line": 277
+    },
+    {
+      "file": "functions/api/paper-trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeOpenRow",
+      "line": 330
+    },
+    {
+      "file": "functions/api/paper-trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeClosedRow",
+      "line": 367
+    },
+    {
+      "file": "functions/api/paper-trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeClosedTrade",
+      "line": 395
+    },
+    {
+      "file": "functions/api/paper-trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeLivePnlR",
+      "line": 436
+    },
+    {
+      "file": "functions/api/paper-trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizePair",
+      "line": 453
+    },
+    {
+      "file": "functions/api/paper-trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeTimeframe",
+      "line": 464
+    },
+    {
+      "file": "functions/api/paper-trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeLimit",
+      "line": 472
+    },
+    {
+      "file": "functions/api/paper-trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "inferSession",
+      "line": 482
+    },
+    {
+      "file": "functions/api/paper-trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "inferHour",
+      "line": 497
+    },
+    {
+      "file": "functions/api/paper-trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "roundByPair",
+      "line": 507
+    },
+    {
+      "file": "functions/api/paper-trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "round",
+      "line": 518
+    },
+    {
+      "file": "functions/api/paper-trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeJson",
+      "line": 526
+    },
+    {
+      "file": "functions/api/paper-trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 540
+    },
+    {
+      "file": "functions/api/portfolio-risk.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestPost",
+      "line": 5
+    },
+    {
+      "file": "functions/api/portfolio-risk.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 70
+    },
+    {
+      "file": "functions/api/portfolio-risk.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizePosition",
+      "line": 79
+    },
+    {
+      "file": "functions/api/portfolio-risk.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildRiskGroups",
+      "line": 100
+    },
+    {
+      "file": "functions/api/portfolio-risk.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getPairRiskGroups",
+      "line": 129
+    },
+    {
+      "file": "functions/api/portfolio-risk.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeJson",
+      "line": 163
+    },
+    {
+      "file": "functions/api/portfolio-risk.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "round",
+      "line": 177
+    },
+    {
+      "file": "functions/api/portfolio-risk.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 185
+    },
+    {
+      "file": "functions/api/reset-paper-guard.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 2
+    },
+    {
+      "file": "functions/api/reset-paper-guard.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestPost",
+      "line": 6
+    },
+    {
+      "file": "functions/api/reset-paper-guard.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "handleResetPaperGuard",
+      "line": 10
+    },
+    {
+      "file": "functions/api/reset-paper-guard.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "ensureResetTables",
+      "line": 150
+    },
+    {
+      "file": "functions/api/reset-paper-guard.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getRecentPaperTrades",
+      "line": 177
+    },
+    {
+      "file": "functions/api/reset-paper-guard.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getConsecutiveLosses",
+      "line": 192
+    },
+    {
+      "file": "functions/api/reset-paper-guard.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "archiveTrade",
+      "line": 212
+    },
+    {
+      "file": "functions/api/reset-paper-guard.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "publicTrade",
+      "line": 230
+    },
+    {
+      "file": "functions/api/reset-paper-guard.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "readBool",
+      "line": 246
+    },
+    {
+      "file": "functions/api/reset-paper-guard.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeJson",
+      "line": 263
+    },
+    {
+      "file": "functions/api/reset-paper-guard.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isAuthorized",
+      "line": 277
+    },
+    {
+      "file": "functions/api/reset-paper-guard.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 288
+    },
+    {
+      "file": "functions/api/risk-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestPost",
+      "line": 1
+    },
+    {
+      "file": "functions/api/risk-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizePayload",
+      "line": 79
+    },
+    {
+      "file": "functions/api/risk-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeJson",
+      "line": 99
+    },
+    {
+      "file": "functions/api/risk-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "clampNumber",
+      "line": 107
+    },
+    {
+      "file": "functions/api/risk-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 113
+    },
+    {
+      "file": "functions/api/server-trading.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 4
+    },
+    {
+      "file": "functions/api/server-trading.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestPost",
+      "line": 8
+    },
+    {
+      "file": "functions/api/server-trading.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "handleServerTrading",
+      "line": 12
+    },
+    {
+      "file": "functions/api/server-trading.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "callEndpoint",
+      "line": 168
+    },
+    {
+      "file": "functions/api/server-trading.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildSummary",
+      "line": 216
+    },
+    {
+      "file": "functions/api/server-trading.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "classifyCall",
+      "line": 340
+    },
+    {
+      "file": "functions/api/server-trading.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildSummaryMessage",
+      "line": 442
+    },
+    {
+      "file": "functions/api/server-trading.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "insertServerTradingRun",
+      "line": 466
+    },
+    {
+      "file": "functions/api/server-trading.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "parseTimeframes",
+      "line": 504
+    },
+    {
+      "file": "functions/api/server-trading.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeTimeframe",
+      "line": 515
+    },
+    {
+      "file": "functions/api/server-trading.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "readBool",
+      "line": 521
+    },
+    {
+      "file": "functions/api/server-trading.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeJson",
+      "line": 538
+    },
+    {
+      "file": "functions/api/server-trading.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeResponseJson",
+      "line": 552
+    },
+    {
+      "file": "functions/api/server-trading.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isAuthorized",
+      "line": 560
+    },
+    {
+      "file": "functions/api/server-trading.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 571
+    },
+    {
+      "file": "functions/api/setup-alerts.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 17
+    },
+    {
+      "file": "functions/api/setup-alerts.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestPost",
+      "line": 19
+    },
+    {
+      "file": "functions/api/setup-alerts.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "handle",
+      "line": 20
+    },
+    {
+      "file": "functions/api/setup-alerts.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "n",
+      "line": 97
+    },
+    {
+      "file": "functions/api/setup-alerts.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "score",
+      "line": 119
+    },
+    {
+      "file": "functions/api/setup-alerts.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isFtmoLocked",
+      "line": 133
+    },
+    {
+      "file": "functions/api/setup-alerts.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isBadNews",
+      "line": 137
+    },
+    {
+      "file": "functions/api/setup-alerts.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "send",
+      "line": 146
+    },
+    {
+      "file": "functions/api/setup-alerts.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildMsg",
+      "line": 165
+    },
+    {
+      "file": "functions/api/setup-alerts.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "id",
+      "line": 185
+    },
+    {
+      "file": "functions/api/setup-alerts.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 189
+    },
+    {
+      "file": "functions/api/sync-market.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 19
+    },
+    {
+      "file": "functions/api/sync-market.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestPost",
+      "line": 23
+    },
+    {
+      "file": "functions/api/sync-market.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "handleSyncMarket",
+      "line": 27
+    },
+    {
+      "file": "functions/api/sync-market.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "syncPair",
+      "line": 93
+    },
+    {
+      "file": "functions/api/sync-market.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeProviderCandle",
+      "line": 202
+    },
+    {
+      "file": "functions/api/sync-market.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "parseProviderTimestamp",
+      "line": 230
+    },
+    {
+      "file": "functions/api/sync-market.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getPairsForGroup",
+      "line": 253
+    },
+    {
+      "file": "functions/api/sync-market.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeGroup",
+      "line": 261
+    },
+    {
+      "file": "functions/api/sync-market.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeTimeframe",
+      "line": 271
+    },
+    {
+      "file": "functions/api/sync-market.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "toProviderSymbol",
+      "line": 276
+    },
+    {
+      "file": "functions/api/sync-market.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isAuthorized",
+      "line": 289
+    },
+    {
+      "file": "functions/api/sync-market.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeJson",
+      "line": 300
+    },
+    {
+      "file": "functions/api/sync-market.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "sleep",
+      "line": 314
+    },
+    {
+      "file": "functions/api/sync-market.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 318
+    },
+    {
+      "file": "functions/api/timeframe-summary.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 26
+    },
+    {
+      "file": "functions/api/timeframe-summary.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scanTimeframe",
+      "line": 86
+    },
+    {
+      "file": "functions/api/timeframe-summary.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getCandles",
+      "line": 133
+    },
+    {
+      "file": "functions/api/timeframe-summary.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildScan",
+      "line": 166
+    },
+    {
+      "file": "functions/api/timeframe-summary.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildMtfAlignment",
+      "line": 296
+    },
+    {
+      "file": "functions/api/timeframe-summary.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computePairDirectionAlignment",
+      "line": 330
+    },
+    {
+      "file": "functions/api/timeframe-summary.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getCandleFreshness",
+      "line": 411
+    },
+    {
+      "file": "functions/api/timeframe-summary.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "ema",
+      "line": 434
+    },
+    {
+      "file": "functions/api/timeframe-summary.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "rsi",
+      "line": 448
+    },
+    {
+      "file": "functions/api/timeframe-summary.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "atr",
+      "line": 469
+    },
+    {
+      "file": "functions/api/timeframe-summary.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeMomentum",
+      "line": 490
+    },
+    {
+      "file": "functions/api/timeframe-summary.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreSession",
+      "line": 501
+    },
+    {
+      "file": "functions/api/timeframe-summary.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "roundByPair",
+      "line": 526
+    },
+    {
+      "file": "functions/api/timeframe-summary.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "round",
+      "line": 537
+    },
+    {
+      "file": "functions/api/timeframe-summary.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "clamp",
+      "line": 544
+    },
+    {
+      "file": "functions/api/timeframe-summary.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 551
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestPost",
+      "line": 2
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onRequestGet",
+      "line": 38
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeScan",
+      "line": 75
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeCandle",
+      "line": 112
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreVectorbt",
+      "line": 139
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "runLocalBacktest",
+      "line": 175
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getBacktestSignal",
+      "line": 249
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "resolveTrade",
+      "line": 270
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildMetrics",
+      "line": 346
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeMaxDrawdownR",
+      "line": 400
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreBacktestMetrics",
+      "line": 414
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreWithoutCandles",
+      "line": 462
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getPairProfile",
+      "line": 481
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getDefaultRr",
+      "line": 508
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getMaxBarsHold",
+      "line": 515
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getSampleQuality",
+      "line": 533
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getConfidenceBand",
+      "line": 549
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getFallbackConfidenceBand",
+      "line": 558
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getModelBias",
+      "line": 565
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildNotes",
+      "line": 574
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "ema",
+      "line": 601
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "rsi",
+      "line": 616
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "atr",
+      "line": 639
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeMomentum",
+      "line": 661
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeTimeframe",
+      "line": 672
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "roundByPair",
+      "line": 680
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeJson",
+      "line": 693
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeNumber",
+      "line": 707
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "round",
+      "line": 713
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "clamp",
+      "line": 721
+    },
+    {
+      "file": "functions/api/vectorbt-score.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "json",
+      "line": 729
+    },
+    {
+      "file": "indicators.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "emaSeries",
+      "line": 1
+    },
+    {
+      "file": "indicators.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "smaSeries",
+      "line": 24
+    },
+    {
+      "file": "indicators.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "rsi",
+      "line": 43
+    },
+    {
+      "file": "indicators.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "atr",
+      "line": 69
+    },
+    {
+      "file": "indicators.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeMomentum",
+      "line": 106
+    },
+    {
+      "file": "indicators.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "macd",
+      "line": 123
+    },
+    {
+      "file": "indicators.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "bollingerBands",
+      "line": 155
+    },
+    {
+      "file": "indicators.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "stochastic",
+      "line": 187
+    },
+    {
+      "file": "integration-patch.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "enhanceScanWithAdvancedEngine",
+      "line": 15
+    },
+    {
+      "file": "mock.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "generateFakeCandles",
+      "line": 1
+    },
+    {
+      "file": "mock.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "generateFakeArchiveTrades",
+      "line": 33
+    },
+    {
+      "file": "mock.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getBasePrice",
+      "line": 70
+    },
+    {
+      "file": "mock.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getStep",
+      "line": 107
+    },
+    {
+      "file": "mock.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "roundByPair",
+      "line": 113
+    },
+    {
+      "file": "mock.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "pseudoNoise",
+      "line": 122
+    },
+    {
+      "file": "mock.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "hashCode",
+      "line": 128
+    },
+    {
+      "file": "mock.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getFakeSession",
+      "line": 139
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "runPaperEngine",
+      "line": 10
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "updateBrowserPaperTrades",
+      "line": 41
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "openBrowserPaperTrades",
+      "line": 91
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "enrichCandidate",
+      "line": 158
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "createBrowserPaperTrade",
+      "line": 176
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "manageOpenTrade",
+      "line": 243
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeEntryQualityScore",
+      "line": 385
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeCandleTriggerScore",
+      "line": 470
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeLateEntryPenalty",
+      "line": 543
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeExitPressureScore",
+      "line": 589
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isLateEntry",
+      "line": 651
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getMaxBarsHold",
+      "line": 677
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computePnlRWithPartial",
+      "line": 694
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildClosedTrade",
+      "line": 713
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scorePaperCandidate",
+      "line": 767
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeBrowserRiskPercent",
+      "line": 779
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeLivePnlR",
+      "line": 806
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getOriginalRiskDistance",
+      "line": 821
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "improveStop",
+      "line": 834
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildRiskGroupsFromTrades",
+      "line": 844
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "wouldOverloadRiskGroup",
+      "line": 859
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getPairRiskGroups",
+      "line": 877
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computePaperAnalytics",
+      "line": 892
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "weakness",
+      "line": 944
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "ema",
+      "line": 955
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "atr",
+      "line": 970
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "average",
+      "line": 992
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "inferSession",
+      "line": 1000
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "inferHour",
+      "line": 1015
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "roundByPair",
+      "line": 1025
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "round",
+      "line": 1038
+    },
+    {
+      "file": "paper-engine.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "clamp",
+      "line": 1046
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "setActiveTab",
+      "line": 7
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "renderTabs",
+      "line": 12
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "renderOverview",
+      "line": 27
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "allowed",
+      "line": 38
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "renderPairList",
+      "line": 49
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "renderTopPriorityTrades",
+      "line": 94
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "renderTopBlockedTrades",
+      "line": 119
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "renderCorrelationMatrix",
+      "line": 140
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "renderSelectedPair",
+      "line": 198
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scan",
+      "line": 202
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "renderTrades",
+      "line": 322
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "renderWatchlist",
+      "line": 347
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "renderFtmoRisk",
+      "line": 365
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "renderPaperLab",
+      "line": 396
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "renderPaperHealth",
+      "line": 547
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "renderTimeframeSummary",
+      "line": 593
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "renderOpenPaperTrade",
+      "line": 733
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "renderClosedPaperTrade",
+      "line": 770
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getBestPaperCandidate",
+      "line": 796
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "weightedPaperScore",
+      "line": 801
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeLiveR",
+      "line": 813
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "parseEqFromModelTag",
+      "line": 830
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getMtfForPair",
+      "line": 835
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "pickBestMtfTimeframe",
+      "line": 842
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "formatAlignedTimeframes",
+      "line": 853
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "formatDateShort",
+      "line": 861
+    },
+    {
+      "file": "render.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "esc",
+      "line": 880
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scanPair",
+      "line": 8
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "fetchMarketCandles",
+      "line": 130
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildLocalScan",
+      "line": 153
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "applyArchiveLearning",
+      "line": 299
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeUltraScore",
+      "line": 335
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeEntryQualityScore",
+      "line": 380
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeExitPressureScore",
+      "line": 483
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computePaperScore",
+      "line": 528
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildTradeDecision",
+      "line": 543
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getTradeProfile",
+      "line": 654
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeDirection",
+      "line": 684
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeTrendScore",
+      "line": 703
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeTimingScore",
+      "line": 724
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeRiskScore",
+      "line": 743
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeExecutionScore",
+      "line": 773
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeSmartMoneyScore",
+      "line": 804
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeContextScore",
+      "line": 829
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeSessionScore",
+      "line": 845
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isLateEntry",
+      "line": 863
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeRiskDistance",
+      "line": 867
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildBaseReasons",
+      "line": 882
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getArchiveStats",
+      "line": 904
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeArchiveSide",
+      "line": 921
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getDirectionArchive",
+      "line": 930
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeConfluenceScore",
+      "line": 941
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeHedgeScore",
+      "line": 964
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isEliteTrade",
+      "line": 980
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildFallbackScan",
+      "line": 993
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeCandle",
+      "line": 1057
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "fetchWithTimeout",
+      "line": 1084
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getPairSymbol",
+      "line": 1097
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getUltraGrade",
+      "line": 1105
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getDefaultRr",
+      "line": 1117
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreWinRate",
+      "line": 1126
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scoreExpectancy",
+      "line": 1130
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "weakness",
+      "line": 1134
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "ema",
+      "line": 1145
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "rsi",
+      "line": 1160
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "atr",
+      "line": 1183
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeMomentum",
+      "line": 1205
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeVolatility",
+      "line": 1216
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "average",
+      "line": 1233
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "inferHour",
+      "line": 1241
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "roundByPair",
+      "line": 1251
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "round",
+      "line": 1264
+    },
+    {
+      "file": "scan.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "clamp",
+      "line": 1272
+    },
+    {
+      "file": "scripts/import-dukascopy-csv-to-sql.mjs",
+      "language": "javascript",
+      "kind": "function",
+      "name": "main",
+      "line": 11
+    },
+    {
+      "file": "scripts/import-dukascopy-csv-to-sql.mjs",
+      "language": "javascript",
+      "kind": "function",
+      "name": "parseFileName",
+      "line": 51
+    },
+    {
+      "file": "scripts/import-dukascopy-csv-to-sql.mjs",
+      "language": "javascript",
+      "kind": "function",
+      "name": "parseCsv",
+      "line": 64
+    },
+    {
+      "file": "scripts/import-dukascopy-csv-to-sql.mjs",
+      "language": "javascript",
+      "kind": "function",
+      "name": "looksLikeHeader",
+      "line": 130
+    },
+    {
+      "file": "scripts/import-dukascopy-csv-to-sql.mjs",
+      "language": "javascript",
+      "kind": "function",
+      "name": "splitDateTime",
+      "line": 142
+    },
+    {
+      "file": "scripts/import-dukascopy-csv-to-sql.mjs",
+      "language": "javascript",
+      "kind": "function",
+      "name": "toUnix",
+      "line": 151
+    },
+    {
+      "file": "scripts/import-dukascopy-csv-to-sql.mjs",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeDate",
+      "line": 159
+    },
+    {
+      "file": "scripts/import-dukascopy-csv-to-sql.mjs",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeTime",
+      "line": 175
+    },
+    {
+      "file": "scripts/import-dukascopy-csv-to-sql.mjs",
+      "language": "javascript",
+      "kind": "function",
+      "name": "toNum",
+      "line": 183
+    },
+    {
+      "file": "scripts/import-dukascopy-csv-to-sql.mjs",
+      "language": "javascript",
+      "kind": "function",
+      "name": "dedupeRows",
+      "line": 188
+    },
+    {
+      "file": "scripts/import-dukascopy-csv-to-sql.mjs",
+      "language": "javascript",
+      "kind": "function",
+      "name": "esc",
+      "line": 203
+    },
+    {
+      "file": "scripts/import-dukascopy-csv-to-sql.mjs",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildSql",
+      "line": 207
+    },
+    {
+      "file": "setup-classifier.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "classifySetup",
+      "line": 1
+    },
+    {
+      "file": "setup-classifier.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeWickRiskScore",
+      "line": 238
+    },
+    {
+      "file": "setup-classifier.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isLateImpulse",
+      "line": 256
+    },
+    {
+      "file": "setup-classifier.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "getVolatilityRegime",
+      "line": 265
+    },
+    {
+      "file": "setup-classifier.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "labelSetup",
+      "line": 289
+    },
+    {
+      "file": "setup-classifier.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "ema",
+      "line": 303
+    },
+    {
+      "file": "setup-classifier.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "atr",
+      "line": 317
+    },
+    {
+      "file": "setup-classifier.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeMomentum",
+      "line": 338
+    },
+    {
+      "file": "setup-classifier.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeVolatility",
+      "line": 349
+    },
+    {
+      "file": "setup-classifier.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "average",
+      "line": 365
+    },
+    {
+      "file": "setup-classifier.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "clamp",
+      "line": 372
+    },
+    {
+      "file": "state.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "createInitialState",
+      "line": 92
+    },
+    {
+      "file": "state.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "loadSavedState",
+      "line": 102
+    },
+    {
+      "file": "state.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "persistState",
+      "line": 120
+    },
+    {
+      "file": "state.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "resetState",
+      "line": 134
+    },
+    {
+      "file": "state.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "clearRuntimeCaches",
+      "line": 145
+    },
+    {
+      "file": "state.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "migrateState",
+      "line": 158
+    },
+    {
+      "file": "state.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "sanitizeState",
+      "line": 191
+    },
+    {
+      "file": "state.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizePair",
+      "line": 248
+    },
+    {
+      "file": "state.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isValidPair",
+      "line": 257
+    },
+    {
+      "file": "state.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "normalizeTimeframe",
+      "line": 262
+    },
+    {
+      "file": "state.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "clampNumber",
+      "line": 270
+    },
+    {
+      "file": "state.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeNumber",
+      "line": 278
+    },
+    {
+      "file": "state.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "isPlainObject",
+      "line": 284
+    },
+    {
+      "file": "state.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "deepMerge",
+      "line": 288
+    },
+    {
+      "file": "state.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "structuredCloneSafe",
+      "line": 302
+    },
+    {
+      "file": "trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "onAddTrade",
+      "line": 3
+    },
+    {
+      "file": "trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "scan",
+      "line": 19
+    },
+    {
+      "file": "trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "clearTrades",
+      "line": 82
+    },
+    {
+      "file": "trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "toggleCurrentWatchlist",
+      "line": 91
+    },
+    {
+      "file": "trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "exportTradesJson",
+      "line": 111
+    },
+    {
+      "file": "trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeDynamicRiskPercent",
+      "line": 121
+    },
+    {
+      "file": "trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computePositionSizing",
+      "line": 150
+    },
+    {
+      "file": "trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildFallbackStop",
+      "line": 235
+    },
+    {
+      "file": "trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "buildFallbackTarget",
+      "line": 252
+    },
+    {
+      "file": "trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "computeRr",
+      "line": 271
+    },
+    {
+      "file": "trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "signalToDirection",
+      "line": 284
+    },
+    {
+      "file": "trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "roundByPair",
+      "line": 293
+    },
+    {
+      "file": "trades.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "formatBtcAmount",
+      "line": 304
+    },
+    {
+      "file": "utils.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "clamp",
+      "line": 1
+    },
+    {
+      "file": "utils.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "round",
+      "line": 10
+    },
+    {
+      "file": "utils.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "formatPrice",
+      "line": 20
+    },
+    {
+      "file": "utils.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "setText",
+      "line": 44
+    },
+    {
+      "file": "utils.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "setValue",
+      "line": 52
+    },
+    {
+      "file": "utils.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "metricCard",
+      "line": 60
+    },
+    {
+      "file": "utils.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "sanitizeDecision",
+      "line": 70
+    },
+    {
+      "file": "utils.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "escapeHtml",
+      "line": 92
+    },
+    {
+      "file": "utils.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "downloadJson",
+      "line": 101
+    },
+    {
+      "file": "utils.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "safeNumber",
+      "line": 118
+    },
+    {
+      "file": "utils.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "average",
+      "line": 124
+    },
+    {
+      "file": "utils.js",
+      "language": "javascript",
+      "kind": "function",
+      "name": "nowIso",
+      "line": 132
+    }
+  ]
+}
