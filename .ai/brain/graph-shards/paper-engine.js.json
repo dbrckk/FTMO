@@ -1,0 +1,26 @@
+{
+  "area": "paper-engine.js",
+  "edges": [
+    {
+      "source": "app.js",
+      "target": "paper-engine.js",
+      "type": "imports"
+    },
+    {
+      "source": "paper-engine.js",
+      "target": "api.js",
+      "type": "imports"
+    },
+    {
+      "source": "paper-engine.js",
+      "target": "state.js",
+      "type": "imports"
+    },
+    {
+      "source": "render.js",
+      "target": "paper-engine.js",
+      "type": "imports"
+    }
+  ],
+  "schema_version": 1
+}

@@ -1,12 +1,8 @@
 {
   "files": {
-    ".github/workflows/semantic-refresh.yml": {
-      "sha256": "ea7392f6d9e76473925e529f1fc7ef2a098377a350f43894e85ced915c141d18",
-      "size": 365
-    },
     ".repo-standards.yml": {
-      "sha256": "1ff064ac05aa84e5100e732b3ca1e5ae0aee4151206ddc59732d4dc9033c0dd4",
-      "size": 2015
+      "sha256": "9107836a537974b9ac68fa70c48ce21780ea27042e01ae34f2cc64bfc1aa0b4c",
+      "size": 2167
     },
     "AGENTS.md": {
       "sha256": "e07f466d4fc455ed6fb4a9e41212e7f313482ea9e1d21599a4e9aca90ffe85ba",

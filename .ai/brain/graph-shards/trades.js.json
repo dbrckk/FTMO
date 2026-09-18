@@ -1,0 +1,26 @@
+{
+  "area": "trades.js",
+  "edges": [
+    {
+      "source": "app.js",
+      "target": "trades.js",
+      "type": "imports"
+    },
+    {
+      "source": "render.js",
+      "target": "trades.js",
+      "type": "imports"
+    },
+    {
+      "source": "trades.js",
+      "target": "state.js",
+      "type": "imports"
+    },
+    {
+      "source": "trades.js",
+      "target": "utils.js",
+      "type": "imports"
+    }
+  ],
+  "schema_version": 1
+}

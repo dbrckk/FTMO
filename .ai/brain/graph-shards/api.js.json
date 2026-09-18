@@ -1,0 +1,36 @@
+{
+  "area": "api.js",
+  "edges": [
+    {
+      "source": "api.js",
+      "target": "config.js",
+      "type": "imports"
+    },
+    {
+      "source": "api.js",
+      "target": "state.js",
+      "type": "imports"
+    },
+    {
+      "source": "app.js",
+      "target": "api.js",
+      "type": "imports"
+    },
+    {
+      "source": "paper-engine.js",
+      "target": "api.js",
+      "type": "imports"
+    },
+    {
+      "source": "render.js",
+      "target": "api.js",
+      "type": "imports"
+    },
+    {
+      "source": "scan.js",
+      "target": "api.js",
+      "type": "imports"
+    }
+  ],
+  "schema_version": 1
+}

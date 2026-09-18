@@ -1,0 +1,11 @@
+{
+  "area": "setup-classifier.js",
+  "edges": [
+    {
+      "source": "scan.js",
+      "target": "setup-classifier.js",
+      "type": "imports"
+    }
+  ],
+  "schema_version": 1
+}

@@ -1,8 +1,285 @@
 {
-  "areas": [],
-  "central_files": [],
-  "edge_count": 0,
+  "areas": [
+    "advanced-engine.js",
+    "api.js",
+    "app.js",
+    "archive-engine.js",
+    "chart.js",
+    "config.js",
+    "functions",
+    "integration-patch.js",
+    "paper-engine.js",
+    "render.js",
+    "scan.js",
+    "setup-classifier.js",
+    "state.js",
+    "trades.js",
+    "utils.js"
+  ],
+  "central_files": [
+    {
+      "dependencies": [
+        "api.js",
+        "chart.js",
+        "config.js",
+        "paper-engine.js",
+        "render.js",
+        "scan.js",
+        "state.js",
+        "trades.js"
+      ],
+      "dependents": [],
+      "in_degree": 0,
+      "out_degree": 8,
+      "path": "app.js"
+    },
+    {
+      "dependencies": [
+        "config.js"
+      ],
+      "dependents": [
+        "api.js",
+        "app.js",
+        "paper-engine.js",
+        "render.js",
+        "scan.js",
+        "trades.js"
+      ],
+      "in_degree": 6,
+      "out_degree": 1,
+      "path": "state.js"
+    },
+    {
+      "dependencies": [
+        "api.js",
+        "chart.js",
+        "paper-engine.js",
+        "state.js",
+        "trades.js",
+        "utils.js"
+      ],
+      "dependents": [
+        "app.js"
+      ],
+      "in_degree": 1,
+      "out_degree": 6,
+      "path": "render.js"
+    },
+    {
+      "dependencies": [
+        "config.js",
+        "state.js"
+      ],
+      "dependents": [
+        "app.js",
+        "paper-engine.js",
+        "render.js",
+        "scan.js"
+      ],
+      "in_degree": 4,
+      "out_degree": 2,
+      "path": "api.js"
+    },
+    {
+      "dependencies": [
+        "api.js",
+        "config.js",
+        "setup-classifier.js",
+        "state.js"
+      ],
+      "dependents": [
+        "app.js"
+      ],
+      "in_degree": 1,
+      "out_degree": 4,
+      "path": "scan.js"
+    },
+    {
+      "dependencies": [
+        "functions/_shared/archive-intelligence.js",
+        "functions/_shared/ftmo-guardian.js",
+        "functions/_shared/model-rules.js",
+        "functions/_shared/news-filter.js",
+        "functions/_shared/realistic-execution.js"
+      ],
+      "dependents": [],
+      "in_degree": 0,
+      "out_degree": 5,
+      "path": "functions/api/paper-run.js"
+    },
+    {
+      "dependencies": [],
+      "dependents": [
+        "api.js",
+        "app.js",
+        "scan.js",
+        "state.js"
+      ],
+      "in_degree": 4,
+      "out_degree": 0,
+      "path": "config.js"
+    },
+    {
+      "dependencies": [
+        "api.js",
+        "state.js"
+      ],
+      "dependents": [
+        "app.js",
+        "render.js"
+      ],
+      "in_degree": 2,
+      "out_degree": 2,
+      "path": "paper-engine.js"
+    },
+    {
+      "dependencies": [
+        "state.js",
+        "utils.js"
+      ],
+      "dependents": [
+        "app.js",
+        "render.js"
+      ],
+      "in_degree": 2,
+      "out_degree": 2,
+      "path": "trades.js"
+    },
+    {
+      "dependencies": [],
+      "dependents": [
+        "archive-engine.js",
+        "render.js",
+        "trades.js"
+      ],
+      "in_degree": 3,
+      "out_degree": 0,
+      "path": "utils.js"
+    },
+    {
+      "dependencies": [],
+      "dependents": [
+        "app.js",
+        "render.js"
+      ],
+      "in_degree": 2,
+      "out_degree": 0,
+      "path": "chart.js"
+    },
+    {
+      "dependencies": [],
+      "dependents": [
+        "functions/api/archive-stats.js",
+        "functions/api/paper-run.js"
+      ],
+      "in_degree": 2,
+      "out_degree": 0,
+      "path": "functions/_shared/archive-intelligence.js"
+    },
+    {
+      "dependencies": [],
+      "dependents": [
+        "functions/api/ftmo-status.js",
+        "functions/api/paper-run.js"
+      ],
+      "in_degree": 2,
+      "out_degree": 0,
+      "path": "functions/_shared/ftmo-guardian.js"
+    },
+    {
+      "dependencies": [],
+      "dependents": [
+        "functions/api/news-events.js",
+        "functions/api/paper-run.js"
+      ],
+      "in_degree": 2,
+      "out_degree": 0,
+      "path": "functions/_shared/news-filter.js"
+    },
+    {
+      "dependencies": [],
+      "dependents": [
+        "integration-patch.js"
+      ],
+      "in_degree": 1,
+      "out_degree": 0,
+      "path": "advanced-engine.js"
+    },
+    {
+      "dependencies": [],
+      "dependents": [
+        "functions/api/paper-run.js"
+      ],
+      "in_degree": 1,
+      "out_degree": 0,
+      "path": "functions/_shared/model-rules.js"
+    },
+    {
+      "dependencies": [],
+      "dependents": [
+        "functions/api/paper-run.js"
+      ],
+      "in_degree": 1,
+      "out_degree": 0,
+      "path": "functions/_shared/realistic-execution.js"
+    },
+    {
+      "dependencies": [],
+      "dependents": [
+        "scan.js"
+      ],
+      "in_degree": 1,
+      "out_degree": 0,
+      "path": "setup-classifier.js"
+    },
+    {
+      "dependencies": [
+        "utils.js"
+      ],
+      "dependents": [],
+      "in_degree": 0,
+      "out_degree": 1,
+      "path": "archive-engine.js"
+    },
+    {
+      "dependencies": [
+        "functions/_shared/archive-intelligence.js"
+      ],
+      "dependents": [],
+      "in_degree": 0,
+      "out_degree": 1,
+      "path": "functions/api/archive-stats.js"
+    },
+    {
+      "dependencies": [
+        "functions/_shared/ftmo-guardian.js"
+      ],
+      "dependents": [],
+      "in_degree": 0,
+      "out_degree": 1,
+      "path": "functions/api/ftmo-status.js"
+    },
+    {
+      "dependencies": [
+        "functions/_shared/news-filter.js"
+      ],
+      "dependents": [],
+      "in_degree": 0,
+      "out_degree": 1,
+      "path": "functions/api/news-events.js"
+    },
+    {
+      "dependencies": [
+        "advanced-engine.js"
+      ],
+      "dependents": [],
+      "in_degree": 0,
+      "out_degree": 1,
+      "path": "integration-patch.js"
+    }
+  ],
+  "edge_count": 35,
   "generated_by": "dbrckk/repo-brain-v7-graph",
-  "node_count": 0,
+  "node_count": 23,
   "schema_version": 1
 }

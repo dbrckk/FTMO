@@ -1,5 +1,81 @@
 {
   "generated_by": "dbrckk/repo-brain-v7-graph",
   "schema_version": 1,
-  "shards": []
+  "shards": [
+    {
+      "area": "advanced-engine.js",
+      "edge_count": 1,
+      "path": ".ai/brain/graph-shards/advanced-engine.js.json"
+    },
+    {
+      "area": "api.js",
+      "edge_count": 6,
+      "path": ".ai/brain/graph-shards/api.js.json"
+    },
+    {
+      "area": "app.js",
+      "edge_count": 8,
+      "path": ".ai/brain/graph-shards/app.js.json"
+    },
+    {
+      "area": "archive-engine.js",
+      "edge_count": 1,
+      "path": ".ai/brain/graph-shards/archive-engine.js.json"
+    },
+    {
+      "area": "chart.js",
+      "edge_count": 2,
+      "path": ".ai/brain/graph-shards/chart.js.json"
+    },
+    {
+      "area": "config.js",
+      "edge_count": 4,
+      "path": ".ai/brain/graph-shards/config.js.json"
+    },
+    {
+      "area": "functions",
+      "edge_count": 8,
+      "path": ".ai/brain/graph-shards/functions.json"
+    },
+    {
+      "area": "integration-patch.js",
+      "edge_count": 1,
+      "path": ".ai/brain/graph-shards/integration-patch.js.json"
+    },
+    {
+      "area": "paper-engine.js",
+      "edge_count": 4,
+      "path": ".ai/brain/graph-shards/paper-engine.js.json"
+    },
+    {
+      "area": "render.js",
+      "edge_count": 7,
+      "path": ".ai/brain/graph-shards/render.js.json"
+    },
+    {
+      "area": "scan.js",
+      "edge_count": 5,
+      "path": ".ai/brain/graph-shards/scan.js.json"
+    },
+    {
+      "area": "setup-classifier.js",
+      "edge_count": 1,
+      "path": ".ai/brain/graph-shards/setup-classifier.js.json"
+    },
+    {
+      "area": "state.js",
+      "edge_count": 7,
+      "path": ".ai/brain/graph-shards/state.js.json"
+    },
+    {
+      "area": "trades.js",
+      "edge_count": 4,
+      "path": ".ai/brain/graph-shards/trades.js.json"
+    },
+    {
+      "area": "utils.js",
+      "edge_count": 3,
+      "path": ".ai/brain/graph-shards/utils.js.json"
+    }
+  ]
 }

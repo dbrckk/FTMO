@@ -22,18 +22,18 @@ Status: active
 <!-- AUTO:START -->
 ## Automatic repository state
 
-Generated: 2026-09-18T20:01:32Z
+Generated: 2026-09-18T20:12:12Z
 
 ### Git
 - Branch: `main`
-- Head: `ae383a7af09b`
-- Commit date: 2026-09-18T21:57:34+02:00
-- Commit: chore(ai): add precise semantic refresh
-- Tracked files: 138
+- Head: `6f9f94957aa5`
+- Commit date: 2026-09-18T22:09:40+02:00
+- Commit: chore(ai): adopt repo standards v14
+- Tracked files: 140
 
 ### Recently changed files
-- `.github/workflows/semantic-refresh.yml`
 - `.repo-standards.yml`
+- `.github/workflows/semantic-refresh.yml`
 - `AGENTS.md`
 - `.github/workflows/ai-repo-map.yml`
 

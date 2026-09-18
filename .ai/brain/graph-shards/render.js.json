@@ -1,0 +1,41 @@
+{
+  "area": "render.js",
+  "edges": [
+    {
+      "source": "app.js",
+      "target": "render.js",
+      "type": "imports"
+    },
+    {
+      "source": "render.js",
+      "target": "api.js",
+      "type": "imports"
+    },
+    {
+      "source": "render.js",
+      "target": "chart.js",
+      "type": "imports"
+    },
+    {
+      "source": "render.js",
+      "target": "paper-engine.js",
+      "type": "imports"
+    },
+    {
+      "source": "render.js",
+      "target": "state.js",
+      "type": "imports"
+    },
+    {
+      "source": "render.js",
+      "target": "trades.js",
+      "type": "imports"
+    },
+    {
+      "source": "render.js",
+      "target": "utils.js",
+      "type": "imports"
+    }
+  ],
+  "schema_version": 1
+}

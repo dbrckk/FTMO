@@ -1,0 +1,11 @@
+{
+  "area": "advanced-engine.js",
+  "edges": [
+    {
+      "source": "integration-patch.js",
+      "target": "advanced-engine.js",
+      "type": "imports"
+    }
+  ],
+  "schema_version": 1
+}

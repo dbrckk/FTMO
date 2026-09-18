@@ -1,0 +1,16 @@
+{
+  "area": "chart.js",
+  "edges": [
+    {
+      "source": "app.js",
+      "target": "chart.js",
+      "type": "imports"
+    },
+    {
+      "source": "render.js",
+      "target": "chart.js",
+      "type": "imports"
+    }
+  ],
+  "schema_version": 1
+}

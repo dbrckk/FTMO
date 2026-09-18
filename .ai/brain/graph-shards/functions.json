@@ -1,0 +1,46 @@
+{
+  "area": "functions",
+  "edges": [
+    {
+      "source": "functions/api/archive-stats.js",
+      "target": "functions/_shared/archive-intelligence.js",
+      "type": "imports"
+    },
+    {
+      "source": "functions/api/ftmo-status.js",
+      "target": "functions/_shared/ftmo-guardian.js",
+      "type": "imports"
+    },
+    {
+      "source": "functions/api/news-events.js",
+      "target": "functions/_shared/news-filter.js",
+      "type": "imports"
+    },
+    {
+      "source": "functions/api/paper-run.js",
+      "target": "functions/_shared/archive-intelligence.js",
+      "type": "imports"
+    },
+    {
+      "source": "functions/api/paper-run.js",
+      "target": "functions/_shared/ftmo-guardian.js",
+      "type": "imports"
+    },
+    {
+      "source": "functions/api/paper-run.js",
+      "target": "functions/_shared/model-rules.js",
+      "type": "imports"
+    },
+    {
+      "source": "functions/api/paper-run.js",
+      "target": "functions/_shared/news-filter.js",
+      "type": "imports"
+    },
+    {
+      "source": "functions/api/paper-run.js",
+      "target": "functions/_shared/realistic-execution.js",
+      "type": "imports"
+    }
+  ],
+  "schema_version": 1
+}

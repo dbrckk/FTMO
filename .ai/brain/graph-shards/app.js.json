@@ -1,0 +1,46 @@
+{
+  "area": "app.js",
+  "edges": [
+    {
+      "source": "app.js",
+      "target": "api.js",
+      "type": "imports"
+    },
+    {
+      "source": "app.js",
+      "target": "chart.js",
+      "type": "imports"
+    },
+    {
+      "source": "app.js",
+      "target": "config.js",
+      "type": "imports"
+    },
+    {
+      "source": "app.js",
+      "target": "paper-engine.js",
+      "type": "imports"
+    },
+    {
+      "source": "app.js",
+      "target": "render.js",
+      "type": "imports"
+    },
+    {
+      "source": "app.js",
+      "target": "scan.js",
+      "type": "imports"
+    },
+    {
+      "source": "app.js",
+      "target": "state.js",
+      "type": "imports"
+    },
+    {
+      "source": "app.js",
+      "target": "trades.js",
+      "type": "imports"
+    }
+  ],
+  "schema_version": 1
+}

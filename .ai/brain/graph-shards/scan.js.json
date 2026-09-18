@@ -1,0 +1,31 @@
+{
+  "area": "scan.js",
+  "edges": [
+    {
+      "source": "app.js",
+      "target": "scan.js",
+      "type": "imports"
+    },
+    {
+      "source": "scan.js",
+      "target": "api.js",
+      "type": "imports"
+    },
+    {
+      "source": "scan.js",
+      "target": "config.js",
+      "type": "imports"
+    },
+    {
+      "source": "scan.js",
+      "target": "setup-classifier.js",
+      "type": "imports"
+    },
+    {
+      "source": "scan.js",
+      "target": "state.js",
+      "type": "imports"
+    }
+  ],
+  "schema_version": 1
+}

@@ -1,3 +1,179 @@
 {
-  "edges": []
+  "edges": [
+    {
+      "source": "api.js",
+      "target": "config.js",
+      "type": "imports"
+    },
+    {
+      "source": "api.js",
+      "target": "state.js",
+      "type": "imports"
+    },
+    {
+      "source": "app.js",
+      "target": "api.js",
+      "type": "imports"
+    },
+    {
+      "source": "app.js",
+      "target": "chart.js",
+      "type": "imports"
+    },
+    {
+      "source": "app.js",
+      "target": "config.js",
+      "type": "imports"
+    },
+    {
+      "source": "app.js",
+      "target": "paper-engine.js",
+      "type": "imports"
+    },
+    {
+      "source": "app.js",
+      "target": "render.js",
+      "type": "imports"
+    },
+    {
+      "source": "app.js",
+      "target": "scan.js",
+      "type": "imports"
+    },
+    {
+      "source": "app.js",
+      "target": "state.js",
+      "type": "imports"
+    },
+    {
+      "source": "app.js",
+      "target": "trades.js",
+      "type": "imports"
+    },
+    {
+      "source": "archive-engine.js",
+      "target": "utils.js",
+      "type": "imports"
+    },
+    {
+      "source": "functions/api/archive-stats.js",
+      "target": "functions/_shared/archive-intelligence.js",
+      "type": "imports"
+    },
+    {
+      "source": "functions/api/ftmo-status.js",
+      "target": "functions/_shared/ftmo-guardian.js",
+      "type": "imports"
+    },
+    {
+      "source": "functions/api/news-events.js",
+      "target": "functions/_shared/news-filter.js",
+      "type": "imports"
+    },
+    {
+      "source": "functions/api/paper-run.js",
+      "target": "functions/_shared/archive-intelligence.js",
+      "type": "imports"
+    },
+    {
+      "source": "functions/api/paper-run.js",
+      "target": "functions/_shared/ftmo-guardian.js",
+      "type": "imports"
+    },
+    {
+      "source": "functions/api/paper-run.js",
+      "target": "functions/_shared/model-rules.js",
+      "type": "imports"
+    },
+    {
+      "source": "functions/api/paper-run.js",
+      "target": "functions/_shared/news-filter.js",
+      "type": "imports"
+    },
+    {
+      "source": "functions/api/paper-run.js",
+      "target": "functions/_shared/realistic-execution.js",
+      "type": "imports"
+    },
+    {
+      "source": "integration-patch.js",
+      "target": "advanced-engine.js",
+      "type": "imports"
+    },
+    {
+      "source": "paper-engine.js",
+      "target": "api.js",
+      "type": "imports"
+    },
+    {
+      "source": "paper-engine.js",
+      "target": "state.js",
+      "type": "imports"
+    },
+    {
+      "source": "render.js",
+      "target": "api.js",
+      "type": "imports"
+    },
+    {
+      "source": "render.js",
+      "target": "chart.js",
+      "type": "imports"
+    },
+    {
+      "source": "render.js",
+      "target": "paper-engine.js",
+      "type": "imports"
+    },
+    {
+      "source": "render.js",
+      "target": "state.js",
+      "type": "imports"
+    },
+    {
+      "source": "render.js",
+      "target": "trades.js",
+      "type": "imports"
+    },
+    {
+      "source": "render.js",
+      "target": "utils.js",
+      "type": "imports"
+    },
+    {
+      "source": "scan.js",
+      "target": "api.js",
+      "type": "imports"
+    },
+    {
+      "source": "scan.js",
+      "target": "config.js",
+      "type": "imports"
+    },
+    {
+      "source": "scan.js",
+      "target": "setup-classifier.js",
+      "type": "imports"
+    },
+    {
+      "source": "scan.js",
+      "target": "state.js",
+      "type": "imports"
+    },
+    {
+      "source": "state.js",
+      "target": "config.js",
+      "type": "imports"
+    },
+    {
+      "source": "trades.js",
+      "target": "state.js",
+      "type": "imports"
+    },
+    {
+      "source": "trades.js",
+      "target": "utils.js",
+      "type": "imports"
+    }
+  ]
 }
