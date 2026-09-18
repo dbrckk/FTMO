@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: repo-standards-${{ github.repository }}-${{ github.ref }}
@@ -16,16 +17,20 @@ concurrency:
 
 jobs:
   ai-context:
-    uses: dbrckk/repo-standards/.github/workflows/reusable-ai-repo-map.yml@v4
+    uses: dbrckk/repo-standards/.github/workflows/reusable-ai-repo-map.yml@v5
 
   repo-health:
     needs: ai-context
-    uses: dbrckk/repo-standards/.github/workflows/reusable-repo-health.yml@v4
+    uses: dbrckk/repo-standards/.github/workflows/reusable-repo-health.yml@v5
 
   project-state:
     needs: repo-health
-    uses: dbrckk/repo-standards/.github/workflows/reusable-project-state.yml@v4
+    uses: dbrckk/repo-standards/.github/workflows/reusable-project-state.yml@v5
 
   context-intelligence:
     needs: project-state
-    uses: dbrckk/repo-standards/.github/workflows/reusable-context-intelligence.yml@v4
+    uses: dbrckk/repo-standards/.github/workflows/reusable-context-intelligence.yml@v5
+
+  observability:
+    needs: context-intelligence
+    uses: dbrckk/repo-standards/.github/workflows/reusable-observability.yml@v5
