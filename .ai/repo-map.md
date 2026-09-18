@@ -137,15 +137,19 @@ concurrency:
 
 jobs:
   ai-context:
-    uses: dbrckk/repo-standards/.github/workflows/reusable-ai-repo-map.yml@v3
+    uses: dbrckk/repo-standards/.github/workflows/reusable-ai-repo-map.yml@v4
 
   repo-health:
     needs: ai-context
-    uses: dbrckk/repo-standards/.github/workflows/reusable-repo-health.yml@v3
+    uses: dbrckk/repo-standards/.github/workflows/reusable-repo-health.yml@v4
 
   project-state:
     needs: repo-health
-    uses: dbrckk/repo-standards/.github/workflows/reusable-project-state.yml@v3
+    uses: dbrckk/repo-standards/.github/workflows/reusable-project-state.yml@v4
+
+  context-intelligence:
+    needs: project-state
+    uses: dbrckk/repo-standards/.github/workflows/reusable-context-intelligence.yml@v4
 ````
 
 ## File: .github/workflows/paper-health.yml
@@ -3016,18 +3020,24 @@ function buildSql(rows)
 ## File: .repo-standards.yml
 ````yaml
 source: dbrckk/repo-standards
-ref: v3
-version: 3
+ref: v4
+version: 4
 adopted: true
 ai_context:
-  repo_map: .ai/repo-map.md
-  repo_health: .ai/repo-health.md
+  index: .ai/index.md
   project_state: .ai/project-state.md
+  change_impact: .ai/change-impact.md
+  architecture: .ai/architecture.json
+  commands: .ai/commands.json
+  repo_health: .ai/repo-health.md
+  repo_map: .ai/repo-map.md
+  segmented_maps: .ai/maps/
 workflow:
   file: .github/workflows/ai-repo-map.yml
   reusable_ai_map: .github/workflows/reusable-ai-repo-map.yml
   reusable_health: .github/workflows/reusable-repo-health.yml
   reusable_project_state: .github/workflows/reusable-project-state.yml
+  reusable_context_intelligence: .github/workflows/reusable-context-intelligence.yml
 ````
 
 ## File: advanced-engine.js
