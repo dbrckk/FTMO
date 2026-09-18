@@ -130,6 +130,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: repo-standards-${{ github.repository }}-${{ github.ref }}
@@ -137,19 +138,23 @@ concurrency:
 
 jobs:
   ai-context:
-    uses: dbrckk/repo-standards/.github/workflows/reusable-ai-repo-map.yml@v4
+    uses: dbrckk/repo-standards/.github/workflows/reusable-ai-repo-map.yml@v5
 
   repo-health:
     needs: ai-context
-    uses: dbrckk/repo-standards/.github/workflows/reusable-repo-health.yml@v4
+    uses: dbrckk/repo-standards/.github/workflows/reusable-repo-health.yml@v5
 
   project-state:
     needs: repo-health
-    uses: dbrckk/repo-standards/.github/workflows/reusable-project-state.yml@v4
+    uses: dbrckk/repo-standards/.github/workflows/reusable-project-state.yml@v5
 
   context-intelligence:
     needs: project-state
-    uses: dbrckk/repo-standards/.github/workflows/reusable-context-intelligence.yml@v4
+    uses: dbrckk/repo-standards/.github/workflows/reusable-context-intelligence.yml@v5
+
+  observability:
+    needs: context-intelligence
+    uses: dbrckk/repo-standards/.github/workflows/reusable-observability.yml@v5
 ````
 
 ## File: .github/workflows/paper-health.yml
@@ -3020,15 +3025,18 @@ function buildSql(rows)
 ## File: .repo-standards.yml
 ````yaml
 source: dbrckk/repo-standards
-ref: v4
-version: 4
+ref: v5
+version: 5
 adopted: true
 ai_context:
   index: .ai/index.md
   project_state: .ai/project-state.md
   change_impact: .ai/change-impact.md
   architecture: .ai/architecture.json
+  dependency_map: .ai/dependency-map.json
   commands: .ai/commands.json
+  ci_status: .ai/ci-status.md
+  security_signals: .ai/security-signals.json
   repo_health: .ai/repo-health.md
   repo_map: .ai/repo-map.md
   segmented_maps: .ai/maps/
@@ -3038,6 +3046,7 @@ workflow:
   reusable_health: .github/workflows/reusable-repo-health.yml
   reusable_project_state: .github/workflows/reusable-project-state.yml
   reusable_context_intelligence: .github/workflows/reusable-context-intelligence.yml
+  reusable_observability: .github/workflows/reusable-observability.yml
 ````
 
 ## File: advanced-engine.js
