@@ -16,16 +16,16 @@
       "count": 49
     },
     {
+      "extension": ".json",
+      "count": 11
+    },
+    {
       "extension": ".yml",
       "count": 11
     },
     {
       "extension": ".md",
-      "count": 8
-    },
-    {
-      "extension": ".json",
-      "count": 6
+      "count": 9
     },
     {
       "extension": ".pine",

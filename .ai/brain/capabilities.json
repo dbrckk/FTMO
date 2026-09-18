@@ -1,0 +1,11 @@
+{
+  "schema_version": 3,
+  "generated_by": "dbrckk/repo-brain",
+  "portable_index": true,
+  "ast_grep_outline": true,
+  "ast_grep_outline_files": 50,
+  "ast_grep_outline_items": 956,
+  "ast_grep_member_items": 20,
+  "ast_symbol_shards": 23,
+  "ast_file_outline_shards": 4
+}

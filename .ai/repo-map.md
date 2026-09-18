@@ -138,7 +138,7 @@ concurrency:
 
 jobs:
   repository-standards:
-    uses: dbrckk/repo-standards/.github/workflows/reusable-unified.yml@v7
+    uses: dbrckk/repo-standards/.github/workflows/reusable-unified.yml@v8
 ````
 
 ## File: .github/workflows/paper-health.yml
@@ -3009,11 +3009,11 @@ function buildSql(rows)
 ## File: .repo-standards.yml
 ````yaml
 source: dbrckk/repo-standards
-ref: v7
-version: 7
+ref: v8
+version: 8
 adopted: true
 workflow_mode: unified-single-commit
-repo_brain: dbrckk/repo-brain@v2
+repo_brain: dbrckk/repo-brain@v3
 ai_context:
   index: .ai/index.md
   project_state: .ai/project-state.md
@@ -3025,6 +3025,10 @@ ai_context:
   security_signals: .ai/security-signals.json
   repo_health: .ai/repo-health.md
   brain_summary: .ai/brain/summary.md
+  brain_capabilities: .ai/brain/capabilities.json
+  brain_ast_routing: .ai/brain/ast-routing.json
+  brain_ast_symbols: .ai/brain/ast-symbols/
+  brain_file_outlines: .ai/brain/file-outlines/
   brain_lookup: .ai/brain/lookup.json
   brain_symbols: .ai/brain/symbols.json
   brain_graph: .ai/brain/code-graph.json
@@ -3083,20 +3087,21 @@ Before substantial work:
 2. Read `.ai/project-state.md`.
 3. Read `.ai/change-impact.md`.
 4. Read `.ai/architecture.json`.
-5. Read `.ai/brain/summary.md`.
-6. Search `.ai/brain/lookup.json` for named symbols before broad source exploration.
-7. Use `.ai/brain/code-graph.json` and `.ai/brain/imports.json` for cross-module context.
-8. Read `.ai/dependency-map.json` when dependency context matters.
-9. Read `.ai/commands.json`, `.ai/ci-status.md`, and security signals when relevant.
-10. Read `.ai/repo-health.md`.
-11. Use `.ai/index.md` and segmented maps only if symbol-level context is insufficient.
-12. Read `.ai/repo-map.md` only as a final broad-context fallback.
-13. Fetch only task-relevant source files or line ranges.
+5. Read `.ai/brain/summary.md` and `.ai/brain/capabilities.json`.
+6. If ast-grep enrichment is available, route named symbols through `.ai/brain/ast-routing.json` and one `.ai/brain/ast-symbols/<initial>.json` shard.
+7. Fall back to `.ai/brain/lookup.json` when AST routing is unavailable or insufficient.
+8. Use `.ai/brain/code-graph.json` and `.ai/brain/imports.json` for cross-module context.
+9. Read `.ai/dependency-map.json` when dependency context matters.
+10. Read `.ai/commands.json`, `.ai/ci-status.md`, and security signals when relevant.
+11. Read `.ai/repo-health.md`.
+12. Use `.ai/index.md` and segmented maps only if symbol-level context is insufficient.
+13. Read `.ai/repo-map.md` only as a final broad-context fallback.
+14. Fetch only task-relevant source files or line ranges.
 
 Repository-specific rules:
 - Preserve existing architecture and public interfaces unless the task requires a change.
 - Prefer the smallest coherent change.
-- Verify Repo Brain symbol hits against authoritative source before editing.
+- Verify AST/Repo Brain symbol hits against authoritative source before editing.
 - Run relevant tests, lint, build, or validation commands before declaring completion.
 - Treat security signals and static graph edges as heuristics, not proof.
 - Never reproduce suspected secret values.
