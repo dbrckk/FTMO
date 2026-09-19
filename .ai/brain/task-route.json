@@ -1,0 +1,201 @@
+{
+  "budget": {
+    "confidence": "medium",
+    "expand_to": 12,
+    "max_files": 6,
+    "requested_max_files": 12,
+    "score_margin": 0,
+    "tier": "bounded",
+    "top_score": 27
+  },
+  "cache": {
+    "fingerprint": "27d7eb55f5cd83f0ac109276812eb35eefeda81b908a9bc09f6a25a66cb5be4f",
+    "hit": false
+  },
+  "candidate_count": 14,
+  "fallback": "If bounded context is insufficient, expand only to budget.expand_to, then use architecture/segmented maps and targeted source search.",
+  "files": [
+    {
+      "learning_score": 0,
+      "matched_terms": [
+        "engine"
+      ],
+      "path": "functions/api/analytics-engine.js",
+      "reasons": [
+        "search-index"
+      ],
+      "score": 27,
+      "symbols": [
+        "average",
+        "buildRecommendations",
+        "buildStats",
+        "clamp",
+        "computeGroupedStats",
+        "computeOverallStats",
+        "computePairDirectionStats",
+        "computeScoreBuckets",
+        "confidenceFromTrades",
+        "ensureAnalyticsTables",
+        "getLearningRows",
+        "handleAnalytics",
+        "importPaperTradesIntoLearning",
+        "inferHour",
+        "inferSession",
+        "isAuthorized",
+        "json",
+        "maxDrawdown",
+        "normalizePair",
+        "onRequestGet"
+      ]
+    },
+    {
+      "learning_score": 0,
+      "matched_terms": [
+        "engine"
+      ],
+      "path": "functions/api/exit-engine.js",
+      "reasons": [
+        "search-index"
+      ],
+      "score": 27,
+      "symbols": [
+        "buildComment",
+        "buildExitDecision",
+        "buildNotes",
+        "clamp",
+        "computeExitPressure",
+        "computeProtectionMode",
+        "getDefaultRr",
+        "getExitAction",
+        "getPairProfile",
+        "json",
+        "normalizeAi",
+        "normalizeScan",
+        "normalizeTimeframe",
+        "onRequestGet",
+        "onRequestPost",
+        "round",
+        "safeJson",
+        "safeNumber",
+        "scoreWeakness"
+      ]
+    },
+    {
+      "learning_score": 0,
+      "matched_terms": [
+        "engine"
+      ],
+      "path": "paper-engine.js",
+      "reasons": [
+        "search-index"
+      ],
+      "score": 27,
+      "symbols": [
+        "atr",
+        "average",
+        "buildClosedTrade",
+        "buildRiskGroupsFromTrades",
+        "clamp",
+        "computeBrowserRiskPercent",
+        "computeCandleTriggerScore",
+        "computeEntryQualityScore",
+        "computeExitPressureScore",
+        "computeLateEntryPenalty",
+        "computeLivePnlR",
+        "computePaperAnalytics",
+        "computePnlRWithPartial",
+        "createBrowserPaperTrade",
+        "ema",
+        "enrichCandidate",
+        "getMaxBarsHold",
+        "getOriginalRiskDistance",
+        "getPairRiskGroups",
+        "improveStop"
+      ]
+    },
+    {
+      "learning_score": 0,
+      "matched_terms": [
+        "engine"
+      ],
+      "path": "integration-patch.js",
+      "reasons": [
+        "search-index"
+      ],
+      "score": 21,
+      "symbols": [
+        "enhanceScanWithAdvancedEngine"
+      ]
+    },
+    {
+      "learning_score": 0,
+      "matched_terms": [
+        "engine"
+      ],
+      "path": "api.js",
+      "reasons": [
+        "search-index"
+      ],
+      "score": 17,
+      "symbols": [
+        "buildScanCacheKey",
+        "enrichScanWithMtf",
+        "escapeHtml",
+        "fetchArchiveStatsBatch",
+        "fetchCorrelationMatrix",
+        "fetchExitSuggestion",
+        "fetchMlScore",
+        "fetchPaperHealth",
+        "fetchServerPaperSnapshot",
+        "fetchTimeframeSummary",
+        "fetchVectorbtScore",
+        "getJson",
+        "getMtfForPair",
+        "postJson",
+        "refreshAiDecision",
+        "saveClosedPaperTrade",
+        "scan"
+      ]
+    },
+    {
+      "learning_score": 0,
+      "matched_terms": [
+        "engine"
+      ],
+      "path": "app.js",
+      "reasons": [
+        "search-index"
+      ],
+      "score": 17,
+      "symbols": [
+        "applyBrowserPaperMtfGuard",
+        "bindEvents",
+        "bootstrapApp",
+        "buildFallbackScan",
+        "cacheEls",
+        "clearScanCaches",
+        "enrichScan",
+        "escapeHtml",
+        "getMtfForPair",
+        "getPairSymbol",
+        "refreshAll",
+        "refreshMetaData",
+        "refreshPaperData",
+        "refreshPostScanData",
+        "renderAllSafe",
+        "renderDashboardAfterScan",
+        "renderLoadingState",
+        "renderTimeframeLabel",
+        "scanPairWithTimeout",
+        "setTextSafe"
+      ]
+    }
+  ],
+  "generated_by": "dbrckk/repo-brain-v8",
+  "schema_version": 1,
+  "task": "game engine",
+  "terms": [
+    "game",
+    "engine"
+  ]
+}

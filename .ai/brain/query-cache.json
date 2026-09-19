@@ -1,1 +1,346 @@
-{"schema_version":1,"generated_by":"dbrckk/repo-brain-query-cache-v1","entries":{}}
+{
+  "entries": {
+    "134c77037f6dc25fa175e8f4f7e4193cded3f2f2420172fb2c81883f3feaf73e": {
+      "route": {
+        "budget": {
+          "confidence": "low",
+          "expand_to": 12,
+          "max_files": 12,
+          "requested_max_files": 12,
+          "score_margin": 3,
+          "tier": "broad",
+          "top_score": 3
+        },
+        "candidate_count": 1,
+        "fallback": "If bounded context is insufficient, expand only to budget.expand_to, then use architecture/segmented maps and targeted source search.",
+        "files": [
+          {
+            "learning_score": 0,
+            "matched_terms": [],
+            "path": ".repo-standards.yml",
+            "reasons": [
+              "recently-changed"
+            ],
+            "score": 3,
+            "symbols": []
+          }
+        ],
+        "generated_by": "dbrckk/repo-brain-v8",
+        "schema_version": 1,
+        "task": "income progression",
+        "terms": [
+          "income",
+          "progression"
+        ]
+      },
+      "task": "income progression"
+    },
+    "27d7eb55f5cd83f0ac109276812eb35eefeda81b908a9bc09f6a25a66cb5be4f": {
+      "route": {
+        "budget": {
+          "confidence": "medium",
+          "expand_to": 12,
+          "max_files": 6,
+          "requested_max_files": 12,
+          "score_margin": 0,
+          "tier": "bounded",
+          "top_score": 27
+        },
+        "candidate_count": 14,
+        "fallback": "If bounded context is insufficient, expand only to budget.expand_to, then use architecture/segmented maps and targeted source search.",
+        "files": [
+          {
+            "learning_score": 0,
+            "matched_terms": [
+              "engine"
+            ],
+            "path": "functions/api/analytics-engine.js",
+            "reasons": [
+              "search-index"
+            ],
+            "score": 27,
+            "symbols": [
+              "average",
+              "buildRecommendations",
+              "buildStats",
+              "clamp",
+              "computeGroupedStats",
+              "computeOverallStats",
+              "computePairDirectionStats",
+              "computeScoreBuckets",
+              "confidenceFromTrades",
+              "ensureAnalyticsTables",
+              "getLearningRows",
+              "handleAnalytics",
+              "importPaperTradesIntoLearning",
+              "inferHour",
+              "inferSession",
+              "isAuthorized",
+              "json",
+              "maxDrawdown",
+              "normalizePair",
+              "onRequestGet"
+            ]
+          },
+          {
+            "learning_score": 0,
+            "matched_terms": [
+              "engine"
+            ],
+            "path": "functions/api/exit-engine.js",
+            "reasons": [
+              "search-index"
+            ],
+            "score": 27,
+            "symbols": [
+              "buildComment",
+              "buildExitDecision",
+              "buildNotes",
+              "clamp",
+              "computeExitPressure",
+              "computeProtectionMode",
+              "getDefaultRr",
+              "getExitAction",
+              "getPairProfile",
+              "json",
+              "normalizeAi",
+              "normalizeScan",
+              "normalizeTimeframe",
+              "onRequestGet",
+              "onRequestPost",
+              "round",
+              "safeJson",
+              "safeNumber",
+              "scoreWeakness"
+            ]
+          },
+          {
+            "learning_score": 0,
+            "matched_terms": [
+              "engine"
+            ],
+            "path": "paper-engine.js",
+            "reasons": [
+              "search-index"
+            ],
+            "score": 27,
+            "symbols": [
+              "atr",
+              "average",
+              "buildClosedTrade",
+              "buildRiskGroupsFromTrades",
+              "clamp",
+              "computeBrowserRiskPercent",
+              "computeCandleTriggerScore",
+              "computeEntryQualityScore",
+              "computeExitPressureScore",
+              "computeLateEntryPenalty",
+              "computeLivePnlR",
+              "computePaperAnalytics",
+              "computePnlRWithPartial",
+              "createBrowserPaperTrade",
+              "ema",
+              "enrichCandidate",
+              "getMaxBarsHold",
+              "getOriginalRiskDistance",
+              "getPairRiskGroups",
+              "improveStop"
+            ]
+          },
+          {
+            "learning_score": 0,
+            "matched_terms": [
+              "engine"
+            ],
+            "path": "integration-patch.js",
+            "reasons": [
+              "search-index"
+            ],
+            "score": 21,
+            "symbols": [
+              "enhanceScanWithAdvancedEngine"
+            ]
+          },
+          {
+            "learning_score": 0,
+            "matched_terms": [
+              "engine"
+            ],
+            "path": "api.js",
+            "reasons": [
+              "search-index"
+            ],
+            "score": 17,
+            "symbols": [
+              "buildScanCacheKey",
+              "enrichScanWithMtf",
+              "escapeHtml",
+              "fetchArchiveStatsBatch",
+              "fetchCorrelationMatrix",
+              "fetchExitSuggestion",
+              "fetchMlScore",
+              "fetchPaperHealth",
+              "fetchServerPaperSnapshot",
+              "fetchTimeframeSummary",
+              "fetchVectorbtScore",
+              "getJson",
+              "getMtfForPair",
+              "postJson",
+              "refreshAiDecision",
+              "saveClosedPaperTrade",
+              "scan"
+            ]
+          },
+          {
+            "learning_score": 0,
+            "matched_terms": [
+              "engine"
+            ],
+            "path": "app.js",
+            "reasons": [
+              "search-index"
+            ],
+            "score": 17,
+            "symbols": [
+              "applyBrowserPaperMtfGuard",
+              "bindEvents",
+              "bootstrapApp",
+              "buildFallbackScan",
+              "cacheEls",
+              "clearScanCaches",
+              "enrichScan",
+              "escapeHtml",
+              "getMtfForPair",
+              "getPairSymbol",
+              "refreshAll",
+              "refreshMetaData",
+              "refreshPaperData",
+              "refreshPostScanData",
+              "renderAllSafe",
+              "renderDashboardAfterScan",
+              "renderLoadingState",
+              "renderTimeframeLabel",
+              "scanPairWithTimeout",
+              "setTextSafe"
+            ]
+          }
+        ],
+        "generated_by": "dbrckk/repo-brain-v8",
+        "schema_version": 1,
+        "task": "game engine",
+        "terms": [
+          "game",
+          "engine"
+        ]
+      },
+      "task": "game engine"
+    },
+    "a00412f60a66568f294c166cf60c1fc180c94f97583b6489ded5cdd8d233969a": {
+      "route": {
+        "budget": {
+          "confidence": "low",
+          "expand_to": 12,
+          "max_files": 12,
+          "requested_max_files": 12,
+          "score_margin": 3,
+          "tier": "broad",
+          "top_score": 3
+        },
+        "candidate_count": 1,
+        "fallback": "If bounded context is insufficient, expand only to budget.expand_to, then use architecture/segmented maps and targeted source search.",
+        "files": [
+          {
+            "learning_score": 0,
+            "matched_terms": [],
+            "path": ".repo-standards.yml",
+            "reasons": [
+              "recently-changed"
+            ],
+            "score": 3,
+            "symbols": []
+          }
+        ],
+        "generated_by": "dbrckk/repo-brain-v8",
+        "schema_version": 1,
+        "task": "purchase billing",
+        "terms": [
+          "purchase",
+          "billing"
+        ]
+      },
+      "task": "purchase billing"
+    },
+    "dda3b8c4fe9a957a92cd0fdd632df15b1f1a44997672c4ccf9ed4783f2677f62": {
+      "route": {
+        "budget": {
+          "confidence": "low",
+          "expand_to": 12,
+          "max_files": 12,
+          "requested_max_files": 12,
+          "score_margin": 3,
+          "tier": "broad",
+          "top_score": 3
+        },
+        "candidate_count": 1,
+        "fallback": "If bounded context is insufficient, expand only to budget.expand_to, then use architecture/segmented maps and targeted source search.",
+        "files": [
+          {
+            "learning_score": 0,
+            "matched_terms": [],
+            "path": ".repo-standards.yml",
+            "reasons": [
+              "recently-changed"
+            ],
+            "score": 3,
+            "symbols": []
+          }
+        ],
+        "generated_by": "dbrckk/repo-brain-v8",
+        "schema_version": 1,
+        "task": "privacy consent",
+        "terms": [
+          "privacy",
+          "consent"
+        ]
+      },
+      "task": "privacy consent"
+    },
+    "fb955563b474bccf44a7e1f0ad7a68c421bba13eb02f747d0c8ce8e5d022924b": {
+      "route": {
+        "budget": {
+          "confidence": "low",
+          "expand_to": 12,
+          "max_files": 12,
+          "requested_max_files": 12,
+          "score_margin": 3,
+          "tier": "broad",
+          "top_score": 3
+        },
+        "candidate_count": 1,
+        "fallback": "If bounded context is insufficient, expand only to budget.expand_to, then use architecture/segmented maps and targeted source search.",
+        "files": [
+          {
+            "learning_score": 0,
+            "matched_terms": [],
+            "path": ".repo-standards.yml",
+            "reasons": [
+              "recently-changed"
+            ],
+            "score": 3,
+            "symbols": []
+          }
+        ],
+        "generated_by": "dbrckk/repo-brain-v8",
+        "schema_version": 1,
+        "task": "offline progress",
+        "terms": [
+          "offline",
+          "progress"
+        ]
+      },
+      "task": "offline progress"
+    }
+  },
+  "generated_by": "dbrckk/repo-brain-query-cache-v1",
+  "schema_version": 1
+}

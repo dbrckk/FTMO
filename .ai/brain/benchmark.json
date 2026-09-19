@@ -1,0 +1,187 @@
+{
+  "cached_pass": [
+    {
+      "budget": {
+        "confidence": "low",
+        "expand_to": 12,
+        "max_files": 12,
+        "requested_max_files": 12,
+        "score_margin": 3,
+        "tier": "broad",
+        "top_score": 3
+      },
+      "cache_hit": true,
+      "candidate_count": 1,
+      "elapsed_ms": 46.136,
+      "ok": true,
+      "selected_files": 1,
+      "task": "purchase billing"
+    },
+    {
+      "budget": {
+        "confidence": "low",
+        "expand_to": 12,
+        "max_files": 12,
+        "requested_max_files": 12,
+        "score_margin": 3,
+        "tier": "broad",
+        "top_score": 3
+      },
+      "cache_hit": true,
+      "candidate_count": 1,
+      "elapsed_ms": 46.316,
+      "ok": true,
+      "selected_files": 1,
+      "task": "income progression"
+    },
+    {
+      "budget": {
+        "confidence": "low",
+        "expand_to": 12,
+        "max_files": 12,
+        "requested_max_files": 12,
+        "score_margin": 3,
+        "tier": "broad",
+        "top_score": 3
+      },
+      "cache_hit": true,
+      "candidate_count": 1,
+      "elapsed_ms": 46.957,
+      "ok": true,
+      "selected_files": 1,
+      "task": "privacy consent"
+    },
+    {
+      "budget": {
+        "confidence": "low",
+        "expand_to": 12,
+        "max_files": 12,
+        "requested_max_files": 12,
+        "score_margin": 3,
+        "tier": "broad",
+        "top_score": 3
+      },
+      "cache_hit": true,
+      "candidate_count": 1,
+      "elapsed_ms": 55.905,
+      "ok": true,
+      "selected_files": 1,
+      "task": "offline progress"
+    },
+    {
+      "budget": {
+        "confidence": "medium",
+        "expand_to": 12,
+        "max_files": 6,
+        "requested_max_files": 12,
+        "score_margin": 0,
+        "tier": "bounded",
+        "top_score": 27
+      },
+      "cache_hit": true,
+      "candidate_count": 14,
+      "elapsed_ms": 46.394,
+      "ok": true,
+      "selected_files": 6,
+      "task": "game engine"
+    }
+  ],
+  "first_pass": [
+    {
+      "budget": {
+        "confidence": "low",
+        "expand_to": 12,
+        "max_files": 12,
+        "requested_max_files": 12,
+        "score_margin": 3,
+        "tier": "broad",
+        "top_score": 3
+      },
+      "cache_hit": false,
+      "candidate_count": 1,
+      "elapsed_ms": 49.003,
+      "ok": true,
+      "selected_files": 1,
+      "task": "purchase billing"
+    },
+    {
+      "budget": {
+        "confidence": "low",
+        "expand_to": 12,
+        "max_files": 12,
+        "requested_max_files": 12,
+        "score_margin": 3,
+        "tier": "broad",
+        "top_score": 3
+      },
+      "cache_hit": false,
+      "candidate_count": 1,
+      "elapsed_ms": 48.351,
+      "ok": true,
+      "selected_files": 1,
+      "task": "income progression"
+    },
+    {
+      "budget": {
+        "confidence": "low",
+        "expand_to": 12,
+        "max_files": 12,
+        "requested_max_files": 12,
+        "score_margin": 3,
+        "tier": "broad",
+        "top_score": 3
+      },
+      "cache_hit": false,
+      "candidate_count": 1,
+      "elapsed_ms": 48.773,
+      "ok": true,
+      "selected_files": 1,
+      "task": "privacy consent"
+    },
+    {
+      "budget": {
+        "confidence": "low",
+        "expand_to": 12,
+        "max_files": 12,
+        "requested_max_files": 12,
+        "score_margin": 3,
+        "tier": "broad",
+        "top_score": 3
+      },
+      "cache_hit": false,
+      "candidate_count": 1,
+      "elapsed_ms": 50.567,
+      "ok": true,
+      "selected_files": 1,
+      "task": "offline progress"
+    },
+    {
+      "budget": {
+        "confidence": "medium",
+        "expand_to": 12,
+        "max_files": 6,
+        "requested_max_files": 12,
+        "score_margin": 0,
+        "tier": "bounded",
+        "top_score": 27
+      },
+      "cache_hit": false,
+      "candidate_count": 14,
+      "elapsed_ms": 49.37,
+      "ok": true,
+      "selected_files": 6,
+      "task": "game engine"
+    }
+  ],
+  "generated_by": "dbrckk/repo-brain-benchmark-v1",
+  "graph_edge_count": 45,
+  "schema_version": 1,
+  "search_file_count": 48,
+  "search_token_count": 2898,
+  "summary": {
+    "all_cached_second_pass": true,
+    "avg_selected_files": 2.0,
+    "cached_pass_ms": 241.708,
+    "first_pass_ms": 246.064
+  }
+}

@@ -22,14 +22,14 @@ Status: active
 <!-- AUTO:START -->
 ## Automatic repository state
 
-Generated: 2026-09-19T07:07:17Z
+Generated: 2026-09-19T07:33:15Z
 
 ### Git
 - Branch: `main`
-- Head: `e8b01191e214`
-- Commit date: 2026-09-19T09:04:50+02:00
-- Commit: chore(ai): adopt repo standards v18
-- Tracked files: 187
+- Head: `36c0416b91b6`
+- Commit date: 2026-09-19T09:31:53+02:00
+- Commit: chore(ai): adopt repo standards v19
+- Tracked files: 188
 
 ### Recently changed files
 - `.repo-standards.yml`
