@@ -3034,7 +3034,7 @@ function buildSql(rows)
 ````yaml
 source: dbrckk/repo-standards
 ref: main
-version: 15
+version: 17
 adopted: true
 workflow_mode: unified-single-commit
 repo_brain: dbrckk/repo-brain@main
@@ -3044,6 +3044,8 @@ graph_routing: compact-sharded-reverse-deps
 graph_resolver: java-kotlin-tail-v2
 graph_enrichment: unique-type-symbol-references-v1
 context_budget: confidence-dynamic-3-6-12
+routing_learning: deterministic-term-feedback-v1
+auto_routing_learning: source-diff-success-v1
 ai_context:
   index: .ai/index.md
   project_state: .ai/project-state.md
@@ -3078,6 +3080,8 @@ ai_context:
   brain_search_manifest: .ai/brain/search-manifest.json
   brain_search_shards: .ai/brain/search-shards/
   brain_query_cache: .ai/brain/query-cache.json
+  brain_routing_learning: .ai/brain/routing-learning.json
+  brain_auto_learning: .ai/brain/auto-learning.json
   brain_hotset: .ai/brain/hotset.json
   brain_context_manifest: .ai/brain/context-manifest.json
   brain_context_packets: .ai/brain/context/

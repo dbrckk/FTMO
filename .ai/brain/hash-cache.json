@@ -1,12 +1,8 @@
 {
   "files": {
     ".repo-standards.yml": {
-      "sha256": "bf90e19cdf0eab6507ed686da1b29529ba25352f7ae08395b5f48658b44c86ef",
-      "size": 2354
-    },
-    "AGENTS.md": {
-      "sha256": "e07f466d4fc455ed6fb4a9e41212e7f313482ea9e1d21599a4e9aca90ffe85ba",
-      "size": 2646
+      "sha256": "a517d0adcd0412a4595b8b4310f2551e3969f3fd5ff8cbb581db75bc39d4f2b6",
+      "size": 2559
     }
   },
   "generated_by": "dbrckk/repo-brain-v6",
