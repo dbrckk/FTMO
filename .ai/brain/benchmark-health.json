@@ -1,0 +1,26 @@
+{
+  "checks": {
+    "all_cached_pass_ok": true,
+    "all_cached_second_pass": true,
+    "all_first_pass_ok": true,
+    "avg_selected_files_le_6": true,
+    "search_index_nonempty": true,
+    "search_tokens_nonempty": true
+  },
+  "generated_by": "dbrckk/repo-brain-benchmark-health-v1",
+  "healthy": true,
+  "observed": {
+    "avg_selected_files": 2.0,
+    "cached_pass_ms": 196.648,
+    "first_pass_ms": 215.759,
+    "graph_edge_count": 45,
+    "search_file_count": 48,
+    "search_token_count": 2898
+  },
+  "policy": {
+    "avg_selected_files_max": 6,
+    "require_second_pass_cache_hits": true,
+    "timing_is_observational_only": true
+  },
+  "schema_version": 1
+}

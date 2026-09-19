@@ -12,7 +12,7 @@
       },
       "cache_hit": true,
       "candidate_count": 1,
-      "elapsed_ms": 46.136,
+      "elapsed_ms": 39.362,
       "ok": true,
       "selected_files": 1,
       "task": "purchase billing"
@@ -29,7 +29,7 @@
       },
       "cache_hit": true,
       "candidate_count": 1,
-      "elapsed_ms": 46.316,
+      "elapsed_ms": 39.864,
       "ok": true,
       "selected_files": 1,
       "task": "income progression"
@@ -46,7 +46,7 @@
       },
       "cache_hit": true,
       "candidate_count": 1,
-      "elapsed_ms": 46.957,
+      "elapsed_ms": 39.302,
       "ok": true,
       "selected_files": 1,
       "task": "privacy consent"
@@ -63,7 +63,7 @@
       },
       "cache_hit": true,
       "candidate_count": 1,
-      "elapsed_ms": 55.905,
+      "elapsed_ms": 39.005,
       "ok": true,
       "selected_files": 1,
       "task": "offline progress"
@@ -80,7 +80,7 @@
       },
       "cache_hit": true,
       "candidate_count": 14,
-      "elapsed_ms": 46.394,
+      "elapsed_ms": 39.115,
       "ok": true,
       "selected_files": 6,
       "task": "game engine"
@@ -99,7 +99,7 @@
       },
       "cache_hit": false,
       "candidate_count": 1,
-      "elapsed_ms": 49.003,
+      "elapsed_ms": 42.992,
       "ok": true,
       "selected_files": 1,
       "task": "purchase billing"
@@ -116,7 +116,7 @@
       },
       "cache_hit": false,
       "candidate_count": 1,
-      "elapsed_ms": 48.351,
+      "elapsed_ms": 42.334,
       "ok": true,
       "selected_files": 1,
       "task": "income progression"
@@ -133,7 +133,7 @@
       },
       "cache_hit": false,
       "candidate_count": 1,
-      "elapsed_ms": 48.773,
+      "elapsed_ms": 41.704,
       "ok": true,
       "selected_files": 1,
       "task": "privacy consent"
@@ -150,7 +150,7 @@
       },
       "cache_hit": false,
       "candidate_count": 1,
-      "elapsed_ms": 50.567,
+      "elapsed_ms": 46.265,
       "ok": true,
       "selected_files": 1,
       "task": "offline progress"
@@ -167,7 +167,7 @@
       },
       "cache_hit": false,
       "candidate_count": 14,
-      "elapsed_ms": 49.37,
+      "elapsed_ms": 42.464,
       "ok": true,
       "selected_files": 6,
       "task": "game engine"
@@ -181,7 +181,7 @@
   "summary": {
     "all_cached_second_pass": true,
     "avg_selected_files": 2.0,
-    "cached_pass_ms": 241.708,
-    "first_pass_ms": 246.064
+    "cached_pass_ms": 196.648,
+    "first_pass_ms": 215.759
   }
 }
